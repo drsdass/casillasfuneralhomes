@@ -51,7 +51,7 @@ function suggestVendorCategory(docName: string | undefined): VendorCategory | un
 
 const docCategoryLabels: Record<CaseDocument['category'], string> = {
   permit: 'Permit', contract: 'Contract', authorization: 'Authorization',
-  photo: 'Photo', obituary: 'Obituary', music: 'Music', other: 'Other',
+  photo: 'Photo', obituary: 'Obituary', music: 'Music', video: 'Video', other: 'Other',
 }
 
 export default function CaseDetail() {

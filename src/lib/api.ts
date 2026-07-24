@@ -1541,6 +1541,45 @@ export const api = {
     }
   },
 
+  /**
+   * Public — no auth. Lets a family member upload a full pre-made video
+   * (a finished tribute video, not the auto-slideshow) through their
+   * portal link. Video files can easily run into the hundreds of MB, so
+   * unlike photos/music this never sends the file through the Edge
+   * Function's own body — it gets a signed Storage upload URL first and
+   * uploads directly to Storage, then a second tiny call just registers
+   * it as a document.
+   */
+  async uploadFamilyPortalVideo(token: string, file: File, onProgress?: (pct: number) => void): Promise<void> {
+    if (USE_MOCK) return // no-op in demo mode
+    const urlRes = await fetch(`${supabaseUrl}/functions/v1/family-portal-upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}`, apikey: supabaseAnonKey! },
+      body: JSON.stringify({ token, action: 'get-upload-url', filename: file.name, kind: 'video' }),
+    })
+    const urlBody = await urlRes.json()
+    if (!urlRes.ok) throw new Error(urlBody?.error ?? `Could not start the upload (${urlRes.status}).`)
+    const { path, signedUrl } = urlBody
+
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('PUT', signedUrl)
+      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100)) }
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}). The file may be too large — try a shorter or lower-resolution video.`)))
+      xhr.onerror = () => reject(new Error('Upload failed — check your connection and try again.'))
+      xhr.send(file)
+    })
+
+    const registerRes = await fetch(`${supabaseUrl}/functions/v1/family-portal-upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${supabaseAnonKey}`, apikey: supabaseAnonKey! },
+      body: JSON.stringify({ token, action: 'register', filename: file.name, kind: 'video', path }),
+    })
+    const registerBody = await registerRes.json()
+    if (!registerRes.ok) throw new Error(registerBody?.error ?? 'Uploaded, but could not save it to the case. Please try again.')
+  },
+
   // -------------------------------------------------------------------
   // Slack notifications
   //

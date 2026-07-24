@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       supabase.from('gpl_items').select('*').eq('location_id', caseRow.location_id),
       supabase.from('contracts').select('*, contract_line_items(*)').eq('case_id', caseRow.id),
       supabase.from('obituary_drafts').select('*').eq('case_id', caseRow.id).maybeSingle(),
-      supabase.from('case_documents').select('*').eq('case_id', caseRow.id).in('category', ['photo', 'music']),
+      supabase.from('case_documents').select('*').eq('case_id', caseRow.id).in('category', ['photo', 'music', 'video']),
     ])
 
     return new Response(JSON.stringify({

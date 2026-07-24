@@ -274,7 +274,7 @@ export interface CaseDocument {
   id: string
   caseId: string
   name: string
-  category: 'permit' | 'contract' | 'authorization' | 'photo' | 'obituary' | 'music' | 'other'
+  category: 'permit' | 'contract' | 'authorization' | 'photo' | 'obituary' | 'music' | 'video' | 'other'
   uploadedAt: string
   uploadedBy: string
   url: string // storage path

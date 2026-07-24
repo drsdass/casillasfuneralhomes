@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 import { useState, useEffect } from 'react'
 import {
   Image as ImageIcon, MessageSquare, PenLine, Check,
-  Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music,
+  Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music, Video,
 } from 'lucide-react'
 import { formatCurrency } from '@/components/ui/Primitives'
 import { useLanguage } from '@/i18n/LanguageContext'
@@ -49,6 +49,8 @@ export default function FamilyPortal() {
   const [intakeSaved, setIntakeSaved] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [uploadingMusic, setUploadingMusic] = useState(false)
+  const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [videoProgress, setVideoProgress] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [intakeDiscrepancy, setIntakeDiscrepancy] = useState(false)
   const [dob, setDob] = useState('')
@@ -114,7 +116,8 @@ export default function FamilyPortal() {
   const statusMessage = data?.statusMessage
   const mediaFiles = data?.mediaFiles ?? []
   const photos = mediaFiles.filter((m) => m.category === 'photo')
-  const music = mediaFiles.find((m) => m.category === 'music')
+  const musicTracks = mediaFiles.filter((m) => m.category === 'music')
+  const videos = mediaFiles.filter((m) => m.category === 'video')
 
   // Pre-fill the intake form with whatever's already on file, once, the
   // first time case data arrives — not on every refetch, or the family's
@@ -508,33 +511,76 @@ export default function FamilyPortal() {
 
               <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('familyPortal.photos.musicTitle')}</h3>
               <p className="text-xs text-slate-400 mb-3">{t('familyPortal.photos.musicSubtitle')}</p>
-              {music ? (
-                <div className="text-sm text-slate-600 flex items-center gap-2">
-                  <Music size={15} className="text-[#b3925a]" /> {music.name}
+              {musicTracks.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {musicTracks.map((track) => (
+                    <div key={track.id} className="text-sm text-slate-600 flex items-center gap-2">
+                      <Music size={15} className="text-[#b3925a]" /> {track.name}
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <label className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 cursor-pointer">
-                  <Music size={14} /> {uploadingMusic ? t('familyPortal.photos.uploading') : t('familyPortal.photos.addSong')}
-                  <input
-                    type="file" accept="audio/*" className="hidden" disabled={uploadingMusic}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setUploadingMusic(true)
-                      setUploadError(null)
-                      try {
-                        await api.uploadFamilyPortalFile(token!, file, 'music')
-                        queryClient.invalidateQueries({ queryKey: ['family-portal', token] })
-                      } catch (err) {
-                        setUploadError(err instanceof Error ? err.message : 'Something went wrong uploading — please try again.')
-                      } finally {
-                        setUploadingMusic(false)
-                        e.target.value = ''
-                      }
-                    }}
-                  />
-                </label>
               )}
+              <label className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 cursor-pointer mb-8">
+                <Music size={14} /> {uploadingMusic ? t('familyPortal.photos.uploading') : t('familyPortal.photos.addSong')}
+                <input
+                  type="file" accept="audio/*" multiple className="hidden" disabled={uploadingMusic}
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files ?? [])
+                    if (!files.length) return
+                    setUploadingMusic(true)
+                    setUploadError(null)
+                    try {
+                      for (const file of files) await api.uploadFamilyPortalFile(token!, file, 'music')
+                      queryClient.invalidateQueries({ queryKey: ['family-portal', token] })
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Something went wrong uploading — please try again.')
+                    } finally {
+                      setUploadingMusic(false)
+                      e.target.value = ''
+                    }
+                  }}
+                />
+              </label>
+
+              <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('familyPortal.photos.videoTitle')}</h3>
+              <p className="text-xs text-slate-400 mb-3">{t('familyPortal.photos.videoSubtitle')}</p>
+              {videos.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {videos.map((v) => (
+                    <div key={v.id} className="text-sm text-slate-600 flex items-center gap-2">
+                      <Video size={15} className="text-[#b3925a]" /> {v.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {uploadingVideo && videoProgress !== null && (
+                <div className="w-full bg-slate-100 rounded-full h-2 mb-3 overflow-hidden">
+                  <div className="bg-[#3b4a35] h-2 transition-all" style={{ width: `${videoProgress}%` }} />
+                </div>
+              )}
+              <label className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 cursor-pointer">
+                <Video size={14} /> {uploadingVideo ? `${t('familyPortal.photos.uploading')} ${videoProgress ?? 0}%` : t('familyPortal.photos.addVideo')}
+                <input
+                  type="file" accept="video/*" className="hidden" disabled={uploadingVideo}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setUploadingVideo(true)
+                    setVideoProgress(0)
+                    setUploadError(null)
+                    try {
+                      await api.uploadFamilyPortalVideo(token!, file, setVideoProgress)
+                      queryClient.invalidateQueries({ queryKey: ['family-portal', token] })
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Something went wrong uploading — please try again.')
+                    } finally {
+                      setUploadingVideo(false)
+                      setVideoProgress(null)
+                      e.target.value = ''
+                    }
+                  }}
+                />
+              </label>
             </div>
           )}
 
