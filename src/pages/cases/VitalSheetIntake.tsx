@@ -141,26 +141,40 @@ export default function VitalSheetIntake() {
           <div className={sectionLabel}>SERVICES</div>
           <div className="p-4 space-y-3">
             <input value={f.visitationHours ?? ''} onChange={(e) => set('visitationHours', e.target.value)} placeholder="Visitation Hours" className={inputClass} />
-            <div className="grid grid-cols-4 gap-2 items-center">
+            <div className="grid grid-cols-5 gap-2 items-center">
               <input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} />
               <input type="time" value={f.rosaryTime ?? ''} onChange={(e) => set('rosaryTime', e.target.value)} className={inputClass} />
               <select value={f.rosaryLanguage ?? ''} onChange={(e) => set('rosaryLanguage', e.target.value as VitalSheetInfo['rosaryLanguage'])} className={inputClass}>
                 <option value="">Rosary Lang.</option><option value="english">English</option><option value="spanish">Spanish</option>
               </select>
               <input value={f.rosaryPlace ?? ''} onChange={(e) => set('rosaryPlace', e.target.value)} placeholder="Rosary Place" className={inputClass} />
+              <input value={f.rosaryBy ?? ''} onChange={(e) => set('rosaryBy', e.target.value)} placeholder="By" className={inputClass} />
             </div>
-            <div className="grid grid-cols-4 gap-2 items-center">
+            <div className="grid grid-cols-5 gap-2 items-center">
               <input type="date" value={f.massDate ?? ''} onChange={(e) => set('massDate', e.target.value)} className={inputClass} />
               <input type="time" value={f.massTime ?? ''} onChange={(e) => set('massTime', e.target.value)} className={inputClass} />
               <select value={f.massLanguage ?? ''} onChange={(e) => set('massLanguage', e.target.value as VitalSheetInfo['massLanguage'])} className={inputClass}>
                 <option value="">Mass Lang.</option><option value="english">English</option><option value="spanish">Spanish</option>
               </select>
               <input value={f.massPlace ?? ''} onChange={(e) => set('massPlace', e.target.value)} placeholder="Mass Place" className={inputClass} />
+              <input value={f.massBy ?? ''} onChange={(e) => set('massBy', e.target.value)} placeholder="By" className={inputClass} />
             </div>
-            <div className="grid grid-cols-3 gap-2 items-center">
+            <div className="grid grid-cols-4 gap-2 items-center">
               <input type="date" value={f.gravesideDate ?? ''} onChange={(e) => set('gravesideDate', e.target.value)} className={inputClass} />
               <input type="time" value={f.gravesideTime ?? ''} onChange={(e) => set('gravesideTime', e.target.value)} className={inputClass} />
               <input value={f.gravesidePlace ?? ''} onChange={(e) => set('gravesidePlace', e.target.value)} placeholder="Graveside Place" className={inputClass} />
+              <input value={f.gravesideBy ?? ''} onChange={(e) => set('gravesideBy', e.target.value)} placeholder="By" className={inputClass} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className={sectionLabel}>OFFICE USE ONLY</div>
+          <div className="p-4 space-y-3">
+            <input value={f.placeOfFinalDisposition ?? ''} onChange={(e) => set('placeOfFinalDisposition', e.target.value)} placeholder="Place of Final Disposition" className={inputClass} />
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.obituary ?? false} onChange={(e) => set('obituary', e.target.checked)} className="accent-[#3b4a35]" /> Obituary</label>
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.pacemaker ?? false} onChange={(e) => set('pacemaker', e.target.checked)} className="accent-[#3b4a35]" /> Pacemaker</label>
             </div>
           </div>
         </Card>
@@ -182,14 +196,17 @@ export default function VitalSheetIntake() {
             <input value={f.cardsNameOn ?? ''} onChange={(e) => set('cardsNameOn', e.target.value)} placeholder="Name on Cards / Memorial Folders" className={inputClass} />
             <textarea value={f.prayerCardsNotes ?? ''} onChange={(e) => set('prayerCardsNotes', e.target.value)} placeholder="Prayer Cards — design, verse, amount, language" className={inputClass} rows={2} />
             <textarea value={f.memorialFoldersNotes ?? ''} onChange={(e) => set('memorialFoldersNotes', e.target.value)} placeholder="Memorial Folders — design, verse, amount, language" className={inputClass} rows={2} />
+            <input value={f.memorialBook ?? ''} onChange={(e) => set('memorialBook', e.target.value)} placeholder="Book" className={inputClass} />
             <div className="grid grid-cols-2 gap-3">
               <input value={f.doctorAddress ?? ''} onChange={(e) => set('doctorAddress', e.target.value)} placeholder="Doctor Address" className={inputClass} />
               <input value={f.doctorFax ?? ''} onChange={(e) => set('doctorFax', e.target.value)} placeholder="Doctor Fax" className={inputClass} />
             </div>
             <input value={f.makeupHair ?? ''} onChange={(e) => set('makeupHair', e.target.value)} placeholder="Make-up & Hair notes" className={inputClass} />
+            <input value={f.receivingFuneralDirector ?? ''} onChange={(e) => set('receivingFuneralDirector', e.target.value)} placeholder="Receiving Funeral Director" className={inputClass} />
+            <input value={f.receivingFuneralDirectorAddress ?? ''} onChange={(e) => set('receivingFuneralDirectorAddress', e.target.value)} placeholder="Receiving Funeral Director Address" className={inputClass} />
             <div className="grid grid-cols-2 gap-3">
-              <input value={f.receivingFuneralDirector ?? ''} onChange={(e) => set('receivingFuneralDirector', e.target.value)} placeholder="Receiving Funeral Director" className={inputClass} />
               <input value={f.receivingFuneralDirectorCharges ?? ''} onChange={(e) => set('receivingFuneralDirectorCharges', e.target.value)} placeholder="Charges $" className={inputClass} />
+              <input value={f.receivingFuneralDirectorPhone ?? ''} onChange={(e) => set('receivingFuneralDirectorPhone', e.target.value)} placeholder="Phone" className={inputClass} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <input value={f.medallions ?? ''} onChange={(e) => set('medallions', e.target.value)} placeholder="Medallions" className={inputClass} />

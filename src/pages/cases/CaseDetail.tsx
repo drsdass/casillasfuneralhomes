@@ -451,76 +451,88 @@ export default function CaseDetail() {
             )}
           </Card>
 
-          {c.vitalSheet && Object.values(c.vitalSheet).some((v) => v !== undefined && v !== '') && (
-            <Card className="lg:col-span-3 p-5">
-              <h3 className="text-sm font-medium text-slate-800 mb-3">Vital Sheet</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 text-sm">
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Birth & Identity</div>
-                  <dl className="space-y-2">
-                    <Field label="Also Known As" value={c.vitalSheet.alsoKnownAs || '—'} />
-                    <Field label="Birth Place" value={[c.vitalSheet.birthCity, c.vitalSheet.birthState, c.vitalSheet.birthCountry].filter(Boolean).join(', ') || '—'} />
-                    <Field label="Education" value={c.vitalSheet.education || '—'} />
-                    <Field label="Race" value={c.vitalSheet.race || '—'} />
-                    <Field label="Hispanic/Latino" value={c.vitalSheet.hispanicLatino ? 'Yes' : 'No'} />
-                  </dl>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Occupation & Residence</div>
-                  <dl className="space-y-2">
-                    <Field label="Occupation" value={c.vitalSheet.occupation || '—'} />
-                    <Field label="Kind of Business" value={c.vitalSheet.kindOfBusiness || '—'} />
-                    <Field label="Years in Occupation" value={c.vitalSheet.yearsInOccupation || '—'} />
-                    <Field label="Residence" value={[c.vitalSheet.residenceAddress, c.vitalSheet.residenceCity, c.vitalSheet.residenceState].filter(Boolean).join(', ') || '—'} />
-                  </dl>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Informant & Family</div>
-                  <dl className="space-y-2">
-                    <Field label="Informant" value={c.vitalSheet.informantName || '—'} />
-                    <Field label="Relationship" value={c.vitalSheet.informantRelationship || '—'} />
-                    <Field label="Spouse" value={c.vitalSheet.spouseName || '—'} />
-                    <Field label="Father" value={c.vitalSheet.fatherName || '—'} />
-                    <Field label="Mother" value={c.vitalSheet.motherName || '—'} />
-                  </dl>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Services</div>
-                  <dl className="space-y-2">
-                    <Field label="Visitation Hours" value={c.vitalSheet.visitationHours || '—'} />
-                    <Field label="Rosary" value={[c.vitalSheet.rosaryDate && format(parseISO(c.vitalSheet.rosaryDate), 'MMM d, yyyy'), c.vitalSheet.rosaryTime, c.vitalSheet.rosaryPlace].filter(Boolean).join(' · ') || '—'} />
-                    <Field label="Mass" value={[c.vitalSheet.massDate && format(parseISO(c.vitalSheet.massDate), 'MMM d, yyyy'), c.vitalSheet.massTime, c.vitalSheet.massPlace].filter(Boolean).join(' · ') || '—'} />
-                    <Field label="Graveside" value={[c.vitalSheet.gravesideDate && format(parseISO(c.vitalSheet.gravesideDate), 'MMM d, yyyy'), c.vitalSheet.gravesideTime, c.vitalSheet.gravesidePlace].filter(Boolean).join(' · ') || '—'} />
-                  </dl>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Survived By</div>
-                  <dl className="space-y-2">
-                    <Field label="Sons" value={c.vitalSheet.sons || '—'} />
-                    <Field label="Daughters" value={c.vitalSheet.daughters || '—'} />
-                    <Field label="Sisters" value={c.vitalSheet.sisters || '—'} />
-                    <Field label="Brothers" value={c.vitalSheet.brothers || '—'} />
-                  </dl>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Flowers, Cards & Extras</div>
-                  <dl className="space-y-2">
-                    <Field label="Flowers" value={c.vitalSheet.flowersNotes || '—'} />
-                    <Field label="Name on Cards" value={c.vitalSheet.cardsNameOn || '—'} />
-                    <Field label="Prayer Cards" value={c.vitalSheet.prayerCardsNotes || '—'} />
-                    <Field label="Memorial Folders" value={c.vitalSheet.memorialFoldersNotes || '—'} />
-                    <Field label="Medallions / Charms" value={[c.vitalSheet.medallions, c.vitalSheet.charms].filter(Boolean).join(' / ') || '—'} />
-                  </dl>
-                </div>
-              </div>
+          <Card className="lg:col-span-3 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-slate-800">Vital Sheet</h3>
               <Link
                 to={`/cases/${c.id}/vital-sheet`}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#3b4a35] hover:underline mt-4"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#3b4a35] border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
               >
-                Edit Vital Sheet →
+                {c.vitalSheet ? 'Edit Vital Sheet' : 'Fill Out Vital Sheet'} →
               </Link>
-            </Card>
-          )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 text-sm">
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Birth & Identity</div>
+                <dl className="space-y-2">
+                  <Field label="Also Known As" value={c.vitalSheet?.alsoKnownAs || '—'} />
+                  <Field label="Birth Place" value={[c.vitalSheet?.birthCity, c.vitalSheet?.birthState, c.vitalSheet?.birthCountry].filter(Boolean).join(', ') || '—'} />
+                  <Field label="Education" value={c.vitalSheet?.education || '—'} />
+                  <Field label="Race" value={c.vitalSheet?.race || '—'} />
+                  <Field label="Hispanic/Latino" value={c.vitalSheet?.hispanicLatino ? 'Yes' : 'No'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Occupation & Residence</div>
+                <dl className="space-y-2">
+                  <Field label="Occupation" value={c.vitalSheet?.occupation || '—'} />
+                  <Field label="Kind of Business" value={c.vitalSheet?.kindOfBusiness || '—'} />
+                  <Field label="Years in Occupation" value={c.vitalSheet?.yearsInOccupation || '—'} />
+                  <Field label="Residence" value={[c.vitalSheet?.residenceAddress, c.vitalSheet?.residenceCity, c.vitalSheet?.residenceState].filter(Boolean).join(', ') || '—'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Informant & Family</div>
+                <dl className="space-y-2">
+                  <Field label="Informant" value={c.vitalSheet?.informantName || '—'} />
+                  <Field label="Relationship" value={c.vitalSheet?.informantRelationship || '—'} />
+                  <Field label="Spouse" value={c.vitalSheet?.spouseName || '—'} />
+                  <Field label="Father" value={c.vitalSheet?.fatherName || '—'} />
+                  <Field label="Mother" value={c.vitalSheet?.motherName || '—'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Services</div>
+                <dl className="space-y-2">
+                  <Field label="Visitation Hours" value={c.vitalSheet?.visitationHours || '—'} />
+                  <Field label="Rosary" value={[c.vitalSheet?.rosaryDate && format(parseISO(c.vitalSheet.rosaryDate), 'MMM d, yyyy'), c.vitalSheet?.rosaryTime, c.vitalSheet?.rosaryPlace, c.vitalSheet?.rosaryBy && `by ${c.vitalSheet.rosaryBy}`].filter(Boolean).join(' · ') || '—'} />
+                  <Field label="Mass" value={[c.vitalSheet?.massDate && format(parseISO(c.vitalSheet.massDate), 'MMM d, yyyy'), c.vitalSheet?.massTime, c.vitalSheet?.massPlace, c.vitalSheet?.massBy && `by ${c.vitalSheet.massBy}`].filter(Boolean).join(' · ') || '—'} />
+                  <Field label="Graveside" value={[c.vitalSheet?.gravesideDate && format(parseISO(c.vitalSheet.gravesideDate), 'MMM d, yyyy'), c.vitalSheet?.gravesideTime, c.vitalSheet?.gravesidePlace, c.vitalSheet?.gravesideBy && `by ${c.vitalSheet.gravesideBy}`].filter(Boolean).join(' · ') || '—'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Office Use Only</div>
+                <dl className="space-y-2">
+                  <Field label="Place of Final Disposition" value={c.vitalSheet?.placeOfFinalDisposition || '—'} />
+                  <Field label="Obituary" value={c.vitalSheet?.obituary ? 'Yes' : 'No'} />
+                  <Field label="Pacemaker" value={c.vitalSheet?.pacemaker ? 'Yes' : 'No'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Survived By</div>
+                <dl className="space-y-2">
+                  <Field label="Sons" value={c.vitalSheet?.sons || '—'} />
+                  <Field label="Daughters" value={c.vitalSheet?.daughters || '—'} />
+                  <Field label="Sisters" value={c.vitalSheet?.sisters || '—'} />
+                  <Field label="Brothers" value={c.vitalSheet?.brothers || '—'} />
+                </dl>
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Flowers, Cards & Extras</div>
+                <dl className="space-y-2">
+                  <Field label="Flowers" value={c.vitalSheet?.flowersNotes || '—'} />
+                  <Field label="Name on Cards" value={c.vitalSheet?.cardsNameOn || '—'} />
+                  <Field label="Prayer Cards" value={c.vitalSheet?.prayerCardsNotes || '—'} />
+                  <Field label="Memorial Folders" value={c.vitalSheet?.memorialFoldersNotes || '—'} />
+                  <Field label="Book" value={c.vitalSheet?.memorialBook || '—'} />
+                  <Field label="Make-up & Hair" value={c.vitalSheet?.makeupHair || '—'} />
+                  <Field label="Doctor" value={[c.vitalSheet?.doctorAddress, c.vitalSheet?.doctorFax && `Fax ${c.vitalSheet.doctorFax}`].filter(Boolean).join(' · ') || '—'} />
+                  <Field label="Receiving FD" value={[c.vitalSheet?.receivingFuneralDirector, c.vitalSheet?.receivingFuneralDirectorAddress, c.vitalSheet?.receivingFuneralDirectorPhone, c.vitalSheet?.receivingFuneralDirectorCharges && `$${c.vitalSheet.receivingFuneralDirectorCharges}`].filter(Boolean).join(' · ') || '—'} />
+                  <Field label="Medallions / Charms" value={[c.vitalSheet?.medallions, c.vitalSheet?.charms].filter(Boolean).join(' / ') || '—'} />
+                </dl>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
