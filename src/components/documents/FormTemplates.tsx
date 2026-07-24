@@ -479,126 +479,206 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
 export function VitalSheetForm({ c }: { c: FuneralCase }) {
   const fc = c.firstCall
   const vs = c.vitalSheet
-  const readOnly = 'border-b border-slate-400 flex-1 min-w-0 px-1 py-0.5 text-sm bg-slate-50'
+  const ro = 'border-b border-slate-400 flex-1 min-w-0 px-1 py-0.5 text-xs bg-slate-50'
+
+  let age = ''
+  if (c.decedent.dateOfBirth && c.decedent.dateOfDeath) {
+    const dob = new Date(c.decedent.dateOfBirth)
+    const dod = new Date(c.decedent.dateOfDeath)
+    let years = dod.getFullYear() - dob.getFullYear()
+    const m = dod.getMonth() - dob.getMonth()
+    if (m < 0 || (m === 0 && dod.getDate() < dob.getDate())) years--
+    age = years >= 0 ? String(years) : ''
+  }
+
   return (
-    <div className="text-sm text-slate-900">
-      <div className="flex items-center gap-3 pb-3 mb-6 border-b-2 border-slate-800">
-        <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-14 w-auto shrink-0" />
-        <h2 className="font-bold text-2xl">VITAL SHEET</h2>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">DECEDENT</div>
-      <div className="space-y-2 mb-5">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">First</span><span className={readOnly}>{c.decedent.firstName}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Middle</span><span className={readOnly}>{c.decedent.middleName ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Last</span><span className={readOnly}>{c.decedent.lastName}</span></div>
-        </div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Also Known As</span><span className={readOnly}>{vs?.alsoKnownAs ?? ''}</span></div>
-        <div className="grid grid-cols-4 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">DOB</span><span className={readOnly}>{fmtDate(c.decedent.dateOfBirth)}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">DOD</span><span className={readOnly}>{fmtDate(c.decedent.dateOfDeath)}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Sex</span><span className={readOnly + ' capitalize'}>{c.decedent.sex ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Marital</span><span className={readOnly}>{c.decedent.maritalStatus ?? ''}</span></div>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Birth City</span><span className={readOnly}>{vs?.birthCity ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">State</span><span className={readOnly}>{vs?.birthState ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Country</span><span className={readOnly}>{vs?.birthCountry ?? ''}</span></div>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-medium">
-          Armed Forces? <span className={checkboxClass}>{c.decedent.veteran ? '✓' : ''}</span>Y <span className={checkboxClass}>{!c.decedent.veteran ? '✓' : ''}</span>N
-        </div>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">BACKGROUND</div>
-      <div className="space-y-2 mb-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Education</span><span className={readOnly}>{vs?.education ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Race</span><span className={readOnly}>{vs?.race ?? ''}</span></div>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-medium">
-          Hispanic/Latino? <span className={checkboxClass}>{vs?.hispanicLatino ? '✓' : ''}</span>Y <span className={checkboxClass}>{!vs?.hispanicLatino ? '✓' : ''}</span>N
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Occupation</span><span className={readOnly}>{vs?.occupation ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Business</span><span className={readOnly}>{vs?.kindOfBusiness ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Yrs</span><span className={readOnly}>{vs?.yearsInOccupation ?? ''}</span></div>
-        </div>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">RESIDENCE</div>
-      <div className="space-y-2 mb-5">
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Address</span><span className={readOnly}>{vs?.residenceAddress ?? ''}</span></div>
-        <div className="grid grid-cols-4 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">City</span><span className={readOnly}>{vs?.residenceCity ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">County</span><span className={readOnly}>{vs?.residenceCounty ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">State</span><span className={readOnly}>{vs?.residenceState ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Zip</span><span className={readOnly}>{vs?.residenceZip ?? ''}</span></div>
-        </div>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">INFORMANT / FAMILY</div>
-      <div className="space-y-2 mb-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Informant</span><span className={readOnly}>{vs?.informantName ?? c.contacts[0]?.name ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Relationship</span><span className={readOnly}>{vs?.informantRelationship ?? c.contacts[0]?.relationship ?? ''}</span></div>
-        </div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Spouse</span><span className={readOnly}>{vs?.spouseName ?? ''}</span></div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Father</span><span className={readOnly}>{vs?.fatherName ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Mother</span><span className={readOnly}>{vs?.motherName ?? ''}</span></div>
-        </div>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">OFFICE USE ONLY</div>
-      <div className="space-y-2 mb-5">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Disposition</span><span className={readOnly + ' capitalize'}>{c.disposition.replace('_', ' ')}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Weight</span><span className={readOnly}>{fc?.weight ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Coroner's Case #</span><span className={readOnly}>{fc?.coronerCaseNumber ?? ''}</span></div>
-        </div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Doctor / Hospice</span><span className={readOnly}>{[fc?.doctorName, fc?.hospiceName].filter(Boolean).join(' / ')}</span></div>
-      </div>
-
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">SERVICES</div>
-      <div className="space-y-2 mb-5">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Visitation</span><span className={readOnly}>{fmtDate(c.visitationDate)}{vs?.visitationHours ? ` · ${vs.visitationHours}` : ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Service</span><span className={readOnly}>{fmtDate(c.serviceDate)}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Graveside</span><span className={readOnly}>{fmtDate(vs?.gravesideDate)}{vs?.gravesideTime ? ` ${vs.gravesideTime}` : ''} {vs?.gravesidePlace ?? ''}</span></div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs font-medium shrink-0">Rosary</span>
-            <span className={readOnly}>{fmtDate(vs?.rosaryDate)}{vs?.rosaryTime ? ` ${vs.rosaryTime}` : ''} {vs?.rosaryPlace ?? ''} {vs?.rosaryLanguage ? `(${vs.rosaryLanguage})` : ''}</span>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs font-medium shrink-0">Mass</span>
-            <span className={readOnly}>{fmtDate(vs?.massDate)}{vs?.massTime ? ` ${vs.massTime}` : ''} {vs?.massPlace ?? ''} {vs?.massLanguage ? `(${vs.massLanguage})` : ''}</span>
+    <div className="text-xs text-slate-900">
+      {/* ------------------------------------------------------------- */}
+      {/* PAGE 1 — matches "This form contains the data needed to      */}
+      {/* complete the California Certificate of Death" exactly        */}
+      {/* ------------------------------------------------------------- */}
+      <div className="mb-3">
+        <div className="flex justify-between items-start mb-2">
+          <div className="italic text-[11px] leading-tight max-w-[45%]">This form contains the data needed to complete the California Certificate of Death</div>
+          <div className="text-right space-y-1 w-1/2">
+            <div className="flex items-baseline gap-1"><span className="font-medium shrink-0">CONTACT PERSON</span><span className={ro}>{c.contacts[0]?.name ?? ''}</span></div>
+            <div className="flex items-baseline gap-1"><span className="font-medium shrink-0">PHONE NUMBER</span><span className={ro}>{c.contacts[0]?.phone ?? ''}</span></div>
+            <div className="flex items-baseline gap-1"><span className="font-medium shrink-0">EMAIL</span><span className={ro}>{c.contacts[0]?.email ?? ''}</span></div>
           </div>
         </div>
+
+        <div className="border border-slate-400">
+          <div className="grid grid-cols-3 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">1. DECEDENT FIRST NAME</div><div className="font-medium">{c.decedent.firstName}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">2. MIDDLE</div><div className="font-medium">{c.decedent.middleName ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">3. LAST NAME</div><div className="font-medium">{c.decedent.lastName}</div></div>
+          </div>
+          <div className="p-1 border-b border-slate-400"><div className="text-[9px] text-slate-500">ALSO KNOWN AS</div><div>{vs?.alsoKnownAs ?? ''}</div></div>
+          <div className="grid grid-cols-4 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">4. DATE OF BIRTH</div><div>{c.decedent.dateOfBirth ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">5. AGE</div><div>{age}</div></div>
+            <div className="p-1 col-span-2"><div className="text-[9px] text-slate-500">6. SEX</div><div className="capitalize">{c.decedent.sex ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-6 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400 col-span-2"><div className="text-[9px] text-slate-500">9. BIRTH CITY/ STATE/ COUNTRY</div><div>{[vs?.birthCity, vs?.birthState, vs?.birthCountry].filter(Boolean).join(', ')}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">10. SOCIAL SECURITY NUMBER</div><div>{c.decedent.ssn ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">11. ARMED FORCES?</div><div>{c.decedent.veteran ? 'Y' : 'N'}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">12. MARITAL STATUS</div><div className="capitalize">{c.decedent.maritalStatus ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">7. DATE OF DEATH</div><div>{c.decedent.dateOfDeath ?? ''}</div><div className="text-[9px] text-slate-500 mt-0.5">8. TIME</div><div>{fc?.timeOfDeath ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-3 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">13. EDUCATION</div><div>{vs?.education ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">14. WAS DECEDENT HISPANIC/ LATINO /SPANISH?</div><div>{vs?.hispanicLatino ? 'Yes' : 'No'}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">16. RACE</div><div>{vs?.race ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-3 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">17. OCCUPATION</div><div>{vs?.occupation ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">18. KIND OF BUSINESS</div><div>{vs?.kindOfBusiness ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">19. YRS IN OCCUPATION</div><div>{vs?.yearsInOccupation ?? ''}</div></div>
+          </div>
+          <div className="p-1 border-b border-slate-400"><div className="text-[9px] text-slate-500">20. DECEDENT'S RESIDENCE</div><div>{vs?.residenceAddress ?? ''}</div></div>
+          <div className="grid grid-cols-5 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">21. CITY</div><div>{vs?.residenceCity ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">22. COUNTY</div><div>{vs?.residenceCounty ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">23. ZIP CODE</div><div>{vs?.residenceZip ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">24. YRS IN COUNTY</div><div>{vs?.yearsInCounty ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">25. STATE</div><div>{vs?.residenceState ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-2 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">26. NAME OF INFORMANT AND RELATIONSHIP</div><div>{[vs?.informantName, vs?.informantRelationship].filter(Boolean).join(' — ')}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">27. MAILING ADDRESS</div><div>{vs?.informantMailingAddress ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-3 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400 col-span-2"><div className="text-[9px] text-slate-500">28. NAME OF SPOUSE</div><div>{vs?.spouseName ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">30. LAST - MAIDEN</div><div></div></div>
+          </div>
+          <div className="grid grid-cols-4 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400 col-span-2"><div className="text-[9px] text-slate-500">31. NAME OF FATHER</div><div>{vs?.fatherName ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">33. LAST</div><div></div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">34 BIRTH STATE</div><div>{vs?.fatherBirthState ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-4">
+            <div className="p-1 border-r border-slate-400 col-span-2"><div className="text-[9px] text-slate-500">35. NAME OF MOTHER</div><div>{vs?.motherName ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">36. LAST - MAIDEN</div><div></div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">38 BIRTH STATE</div><div>{vs?.motherBirthState ?? ''}</div></div>
+          </div>
+        </div>
+
+        <div className="bg-slate-600 text-white text-center text-[10px] font-semibold py-0.5 mt-2">OFFICE USE ONLY</div>
+        <div className="border border-slate-400 border-t-0">
+          <div className="p-1 border-b border-slate-400"><div className="text-[9px] text-slate-500">101. PLACE OF DEATH</div><div>{c.decedent.placeOfDeath ?? ''}</div></div>
+          <div className="grid grid-cols-2 border-b border-slate-400">
+            <div className="p-1 border-r border-slate-400">
+              <div className="text-[9px] text-slate-500">DISPOSITION</div>
+              <div>EMB <span className="inline-block w-3 h-3 border border-slate-500 align-middle ml-1 mr-3 text-center">{c.disposition === 'burial' ? '✓' : ''}</span>
+              CREM <span className="inline-block w-3 h-3 border border-slate-500 align-middle ml-1">{c.disposition === 'cremation' ? '✓' : ''}</span></div>
+            </div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">40. PLACE OF FINAL DISPOSITION</div><div>{vs?.placeOfFinalDisposition ?? ''}</div></div>
+          </div>
+          <div className="grid grid-cols-5">
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">WEIGHT</div><div>{fc?.weight ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">OBITUARY</div><div>{vs?.obituary ? 'Y' : 'N'}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">PACEMAKER</div><div>{vs?.pacemaker ? 'Y' : 'N'}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">CORONER'S CASE #</div><div>{fc?.coronerCaseNumber ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">DOCTOR - HOSPICE</div><div>{[fc?.doctorName, fc?.hospiceName].filter(Boolean).join(' / ')}</div></div>
+          </div>
+        </div>
+
+        <div className="border border-slate-400 border-t-0">
+          <div className="grid grid-cols-[90px_1fr_1fr_1fr] border-b border-slate-400">
+            <div className="p-1 bg-slate-100 font-medium border-r border-slate-400">VISITATION</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{vs?.visitationHours ?? ''}</div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">Place</div>{c.visitationLocation ?? ''}</div>
+          </div>
+          <div className="grid grid-cols-[90px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+            <div className="p-1 bg-slate-100 font-medium border-r border-slate-400">ROSARY SERVICE</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.rosaryDate ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.rosaryTime ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.rosaryLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.rosaryPlace ?? ''}</div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.rosaryBy ?? ''}</div>
+          </div>
+          <div className="grid grid-cols-[90px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+            <div className="p-1 bg-slate-100 font-medium border-r border-slate-400">MASS FUNERAL SERV</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.massDate ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.massTime ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.massLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.massPlace ?? ''}</div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.massBy ?? ''}</div>
+          </div>
+          <div className="grid grid-cols-[90px_1fr_1fr_1fr]">
+            <div className="p-1 bg-slate-100 font-medium border-r border-slate-400">GRAVESIDE SERVICE</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.gravesideDate ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.gravesideTime ?? ''}</div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">Place</div>{vs?.gravesidePlace ?? ''} {vs?.gravesideBy && `— BY ${vs.gravesideBy}`}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-8 mt-2">
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2"><span className="w-20 font-medium shrink-0">SONS</span><span className={ro}>{vs?.sons ?? ''}</span></div>
+            <div className="flex items-baseline gap-2"><span className="w-20 font-medium shrink-0">DAUGHTERS</span><span className={ro}>{vs?.daughters ?? ''}</span></div>
+            <div className="flex items-baseline gap-2"><span className="w-20 font-medium shrink-0">SISTERS</span><span className={ro}>{vs?.sisters ?? ''}</span></div>
+            <div className="flex items-baseline gap-2"><span className="w-20 font-medium shrink-0">BROTHER</span><span className={ro}>{vs?.brothers ?? ''}</span></div>
+          </div>
+          <div className="text-[10px] space-y-1">
+            <div className="flex items-baseline gap-2"><span className="w-4 font-medium">Y</span><span className={ro}>{age}</span></div>
+            <div className="flex items-baseline gap-2"><span className="w-4 font-medium">M</span><span className={ro}></span></div>
+            <div className="flex items-baseline gap-2"><span className="w-4 font-medium">D</span><span className={ro}></span></div>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">SURVIVED BY</div>
-      <div className="grid grid-cols-4 gap-4 mb-5">
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Sons</span><span className={readOnly}>{vs?.sons ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Daughters</span><span className={readOnly}>{vs?.daughters ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Sisters</span><span className={readOnly}>{vs?.sisters ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Brothers</span><span className={readOnly}>{vs?.brothers ?? ''}</span></div>
-      </div>
+      {/* ------------------------------------------------------------- */}
+      {/* PAGE 2 — matches the back page (Flowers / Cards / Doctor /    */}
+      {/* Receiving Funeral Director) exactly                          */}
+      {/* ------------------------------------------------------------- */}
+      <div className="break-before-page pt-6 border-t-2 border-dashed border-slate-300 mt-6">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">Church:</span><span className={ro}>{vs?.churchName ?? ''}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">Pastor:</span><span className={ro}>{vs?.pastorName ?? ''}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">Address:</span><span className={ro}>{vs?.churchAddress ?? ''}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">Tel:</span><span className={ro}>{vs?.pastorPhone ?? ''}</span></div>
+        </div>
 
-      <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">FLOWERS, CARDS &amp; EXTRAS</div>
-      <div className="space-y-2">
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Flowers</span><span className={readOnly}>{vs?.flowersNotes ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Name on Cards</span><span className={readOnly}>{vs?.cardsNameOn ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Prayer Cards</span><span className={readOnly}>{vs?.prayerCardsNotes ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Mem. Folders</span><span className={readOnly}>{vs?.memorialFoldersNotes ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Make-up &amp; Hair</span><span className={readOnly}>{vs?.makeupHair ?? ''}</span></div>
-        <div className="flex items-baseline gap-2"><span className="text-xs font-medium w-28 shrink-0">Receiving FD</span><span className={readOnly}>{[vs?.receivingFuneralDirector, vs?.receivingFuneralDirectorCharges && `$${vs.receivingFuneralDirectorCharges}`].filter(Boolean).join(' — ')}</span></div>
+        <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-2">FLOWERS</div>
+        <div className="mb-4">
+          <p className="text-xs whitespace-pre-wrap">{vs?.flowersNotes || '—'}</p>
+        </div>
+
+        <div className="mb-4"><span className="font-semibold">NAME ON CARDS/MEM FOLDERS:</span> <span className={ro}>{vs?.cardsNameOn ?? ''}</span></div>
+
+        <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-2">PRAYER CARDS</div>
+        <p className="text-xs whitespace-pre-wrap mb-4">{vs?.prayerCardsNotes || '—'}</p>
+
+        <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-2">MEM. FOLDERS</div>
+        <p className="text-xs whitespace-pre-wrap mb-4">{vs?.memorialFoldersNotes || '—'}</p>
+
+        <div className="flex items-baseline gap-2 mb-4"><span className="font-medium shrink-0">Book</span><span className={ro}>{vs?.memorialBook ?? ''}</span></div>
+
         <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Medallions</span><span className={readOnly}>{vs?.medallions ?? ''}</span></div>
-          <div className="flex items-baseline gap-2"><span className="text-xs font-medium shrink-0">Charms</span><span className={readOnly}>{vs?.charms ?? ''}</span></div>
+          <div>
+            <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-2">DOCTOR</div>
+            <div className="space-y-1">
+              <div>{fc?.doctorName ?? ''}</div>
+              <div className="flex items-baseline gap-2"><span className="text-[10px] text-slate-500 shrink-0">Address</span><span className={ro}>{vs?.doctorAddress ?? ''}</span></div>
+              <div className="flex items-baseline gap-2"><span className="text-[10px] text-slate-500 shrink-0">Tel.</span><span className={ro}>{fc?.doctorPhone ?? ''}</span><span className="text-[10px] text-slate-500 shrink-0">Fax</span><span className={ro}>{vs?.doctorFax ?? ''}</span></div>
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold mb-2">MAKE-UP &amp; HAIR</div>
+            <p className="text-xs whitespace-pre-wrap">{vs?.makeupHair || '—'}</p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-baseline gap-2 mb-1"><span className="font-medium shrink-0">Receiving Funeral Director</span><span className={ro}>{vs?.receivingFuneralDirector ?? ''}</span></div>
+          <div className="flex items-baseline gap-2 mb-1"><span className="font-medium shrink-0">Address</span><span className={ro}>{vs?.receivingFuneralDirectorAddress ?? ''}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">Charges $</span><span className={ro}>{vs?.receivingFuneralDirectorCharges ?? ''}</span><span className="font-medium shrink-0">Tel</span><span className={ro}>{vs?.receivingFuneralDirectorPhone ?? ''}</span></div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">medallions</span><span className={ro}>{vs?.medallions ?? ''}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-medium shrink-0">charms</span><span className={ro}>{vs?.charms ?? ''}</span></div>
         </div>
       </div>
     </div>

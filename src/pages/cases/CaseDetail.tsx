@@ -520,6 +520,7 @@ export default function CaseDetail() {
               <div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Flowers, Cards & Extras</div>
                 <dl className="space-y-2">
+                  <Field label="Church" value={[c.vitalSheet?.churchName, c.vitalSheet?.pastorName && `Pastor ${c.vitalSheet.pastorName}`].filter(Boolean).join(' · ') || '—'} />
                   <Field label="Flowers" value={c.vitalSheet?.flowersNotes || '—'} />
                   <Field label="Name on Cards" value={c.vitalSheet?.cardsNameOn || '—'} />
                   <Field label="Prayer Cards" value={c.vitalSheet?.prayerCardsNotes || '—'} />

@@ -100,6 +100,7 @@ export interface Decedent {
 // other case fields exist yet. veteran status lives on Decedent above, not
 // duplicated here.
 export interface FirstCallInfo {
+  timeOfDeath?: string
   locationType?: 'residence' | 'jfk' | 'drmc' | 'emc' | 'other'
   locationAddress?: string
   gateCode?: string
@@ -174,6 +175,10 @@ export interface VitalSheetInfo {
   sisters?: string
   brothers?: string
   flowersNotes?: string
+  churchName?: string
+  churchAddress?: string
+  pastorName?: string
+  pastorPhone?: string
   cardsNameOn?: string
   prayerCardsNotes?: string
   memorialFoldersNotes?: string

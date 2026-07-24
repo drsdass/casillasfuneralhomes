@@ -190,6 +190,20 @@ export default function VitalSheetIntake() {
         </Card>
 
         <Card className="overflow-hidden">
+          <div className={sectionLabel}>CHURCH</div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input value={f.churchName ?? ''} onChange={(e) => set('churchName', e.target.value)} placeholder="Church" className={inputClass} />
+              <input value={f.pastorName ?? ''} onChange={(e) => set('pastorName', e.target.value)} placeholder="Pastor" className={inputClass} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input value={f.churchAddress ?? ''} onChange={(e) => set('churchAddress', e.target.value)} placeholder="Church Address" className={inputClass} />
+              <input value={f.pastorPhone ?? ''} onChange={(e) => set('pastorPhone', e.target.value)} placeholder="Pastor Tel." className={inputClass} />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
           <div className={sectionLabel}>FLOWERS, CARDS & EXTRAS</div>
           <div className="p-4 space-y-3">
             <textarea value={f.flowersNotes ?? ''} onChange={(e) => set('flowersNotes', e.target.value)} placeholder="Flowers — vendor, items, ribbon text, color" className={inputClass} rows={2} />

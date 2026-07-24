@@ -68,6 +68,7 @@ export default function FirstCallIntake() {
     setNokRelationship(existing.contacts[0]?.relationship ?? '')
     const fc = existing.firstCall
     if (fc) {
+      setTimeOfDeath(fc.timeOfDeath ?? '')
       setLocationType(fc.locationType ?? 'residence')
       setLocationAddress(fc.locationAddress ?? '')
       setGateCode(fc.gateCode ?? '')
@@ -91,6 +92,7 @@ export default function FirstCallIntake() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const firstCall: FirstCallInfo = {
+        timeOfDeath: timeOfDeath || undefined,
         locationType, locationAddress: locationAddress || undefined, gateCode: gateCode || undefined,
         weight: weight || undefined, familyPresent, familyReady: familyReady || undefined, contagious,
         specialInstructions: locationInstructions || undefined, coronerCase, coronerCaseNumber: coronerCaseNumber || undefined,
