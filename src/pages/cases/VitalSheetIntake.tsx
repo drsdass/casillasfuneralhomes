@@ -73,6 +73,10 @@ export default function VitalSheetIntake() {
           <div className={sectionLabel}>BIRTH & IDENTITY</div>
           <div className="p-4 space-y-3">
             <input value={f.alsoKnownAs ?? ''} onChange={(e) => set('alsoKnownAs', e.target.value)} placeholder="Also Known As" className={inputClass} />
+            <div className="grid grid-cols-2 gap-3">
+              <input value={f.ageUnderHours ?? ''} onChange={(e) => set('ageUnderHours', e.target.value)} placeholder="If under 24 hrs — Hours" className={inputClass} />
+              <input value={f.ageUnderDays ?? ''} onChange={(e) => set('ageUnderDays', e.target.value)} placeholder="If under 24 hrs — Days" className={inputClass} />
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <input value={f.birthCity ?? ''} onChange={(e) => set('birthCity', e.target.value)} placeholder="Birth City" className={inputClass} />
               <input value={f.birthState ?? ''} onChange={(e) => set('birthState', e.target.value)} placeholder="Birth State" className={inputClass} />
@@ -82,9 +86,12 @@ export default function VitalSheetIntake() {
               <input value={f.education ?? ''} onChange={(e) => set('education', e.target.value)} placeholder="Education" className={inputClass} />
               <input value={f.race ?? ''} onChange={(e) => set('race', e.target.value)} placeholder="Race" className={inputClass} />
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input type="checkbox" checked={f.hispanicLatino ?? false} onChange={(e) => set('hispanicLatino', e.target.checked)} className="accent-[#3b4a35]" /> Hispanic / Latino / Spanish
-            </label>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-600">Hispanic/Latino/Spanish?</span>
+              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!f.hispanicLatino} onChange={() => set('hispanicLatino', false)} className="accent-[#3b4a35]" /> No</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.hispanicLatino ?? false} onChange={() => set('hispanicLatino', true)} className="accent-[#3b4a35]" /> Yes</label>
+              {f.hispanicLatino && <input value={f.hispanicSpecify ?? ''} onChange={(e) => set('hispanicSpecify', e.target.value)} placeholder="Specify" className={inputClass} />}
+            </div>
           </div>
         </Card>
 
@@ -171,10 +178,26 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>OFFICE USE ONLY</div>
           <div className="p-4 space-y-3">
-            <input value={f.placeOfFinalDisposition ?? ''} onChange={(e) => set('placeOfFinalDisposition', e.target.value)} placeholder="Place of Final Disposition" className={inputClass} />
+            <div className="grid grid-cols-2 gap-3">
+              <input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} placeholder="Disposition Date" className={inputClass} />
+              <input value={f.placeOfFinalDisposition ?? ''} onChange={(e) => set('placeOfFinalDisposition', e.target.value)} placeholder="Place of Final Disposition" className={inputClass} />
+            </div>
+            <input value={f.dispositionTypeOther ?? ''} onChange={(e) => set('dispositionTypeOther', e.target.value)} placeholder="CVC / DMP / Other" className={inputClass} />
+            <div className="grid grid-cols-2 gap-3">
+              <input value={f.typeOfDisposition ?? ''} onChange={(e) => set('typeOfDisposition', e.target.value)} placeholder="Type of Disposition (EMB, etc.)" className={inputClass} />
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.accidentOrViolentCause ?? false} onChange={(e) => set('accidentOrViolentCause', e.target.checked)} className="accent-[#3b4a35]" /> Accident / Violent Cause</label>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <input value={f.deathCounty ?? ''} onChange={(e) => set('deathCounty', e.target.value)} placeholder="County (of death)" className={inputClass} />
+              <input value={f.facilityAddressOrAddressFound ?? ''} onChange={(e) => set('facilityAddressOrAddressFound', e.target.value)} placeholder="Facility Address / Address Found" className={inputClass} />
+              <input value={f.deathCity ?? ''} onChange={(e) => set('deathCity', e.target.value)} placeholder="City (of death)" className={inputClass} />
+            </div>
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.obituary ?? false} onChange={(e) => set('obituary', e.target.checked)} className="accent-[#3b4a35]" /> Obituary</label>
               <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.pacemaker ?? false} onChange={(e) => set('pacemaker', e.target.checked)} className="accent-[#3b4a35]" /> Pacemaker</label>
+              <span className="text-sm text-slate-600">Language</span>
+              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'spanish'} onChange={() => set('documentLanguage', 'spanish')} className="accent-[#3b4a35]" /> SPN</label>
+              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'english'} onChange={() => set('documentLanguage', 'english')} className="accent-[#3b4a35]" /> ENG</label>
             </div>
           </div>
         </Card>

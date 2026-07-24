@@ -129,11 +129,14 @@ export interface FirstCallInfo {
 // disposition, visitation date) — those are pulled from there directly.
 export interface VitalSheetInfo {
   alsoKnownAs?: string
+  ageUnderHours?: string
+  ageUnderDays?: string
   birthCity?: string
   birthState?: string
   birthCountry?: string
   education?: string
   hispanicLatino?: boolean
+  hispanicSpecify?: string
   race?: string
   occupation?: string
   kindOfBusiness?: string
@@ -153,6 +156,14 @@ export interface VitalSheetInfo {
   motherName?: string
   motherBirthState?: string
   placeOfFinalDisposition?: string
+  dispositionDate?: string
+  dispositionTypeOther?: string // "CVC / DMP / OTHER:" line
+  typeOfDisposition?: string // "41 TYPE OF DISPOSITION" — EMB, etc.
+  accidentOrViolentCause?: boolean // "ACC VC Y N"
+  deathCounty?: string
+  facilityAddressOrAddressFound?: string
+  deathCity?: string
+  documentLanguage?: 'spanish' | 'english' // the top-level "LENGUAGE SPN ENG" box
   obituary?: boolean
   pacemaker?: boolean
   visitationHours?: string

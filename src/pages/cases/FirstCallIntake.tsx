@@ -21,6 +21,7 @@ export default function FirstCallIntake() {
 
   const [caseNumber, setCaseNumber] = useState('')
   const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
   const [dateOfDeath, setDateOfDeath] = useState('')
   const [timeOfDeath, setTimeOfDeath] = useState('')
@@ -59,6 +60,7 @@ export default function FirstCallIntake() {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
     setFirstName(existing.decedent.firstName)
+    setMiddleName(existing.decedent.middleName ?? '')
     setLastName(existing.decedent.lastName)
     setDateOfDeath(existing.decedent.dateOfDeath ?? '')
     setDateOfBirth(existing.decedent.dateOfBirth ?? '')
@@ -108,7 +110,7 @@ export default function FirstCallIntake() {
       if (isEdit && caseId) {
         await api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
-          decedent: { ...existing?.decedent, firstName, lastName, dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
+          decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
           contacts, firstCall,
         }, currentUser!)
         return caseId
@@ -117,7 +119,7 @@ export default function FirstCallIntake() {
         orgId: currentUser!.orgId, locationId: activeLocationId,
         caseNumber: caseNumber.trim() || `NEW-${Date.now().toString().slice(-6)}`,
         type: 'at_need', status: 'first_call', disposition: 'undetermined',
-        decedent: { firstName: firstName || 'Unknown', lastName: lastName || 'Unknown', dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
+        decedent: { firstName: firstName || 'Unknown', middleName: middleName || undefined, lastName: lastName || 'Unknown', dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
         contacts, firstCall,
         custodyStage: 'scene_first_call',
       }, currentUser!)
@@ -169,8 +171,9 @@ export default function FirstCallIntake() {
                 <label className={labelClass}>Case Number</label>
                 <input value={caseNumber} onChange={(e) => setCaseNumber(e.target.value)} placeholder="Leave blank to auto-generate" className={inputClass + ' max-w-xs'} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div><label className={labelClass}>First Name</label><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></div>
+                <div><label className={labelClass}>Middle Name</label><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></div>
                 <div><label className={labelClass}>Last Name</label><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">

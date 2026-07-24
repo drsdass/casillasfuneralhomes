@@ -66,6 +66,7 @@ export default function CaseForm() {
 
   const [caseNumber, setCaseNumber] = useState(existing?.caseNumber ?? '')
   const [firstName, setFirstName] = useState(existing?.decedent.firstName ?? extracted?.decedentFirstName ?? '')
+  const [middleName, setMiddleName] = useState(existing?.decedent.middleName ?? '')
   const [lastName, setLastName] = useState(existing?.decedent.lastName ?? extracted?.decedentLastName ?? '')
   const [dateOfDeath, setDateOfDeath] = useState(existing?.decedent.dateOfDeath ?? extracted?.dateOfDeath ?? '')
   const [placeOfDeath, setPlaceOfDeath] = useState(existing?.decedent.placeOfDeath ?? extracted?.placeOfDeath ?? '')
@@ -101,6 +102,7 @@ export default function CaseForm() {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
     setFirstName(existing.decedent.firstName)
+    setMiddleName(existing.decedent.middleName ?? '')
     setLastName(existing.decedent.lastName)
     setDateOfDeath(existing.decedent.dateOfDeath ?? '')
     setPlaceOfDeath(existing.decedent.placeOfDeath ?? '')
@@ -128,7 +130,7 @@ export default function CaseForm() {
         return api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
           type, status, disposition,
-          decedent: { ...existing?.decedent, firstName, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
+          decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
           contacts,
           familyId,
           visitationDate: localInputToIso(visitationDate),
@@ -142,7 +144,7 @@ export default function CaseForm() {
         locationId: activeLocationId,
         caseNumber: `NEW-${Date.now().toString().slice(-6)}`,
         type, status, disposition,
-        decedent: { firstName, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
+        decedent: { firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
         contacts,
         familyId,
         visitationDate: localInputToIso(visitationDate),
@@ -195,10 +197,14 @@ export default function CaseForm() {
       <form onSubmit={handleSubmit} className="max-w-2xl">
         <Card className="p-5 mb-5">
           <h3 className="text-sm font-medium text-slate-800 mb-3">Decedent</h3>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
               <label className={labelClass}>First Name</label>
               <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Middle Name</label>
+              <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Last Name</label>
