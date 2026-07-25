@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 import { useState, useEffect } from 'react'
 import {
   Image as ImageIcon, MessageSquare, PenLine, Check,
-  Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music, Video,
+  Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music, Video, Play, Pause,
 } from 'lucide-react'
 import { formatCurrency } from '@/components/ui/Primitives'
 import { useLanguage } from '@/i18n/LanguageContext'
@@ -118,6 +118,23 @@ export default function FamilyPortal() {
   const photos = mediaFiles.filter((m) => m.category === 'photo')
   const musicTracks = mediaFiles.filter((m) => m.category === 'music')
   const videos = mediaFiles.filter((m) => m.category === 'video')
+  const [photoPreviewUrls, setPhotoPreviewUrls] = useState<Record<string, string>>({})
+  const [audioPreviewUrls, setAudioPreviewUrls] = useState<Record<string, string>>({})
+  const [videoPreviewUrls, setVideoPreviewUrls] = useState<Record<string, string>>({})
+  const [showSlideshowPreview, setShowSlideshowPreview] = useState(false)
+
+  useEffect(() => {
+    photos.forEach((p) => {
+      if (!photoPreviewUrls[p.id]) api.getDocumentSignedUrl(p.url).then((url) => setPhotoPreviewUrls((prev) => ({ ...prev, [p.id]: url })))
+    })
+    musicTracks.forEach((m) => {
+      if (!audioPreviewUrls[m.id]) api.getDocumentSignedUrl(m.url).then((url) => setAudioPreviewUrls((prev) => ({ ...prev, [m.id]: url })))
+    })
+    videos.forEach((v) => {
+      if (!videoPreviewUrls[v.id]) api.getDocumentSignedUrl(v.url).then((url) => setVideoPreviewUrls((prev) => ({ ...prev, [v.id]: url })))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaFiles])
 
   // Pre-fill the intake form with whatever's already on file, once, the
   // first time case data arrives — not on every refetch, or the family's
@@ -506,16 +523,34 @@ export default function FamilyPortal() {
               </label>
 
               {photos.length > 0 && (
-                <div className="text-sm text-slate-600 mb-5">{t('familyPortal.photos.count', { count: photos.length })}</div>
+                <div className="mb-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-slate-600">{t('familyPortal.photos.count', { count: photos.length })}</div>
+                    <button
+                      onClick={() => setShowSlideshowPreview(true)}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"
+                    >
+                      <Play size={12} /> {t('familyPortal.photos.previewSlideshow')}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {photos.map((p) => (
+                      <div key={p.id} className="aspect-square bg-slate-100 rounded-md overflow-hidden">
+                        {photoPreviewUrls[p.id] && <img src={photoPreviewUrls[p.id]} alt="" className="w-full h-full object-cover" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('familyPortal.photos.musicTitle')}</h3>
               <p className="text-xs text-slate-400 mb-3">{t('familyPortal.photos.musicSubtitle')}</p>
               {musicTracks.length > 0 && (
-                <div className="space-y-1.5 mb-3">
+                <div className="space-y-2 mb-3">
                   {musicTracks.map((track) => (
-                    <div key={track.id} className="text-sm text-slate-600 flex items-center gap-2">
-                      <Music size={15} className="text-[#b3925a]" /> {track.name}
+                    <div key={track.id}>
+                      <div className="text-sm text-slate-600 flex items-center gap-2 mb-1"><Music size={14} className="text-[#b3925a]" /> {track.name}</div>
+                      {audioPreviewUrls[track.id] && <audio src={audioPreviewUrls[track.id]} controls className="w-full h-9" />}
                     </div>
                   ))}
                 </div>
@@ -545,10 +580,11 @@ export default function FamilyPortal() {
               <h3 className="text-sm font-semibold text-slate-700 mb-1">{t('familyPortal.photos.videoTitle')}</h3>
               <p className="text-xs text-slate-400 mb-3">{t('familyPortal.photos.videoSubtitle')}</p>
               {videos.length > 0 && (
-                <div className="space-y-1.5 mb-3">
+                <div className="space-y-3 mb-3">
                   {videos.map((v) => (
-                    <div key={v.id} className="text-sm text-slate-600 flex items-center gap-2">
-                      <Video size={15} className="text-[#b3925a]" /> {v.name}
+                    <div key={v.id}>
+                      <div className="text-sm text-slate-600 flex items-center gap-2 mb-1"><Video size={14} className="text-[#b3925a]" /> {v.name}</div>
+                      {videoPreviewUrls[v.id] && <video src={videoPreviewUrls[v.id]} controls className="w-full max-h-64 rounded-md bg-black" />}
                     </div>
                   ))}
                 </div>
@@ -582,6 +618,14 @@ export default function FamilyPortal() {
                 />
               </label>
             </div>
+          )}
+
+          {showSlideshowPreview && (
+            <FamilySlideshowPreview
+              photoUrls={photos.map((p) => photoPreviewUrls[p.id]).filter(Boolean)}
+              musicUrls={musicTracks.map((m) => audioPreviewUrls[m.id]).filter(Boolean)}
+              onClose={() => setShowSlideshowPreview(false)}
+            />
           )}
 
           {active === 'billing' && (
@@ -670,6 +714,56 @@ export default function FamilyPortal() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A simple inline preview so the family can see/hear their own upload
+ * right on their own portal page — not the full staff Slideshow (no
+ * shuffle, no video toggle), just enough to confirm it looks right
+ * before the service.
+ */
+function FamilySlideshowPreview({ photoUrls, musicUrls, onClose }: { photoUrls: string[]; musicUrls: string[]; onClose: () => void }) {
+  const [index, setIndex] = useState(0)
+  const [trackIndex, setTrackIndex] = useState(0)
+  const [playing, setPlaying] = useState(true)
+
+  useEffect(() => {
+    if (!playing || photoUrls.length < 2) return
+    const id = setInterval(() => setIndex((i) => (i + 1) % photoUrls.length), 4000)
+    return () => clearInterval(id)
+  }, [playing, photoUrls.length])
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <style>{`@keyframes familyFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+      <div className="bg-black rounded-lg overflow-hidden max-w-2xl w-full">
+        <div className="flex items-center justify-between px-4 py-2 bg-black/60">
+          <span className="text-white/70 text-xs">{index + 1} / {photoUrls.length || 1}</span>
+          <button onClick={onClose} className="text-white/70 hover:text-white text-sm">Close ✕</button>
+        </div>
+        <div className="aspect-video bg-black flex items-center justify-center">
+          {photoUrls.length > 0 ? (
+            <img key={index} src={photoUrls[index]} alt="" className="max-h-full max-w-full object-contain animate-[familyFadeIn_1s_ease-in-out]" />
+          ) : (
+            <span className="text-white/50 text-sm">No photos yet</span>
+          )}
+        </div>
+        <div className="flex items-center justify-center gap-3 px-4 py-3 bg-black/60">
+          <button onClick={() => setPlaying((p) => !p)} className="bg-white/10 hover:bg-white/20 rounded-full p-2.5 text-white">
+            {playing ? <Pause size={16} /> : <Play size={16} />}
+          </button>
+        </div>
+        {musicUrls.length > 0 && (
+          <audio
+            key={trackIndex}
+            src={musicUrls[trackIndex]}
+            autoPlay={playing}
+            onEnded={() => setTrackIndex((i) => (i + 1) % musicUrls.length)}
+          />
+        )}
       </div>
     </div>
   )

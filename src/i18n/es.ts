@@ -90,6 +90,7 @@ export const es: TranslationKeys = {
       dropzone: 'Haga clic para elegir fotos para subir',
       uploading: 'Subiendo…',
       count: '{count} foto(s) subida(s)',
+      previewSlideshow: 'Vista Previa',
       musicTitle: 'Música de Fondo',
       musicSubtitle: 'Agregue tantas canciones como desee para tocar durante la presentación en el servicio.',
       addSong: 'Agregar una Canción',

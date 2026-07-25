@@ -88,6 +88,7 @@ export const en = {
       dropzone: 'Click to choose photos to upload',
       uploading: 'Uploading…',
       count: '{count} photo(s) uploaded',
+      previewSlideshow: 'Preview Slideshow',
       musicTitle: 'Background Music',
       musicSubtitle: 'Add as many songs as you\'d like to play during the slideshow at the service.',
       addSong: 'Add a Song',
