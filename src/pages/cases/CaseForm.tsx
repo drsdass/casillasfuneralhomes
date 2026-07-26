@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Sparkles } from 'lucide-react'
 import type { CaseType, DispositionType, CaseStatus, ExtractedCaseData } from '@/types'
@@ -364,7 +365,7 @@ export default function CaseForm() {
 
         {saveMutation.isError && (
           <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-            Couldn't save this case: {saveMutation.error instanceof Error ? saveMutation.error.message : 'Unknown error'}
+            Couldn't save this case: {getErrorMessage(saveMutation.error)}
           </div>
         )}
 

@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { TASK_STATUS_LABELS } from '@/types'
+import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
 import { Card, CaseStatusBadge, formatCurrency } from '@/components/ui/Primitives'
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
@@ -446,7 +447,7 @@ export default function CaseDetail() {
             )}
             {generateLinkMutation.isError && (
               <div className="mt-2 text-xs text-red-600">
-                Couldn't generate a link: {generateLinkMutation.error instanceof Error ? generateLinkMutation.error.message : 'Unknown error'}
+                Couldn't generate a link: {getErrorMessage(generateLinkMutation.error)}
               </div>
             )}
           </Card>
@@ -992,7 +993,7 @@ export default function CaseDetail() {
           )}
           {sendForSignatureMutation.isError && (
             <div className="no-print text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-              Couldn't send for signature: {sendForSignatureMutation.error instanceof Error ? sendForSignatureMutation.error.message : 'Unknown error'}
+              Couldn't send for signature: {getErrorMessage(sendForSignatureMutation.error)}
             </div>
           )}
           {sendForSignatureMutation.isSuccess && (

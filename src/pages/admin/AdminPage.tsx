@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, Fragment } from 'react'
 import { api } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
@@ -447,7 +448,7 @@ export default function AdminPage() {
           onCancel={() => setShowAddStaff(false)}
           onCreate={(input) => createStaffMutation.mutate(input)}
           isPending={createStaffMutation.isPending}
-          error={createStaffMutation.isError ? (createStaffMutation.error instanceof Error ? createStaffMutation.error.message : 'Unknown error') : null}
+          error={createStaffMutation.isError ? getErrorMessage(createStaffMutation.error) : null}
           createdPassword={createStaffMutation.isSuccess ? createStaffMutation.data.tempPassword : null}
           onDone={() => { setShowAddStaff(false); createStaffMutation.reset() }}
         />

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Upload, FileText, Sparkles, AlertTriangle } from 'lucide-react'
 import type { ExtractedCaseData } from '@/types'
@@ -81,7 +82,7 @@ export default function UploadToCreate() {
           <div className="mt-4 flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
             <span>
-              Couldn't read that document: {extractMutation.error instanceof Error ? extractMutation.error.message : 'Unknown error'}
+              Couldn't read that document: {getErrorMessage(extractMutation.error)}
             </span>
           </div>
         )}

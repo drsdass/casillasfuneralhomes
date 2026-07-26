@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { canViewAllLocations, canEditCases, canAssignStaff } from '@/lib/permissions'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { format, parseISO } from 'date-fns'
@@ -106,7 +107,7 @@ export default function CalendarPage() {
       api.updateEvent(event.id, { participantIds }, currentUser!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['events'] }),
     onError: (err) => {
-      setDropError(`Couldn't save that assignment: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      setDropError(`Couldn't save that assignment: ${getErrorMessage(err)}`)
       setTimeout(() => setDropError(null), 8000)
     },
   })
