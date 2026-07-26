@@ -497,7 +497,7 @@ create table signature_requests (
 create table family_portal_links (
   id uuid primary key default uuid_generate_v4(),
   case_id uuid not null references cases(id) on delete cascade,
-  contact_id uuid references case_contacts(id),
+  contact_id uuid references case_contacts(id) on delete set null,
   token text not null unique,
   created_at timestamptz not null default now(),
   expires_at timestamptz,

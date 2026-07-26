@@ -349,15 +349,30 @@ export const api = {
     const { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)
     if (error) throw error
     if (patch.contacts) {
-      // Simplest correct approach at this scale: replace the full contact
-      // list rather than diffing individual rows.
-      const { error: deleteErr } = await supabase!.from('case_contacts').delete().eq('case_id', id)
-      if (deleteErr) throw deleteErr
-      if (patch.contacts.length) {
-        const { error: insertErr } = await supabase!
-          .from('case_contacts')
-          .insert(patch.contacts.map((c) => contactToRow(c, id)))
-        if (insertErr) throw insertErr
+      // Update existing rows in place rather than deleting and
+      // re-inserting — a contact can be referenced elsewhere (a family
+      // portal link's contact_id, for instance), and deleting it out
+      // from under that reference violates the foreign key even when
+      // the "same" contact is about to be re-inserted right after.
+      const { data: existingRows } = await supabase!.from('case_contacts').select('id').eq('case_id', id)
+      const existingIds = new Set((existingRows ?? []).map((r) => r.id))
+      const keepIds = new Set<string>()
+
+      for (const contact of patch.contacts) {
+        if (existingIds.has(contact.id)) {
+          keepIds.add(contact.id)
+          const { error: updateErr } = await supabase!.from('case_contacts').update(contactToRow(contact, id)).eq('id', contact.id)
+          if (updateErr) throw updateErr
+        } else {
+          const { error: insertErr } = await supabase!.from('case_contacts').insert(contactToRow(contact, id))
+          if (insertErr) throw insertErr
+        }
+      }
+
+      const toRemove = [...existingIds].filter((existingId) => !keepIds.has(existingId))
+      if (toRemove.length) {
+        const { error: deleteErr } = await supabase!.from('case_contacts').delete().in('id', toRemove)
+        if (deleteErr) throw deleteErr
       }
     }
     // Only touch the calendar when a date field was actually part of this
