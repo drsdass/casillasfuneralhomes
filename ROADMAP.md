@@ -169,6 +169,39 @@ any single conversation.
   gap found while doing this — never existed before; the only way tasks
   got onto a case previously was template-seeding.
 
+- **Vital Sheet with printed item numbers everywhere** — one shared field
+  list (`src/lib/vitalFields.ts`) in paper-form order carries the number
+  printed on the state form for every item. The staff form, Overview,
+  printout and EDRS entry screen all read from it, so numbers can't drift.
+  Spouse / father / mother are now separate first-middle-last boxes (28-38).
+  The staff form also finally collects sex, marital status, SSN, time of
+  death and place of death, which had no entry anywhere before.
+- **EDRS Entry screen** (`/cases/:id/edrs`) — every item that gets keyed
+  into EDRS, in paper-form order with its number, one-click copy, and a
+  count of what's still empty. Not an integration (no California API was
+  found) — a faster, less error-prone way to do the retyping.
+- **SSNs are now encrypted at rest** (`src/db/ssn_encryption.sql`). Found:
+  the family portal wrote SSNs into `decedent_ssn_encrypted` as plain text,
+  nothing could read them back, and First Call's SSN box was discarded on
+  save. Now a trigger encrypts every write (key held in Supabase Vault), and
+  the only way to read one is `get_decedent_ssn()`, which checks location
+  access and writes an audit-log entry per view.
+
+- **EDRS-ready values and a "ready to file" check** (`src/lib/edrsFormat.ts`,
+  rules from the state's death-registration handbook, rev. July 2021). The
+  EDRS Entry screen now shows every value already in EDRS's form — four-digit
+  time, no accents (Muñoz → Munoz), dashes where EDRS wants them, its own
+  dropdown wording — and lists anything that would be rejected ("Retired" as
+  an occupation, a spouse for someone widowed, a non-EDRS education level,
+  placeholder names from First Call, a missing facility license number…).
+  The staff form uses EDRS's own choices for marital status, education, race,
+  disposition type, and a new card holds the items EDRS asks that the paper
+  form doesn't (homeless status, embalmer, place-of-death type). Mother's
+  fields renumbered 36/37 to match the state's numbering.
+  `npm run check:edrs` runs 46 checks on the numbering and rules.
+- **EDRS one-click fill** — planned, not built. See `docs/EDRS_AUTOFILL_PLAN.md`;
+  waiting on CDPH's answer and screenshots of EDRS's pages.
+
 ## 🚧 In progress / needs finishing
 
 - **SignRequest end-to-end test** — infrastructure is built and deployed;

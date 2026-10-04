@@ -12,6 +12,7 @@ import CaseForm from '@/pages/cases/CaseForm'
 import FirstCallIntake from '@/pages/cases/FirstCallIntake'
 import VitalSheetIntake from '@/pages/cases/VitalSheetIntake'
 import SlideshowPlayer from '@/pages/cases/SlideshowPlayer'
+import EdrsEntry from '@/pages/cases/EdrsEntry'
 import UploadToCreate from '@/pages/cases/UploadToCreate'
 import CaseDetail from '@/pages/cases/CaseDetail'
 import CustodyBoard from '@/pages/custody/CustodyBoard'
@@ -72,6 +73,7 @@ export default function App() {
                 <Route path="/cases/first-call" element={<FirstCallIntake />} />
                 <Route path="/cases/:caseId/first-call" element={<FirstCallIntake />} />
                 <Route path="/cases/:caseId/vital-sheet" element={<VitalSheetIntake />} />
+                <Route path="/cases/:caseId/edrs" element={<EdrsEntry />} />
                 <Route path="/cases/:caseId/slideshow" element={<SlideshowPlayer />} />
                 <Route path="/cases/new" element={<CaseForm />} />
                 <Route path="/cases/:caseId/edit" element={<CaseForm />} />

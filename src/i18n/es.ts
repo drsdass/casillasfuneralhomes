@@ -52,6 +52,7 @@ export const es: TranslationKeys = {
       informantName: 'Nombre', informantRelationship: 'Relación', informantMailingAddress: 'Dirección Postal',
       familySection: 'Familia',
       spouseName: 'Nombre del Cónyuge', fatherName: 'Nombre del Padre', fatherBirthState: 'Estado de Nacimiento del Padre', motherName: 'Nombre de la Madre', motherBirthState: 'Estado de Nacimiento de la Madre',
+      firstName: 'Primer Nombre', middleName: 'Segundo Nombre', lastName: 'Apellido', lastNameMaiden: 'Apellido (de soltera)',
       survivedBySection: 'Sobrevivido Por',
       sons: 'Hijos', daughters: 'Hijas', sisters: 'Hermanas', brothers: 'Hermanos',
       save: 'Guardar',

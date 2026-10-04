@@ -58,10 +58,28 @@ interface RequestBody {
     occupation?: string; kindOfBusiness?: string; yearsInOccupation?: string
     residenceAddress?: string; residenceCity?: string; residenceCounty?: string; residenceZip?: string; residenceState?: string; yearsInCounty?: string
     informantName?: string; informantRelationship?: string; informantMailingAddress?: string
-    spouseName?: string; fatherName?: string; fatherBirthState?: string; motherName?: string; motherBirthState?: string
+    spouseFirstName?: string; spouseMiddleName?: string; spouseLastName?: string
+    fatherFirstName?: string; fatherMiddleName?: string; fatherLastName?: string; fatherBirthState?: string
+    motherFirstName?: string; motherMiddleName?: string; motherLastName?: string; motherBirthState?: string
     sons?: string; daughters?: string; sisters?: string; brothers?: string
   }
 }
+
+// The ONLY Vital Sheet keys a family member may write. Everything else on
+// the Vital Sheet (receiving funeral director charges, doctor details,
+// disposition, office-use fields…) is staff-only — it is dropped here no
+// matter what the request contains.
+const FAMILY_VITAL_KEYS = new Set([
+  'alsoKnownAs', 'birthCity', 'birthState', 'birthCountry',
+  'education', 'hispanicLatino', 'race',
+  'occupation', 'kindOfBusiness', 'yearsInOccupation',
+  'residenceAddress', 'residenceCity', 'residenceCounty', 'residenceZip', 'residenceState', 'yearsInCounty',
+  'informantName', 'informantRelationship', 'informantMailingAddress',
+  'spouseFirstName', 'spouseMiddleName', 'spouseLastName',
+  'fatherFirstName', 'fatherMiddleName', 'fatherLastName', 'fatherBirthState',
+  'motherFirstName', 'motherMiddleName', 'motherLastName', 'motherBirthState',
+  'sons', 'daughters', 'sisters', 'brothers',
+])
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -120,6 +138,8 @@ Deno.serve(async (req) => {
       casePatch.field_discrepancies = discrepancies
     }
 
+    // Written as-is on purpose: a database trigger (src/db/ssn_encryption.sql)
+    // encrypts anything that lands in this column.
     if (body.ssn !== undefined) casePatch.decedent_ssn_encrypted = body.ssn || null
 
     casePatch.first_call = {
@@ -131,7 +151,8 @@ Deno.serve(async (req) => {
     }
 
     if (body.vitalSheet) {
-      casePatch.vital_sheet = { ...(caseRow.vital_sheet ?? {}), ...body.vitalSheet }
+      const allowed = Object.fromEntries(Object.entries(body.vitalSheet).filter(([key]) => FAMILY_VITAL_KEYS.has(key)))
+      casePatch.vital_sheet = { ...(caseRow.vital_sheet ?? {}), ...allowed }
     }
 
     // Auto-lock "Your Information" the moment the family saves it — this

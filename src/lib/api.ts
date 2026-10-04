@@ -60,6 +60,22 @@ function suggestTaskCategory(itemName: string): CaseTask['category'] {
   return 'other'
 }
 
+let ssnEncryptionKnownReady = false
+/**
+ * True once the database's SSN encryption (src/db/ssn_encryption.sql) is
+ * installed. Without it a write would land as plain text, so SSN saves
+ * refuse to run rather than quietly store one unencrypted. A "Not allowed"
+ * reply from the probe means the function exists and correctly refused the
+ * made-up case id — only a *missing* function means it isn't installed.
+ */
+async function ssnEncryptionReady(): Promise<boolean> {
+  if (ssnEncryptionKnownReady) return true
+  const { error } = await supabase!.rpc('get_decedent_ssn', { p_case_id: '00000000-0000-0000-0000-000000000000' })
+  const missing = !!error && /could not find the function|does not exist/i.test(error.message)
+  ssnEncryptionKnownReady = !missing
+  return ssnEncryptionKnownReady
+}
+
 async function logAuditReal(entry: {
   entityType: AuditLogEntry['entityType']
   entityId: string
@@ -313,6 +329,34 @@ export const api = {
     const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(rowToCase)
+  },
+
+  /**
+   * Social Security numbers never ride along on the normal case row. They're
+   * encrypted by a database trigger on write, and read back only through an
+   * access-checked, audit-logged database function (src/db/ssn_encryption.sql).
+   * Returns null if none is on file, or if that migration hasn't been run yet.
+   */
+  async getDecedentSsn(caseId: string): Promise<string | null> {
+    if (USE_MOCK) return (await mockStore.getCase(caseId))?.decedent.ssn ?? null
+    const { data, error } = await supabase!.rpc('get_decedent_ssn', { p_case_id: caseId })
+    if (error) throw error
+    return (data as string | null) ?? null
+  },
+
+  /** Writes plain text on purpose — the database trigger encrypts it. An empty value clears it. */
+  async setDecedentSsn(caseId: string, ssn: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) {
+      const c = await mockStore.getCase(caseId)
+      if (c) mockStore.updateCase(caseId, { decedent: { ...c.decedent, ssn: ssn || undefined } }, changedBy)
+      return
+    }
+    if (!(await ssnEncryptionReady())) {
+      throw new Error("Social Security numbers can't be saved yet — the one-time encryption setup (src/db/ssn_encryption.sql) hasn't been run in Supabase.")
+    }
+    const { error } = await supabase!.from('cases').update({ decedent_ssn_encrypted: ssn.trim() || null }).eq('id', caseId)
+    if (error) throw error
+    logAuditReal({ entityType: 'case', entityId: caseId, caseId, action: 'update', summary: ssn.trim() ? 'Updated the Social Security number' : 'Cleared the Social Security number', changedBy: changedBy.id })
   },
 
   async getCase(caseId: string): Promise<FuneralCase | undefined> {

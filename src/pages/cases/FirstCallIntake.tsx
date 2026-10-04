@@ -113,6 +113,7 @@ export default function FirstCallIntake() {
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
           contacts, firstCall,
         }, currentUser!)
+        if (ssn.trim()) await api.setDecedentSsn(caseId, ssn, currentUser!)
         return caseId
       }
       const created = await api.createCase({
@@ -123,6 +124,7 @@ export default function FirstCallIntake() {
         contacts, firstCall,
         custodyStage: 'scene_first_call',
       }, currentUser!)
+      if (ssn.trim()) await api.setDecedentSsn(created.id, ssn, currentUser!)
       return created.id
     },
     onSuccess: (id) => setSavedCaseId(id),
@@ -182,7 +184,7 @@ export default function FirstCallIntake() {
                 <div><label className={labelClass}>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3 items-end">
-                <div><label className={labelClass}>SS#</label><input value={ssn} onChange={(e) => setSsn(e.target.value)} className={inputClass} /></div>
+                <div><label className={labelClass}>SS#</label><input value={ssn} onChange={(e) => setSsn(e.target.value)} placeholder={isEdit ? 'Leave blank to keep what\'s on file' : ''} autoComplete="off" className={inputClass} /></div>
                 <label className="flex items-center gap-2 text-sm text-slate-600 pb-2">
                   <input type="checkbox" checked={veteran} onChange={(e) => setVeteran(e.target.checked)} className="accent-[#3b4a35]" /> Veteran
                 </label>

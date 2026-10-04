@@ -154,7 +154,7 @@ create table cases (
   decedent_dob date,
   decedent_dod date,
   decedent_place_of_death text,
-  decedent_ssn_encrypted text, -- encrypt at application layer before insert
+  decedent_ssn_encrypted text, -- encrypted by a trigger on write; read only via get_decedent_ssn(). Run src/db/ssn_encryption.sql after this file.
   decedent_sex text,
   decedent_marital_status text,
   decedent_veteran boolean default false,

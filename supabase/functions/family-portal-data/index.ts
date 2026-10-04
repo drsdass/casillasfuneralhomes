@@ -83,6 +83,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Case not found.' }), { status: 404, headers: { ...corsHeaders, 'content-type': 'application/json' } })
     }
 
+    // The Social Security number never goes to the family's browser — even
+    // encrypted. They can type it in; they never need it echoed back.
+    delete (caseRow as Record<string, unknown>).decedent_ssn_encrypted
+
     const [{ data: location }, { data: gplItems }, { data: contracts }, { data: obituary }, { data: mediaFiles }] = await Promise.all([
       supabase.from('locations').select('*').eq('id', caseRow.location_id).single(),
       supabase.from('gpl_items').select('*').eq('location_id', caseRow.location_id),

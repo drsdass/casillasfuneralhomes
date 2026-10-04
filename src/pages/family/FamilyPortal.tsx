@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { resolveName } from '@/lib/vitalFields'
 import { useState, useEffect } from 'react'
 import {
   Image as ImageIcon, MessageSquare, PenLine, Check,
@@ -84,10 +85,12 @@ export default function FamilyPortal() {
   const [vsInformantName, setVsInformantName] = useState('')
   const [vsInformantRelationship, setVsInformantRelationship] = useState('')
   const [vsInformantMailingAddress, setVsInformantMailingAddress] = useState('')
-  const [vsSpouseName, setVsSpouseName] = useState('')
-  const [vsFatherName, setVsFatherName] = useState('')
+  const [vsNames, setVsNames] = useState({
+    spouseFirst: '', spouseMiddle: '', spouseLast: '',
+    fatherFirst: '', fatherMiddle: '', fatherLast: '',
+    motherFirst: '', motherMiddle: '', motherLast: '',
+  })
   const [vsFatherBirthState, setVsFatherBirthState] = useState('')
-  const [vsMotherName, setVsMotherName] = useState('')
   const [vsMotherBirthState, setVsMotherBirthState] = useState('')
   const [vsSons, setVsSons] = useState('')
   const [vsDaughters, setVsDaughters] = useState('')
@@ -158,8 +161,13 @@ export default function FamilyPortal() {
       setVsResidenceAddress(vs.residenceAddress ?? ''); setVsResidenceCity(vs.residenceCity ?? ''); setVsResidenceCounty(vs.residenceCounty ?? '')
       setVsResidenceZip(vs.residenceZip ?? ''); setVsResidenceState(vs.residenceState ?? ''); setVsYearsInCounty(vs.yearsInCounty ?? '')
       setVsInformantName(vs.informantName ?? ''); setVsInformantRelationship(vs.informantRelationship ?? ''); setVsInformantMailingAddress(vs.informantMailingAddress ?? '')
-      setVsSpouseName(vs.spouseName ?? ''); setVsFatherName(vs.fatherName ?? ''); setVsFatherBirthState(vs.fatherBirthState ?? '')
-      setVsMotherName(vs.motherName ?? ''); setVsMotherBirthState(vs.motherBirthState ?? '')
+      const sp = resolveName(vs, 'spouse'); const fa = resolveName(vs, 'father'); const mo = resolveName(vs, 'mother')
+      setVsNames({
+        spouseFirst: sp.first, spouseMiddle: sp.middle, spouseLast: sp.last,
+        fatherFirst: fa.first, fatherMiddle: fa.middle, fatherLast: fa.last,
+        motherFirst: mo.first, motherMiddle: mo.middle, motherLast: mo.last,
+      })
+      setVsFatherBirthState(vs.fatherBirthState ?? ''); setVsMotherBirthState(vs.motherBirthState ?? '')
       setVsSons(vs.sons ?? ''); setVsDaughters(vs.daughters ?? ''); setVsSisters(vs.sisters ?? ''); setVsBrothers(vs.brothers ?? '')
     }
   }
@@ -193,8 +201,11 @@ export default function FamilyPortal() {
         residenceAddress: vsResidenceAddress || undefined, residenceCity: vsResidenceCity || undefined, residenceCounty: vsResidenceCounty || undefined,
         residenceZip: vsResidenceZip || undefined, residenceState: vsResidenceState || undefined, yearsInCounty: vsYearsInCounty || undefined,
         informantName: vsInformantName || undefined, informantRelationship: vsInformantRelationship || undefined, informantMailingAddress: vsInformantMailingAddress || undefined,
-        spouseName: vsSpouseName || undefined, fatherName: vsFatherName || undefined, fatherBirthState: vsFatherBirthState || undefined,
-        motherName: vsMotherName || undefined, motherBirthState: vsMotherBirthState || undefined,
+        spouseFirstName: vsNames.spouseFirst || undefined, spouseMiddleName: vsNames.spouseMiddle || undefined, spouseLastName: vsNames.spouseLast || undefined,
+        fatherFirstName: vsNames.fatherFirst || undefined, fatherMiddleName: vsNames.fatherMiddle || undefined, fatherLastName: vsNames.fatherLast || undefined,
+        fatherBirthState: vsFatherBirthState || undefined,
+        motherFirstName: vsNames.motherFirst || undefined, motherMiddleName: vsNames.motherMiddle || undefined, motherLastName: vsNames.motherLast || undefined,
+        motherBirthState: vsMotherBirthState || undefined,
         sons: vsSons || undefined, daughters: vsDaughters || undefined, sisters: vsSisters || undefined, brothers: vsBrothers || undefined,
       },
     }),
@@ -433,15 +444,30 @@ export default function FamilyPortal() {
               <input value={vsInformantMailingAddress} onChange={(e) => setVsInformantMailingAddress(e.target.value)} placeholder={t('familyPortal.vitalSheet.informantMailingAddress')} className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm mb-5 focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
 
               <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('familyPortal.vitalSheet.familySection')}</h3>
-              <input value={vsSpouseName} onChange={(e) => setVsSpouseName(e.target.value)} placeholder={t('familyPortal.vitalSheet.spouseName')} className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                <input value={vsFatherName} onChange={(e) => setVsFatherName(e.target.value)} placeholder={t('familyPortal.vitalSheet.fatherName')} className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-                <input value={vsFatherBirthState} onChange={(e) => setVsFatherBirthState(e.target.value)} placeholder={t('familyPortal.vitalSheet.fatherBirthState')} className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <input value={vsMotherName} onChange={(e) => setVsMotherName(e.target.value)} placeholder={t('familyPortal.vitalSheet.motherName')} className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-                <input value={vsMotherBirthState} onChange={(e) => setVsMotherBirthState(e.target.value)} placeholder={t('familyPortal.vitalSheet.motherBirthState')} className="border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-              </div>
+              {([
+                ['spouse', t('familyPortal.vitalSheet.spouseName'), true],
+                ['father', t('familyPortal.vitalSheet.fatherName'), false],
+                ['mother', t('familyPortal.vitalSheet.motherName'), true],
+              ] as const).map(([who, title, maiden]) => {
+                const key = (suffix: 'First' | 'Middle' | 'Last') => `${who}${suffix}` as keyof typeof vsNames
+                const box = 'border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
+                return (
+                  <div key={who} className="mb-4">
+                    <div className="text-xs font-medium text-slate-600 mb-1">{title}</div>
+                    <div className="grid grid-cols-3 gap-3 mb-2">
+                      <input value={vsNames[key('First')]} onChange={(e) => setVsNames((n) => ({ ...n, [key('First')]: e.target.value }))} placeholder={t('familyPortal.vitalSheet.firstName')} className={box} />
+                      <input value={vsNames[key('Middle')]} onChange={(e) => setVsNames((n) => ({ ...n, [key('Middle')]: e.target.value }))} placeholder={t('familyPortal.vitalSheet.middleName')} className={box} />
+                      <input value={vsNames[key('Last')]} onChange={(e) => setVsNames((n) => ({ ...n, [key('Last')]: e.target.value }))} placeholder={t(maiden ? 'familyPortal.vitalSheet.lastNameMaiden' : 'familyPortal.vitalSheet.lastName')} className={box} />
+                    </div>
+                    {who === 'father' && (
+                      <input value={vsFatherBirthState} onChange={(e) => setVsFatherBirthState(e.target.value)} placeholder={t('familyPortal.vitalSheet.fatherBirthState')} className={`${box} w-full`} />
+                    )}
+                    {who === 'mother' && (
+                      <input value={vsMotherBirthState} onChange={(e) => setVsMotherBirthState(e.target.value)} placeholder={t('familyPortal.vitalSheet.motherBirthState')} className={`${box} w-full`} />
+                    )}
+                  </div>
+                )
+              })}
 
               <h3 className="text-sm font-semibold text-slate-700 mb-2">{t('familyPortal.vitalSheet.survivedBySection')}</h3>
               <div className="grid grid-cols-2 gap-3 mb-5">

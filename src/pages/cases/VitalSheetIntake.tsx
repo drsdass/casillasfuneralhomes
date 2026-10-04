@@ -1,15 +1,67 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
+import { VITAL_FIELDS, computeAge, withSplitNames } from '@/lib/vitalFields'
+import {
+  EDRS_MARITAL, EDRS_EDUCATION, EDRS_RACES, EDRS_RELATIONSHIPS, EDRS_DISPOSITIONS, PLACE_OF_DEATH_TYPES,
+  normalizeMarital, normalizeEducation, normalizeRace, normalizeDisposition,
+} from '@/lib/edrsFormat'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
-import { ArrowLeft, Mail, MessageSquare, Copy, Check } from 'lucide-react'
-import type { VitalSheetInfo } from '@/types'
+import { ArrowLeft, Mail, MessageSquare, Copy, Check, ListChecks, Eye } from 'lucide-react'
+import type { VitalSheetInfo, Decedent } from '@/types'
 
 const sectionLabel = 'bg-slate-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-t-md'
 const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
-const labelClass = 'block text-xs font-medium text-slate-600 mb-1'
+const labelClass = 'block text-[11px] font-medium text-slate-600 mb-1 uppercase tracking-wide'
+const readOnlyClass = 'w-full border border-slate-200 bg-slate-50 rounded-md px-3 py-2 text-sm text-slate-700 min-h-[38px]'
+
+const byId = Object.fromEntries(VITAL_FIELDS.map((f) => [f.id, f]))
+
+/**
+ * A labelled box whose number and wording come from the shared field list,
+ * so what's on this screen is always what's printed on the paper form.
+ */
+function L({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
+  const f = byId[id]
+  return (
+    <div className={className}>
+      <label className={labelClass}>
+        {f.number && <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{f.number}.</span>}
+        {f.label}
+        {f.hint && <span className="text-slate-400 font-normal normal-case"> — {f.hint}</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+/** A dropdown limited to EDRS's own choices. A value already on file that isn't one of them stays visible (and flagged) until someone picks a real one. */
+function VocabSelect({ value, onChange, options, className }: { value: string; onChange: (v: string) => void; options: readonly string[]; className: string }) {
+  const legacy = value && !options.includes(value)
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">—</option>
+      {legacy && <option value={value}>{value} (not an EDRS choice)</option>}
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  )
+}
+
+/** Same look as L, for the items that exist in EDRS but not on the paper form. */
+function EL({ num, label, hint, children, className }: { num: string; label: string; hint?: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <label className={labelClass}>
+        <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{num}.</span>{label}
+        {hint && <span className="text-slate-400 font-normal normal-case"> — {hint}</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
 
 export default function VitalSheetIntake() {
   const { caseId } = useParams<{ caseId: string }>()
@@ -17,7 +69,27 @@ export default function VitalSheetIntake() {
   const { currentUser } = useSession()
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
 
+  // Vital Sheet fields proper
   const [f, setF] = useState<VitalSheetInfo>({})
+  // Fields that live on the decedent / First Call but belong on this form too
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [dob, setDob] = useState('')
+  const [dod, setDod] = useState('')
+  const [timeOfDeath, setTimeOfDeath] = useState('')
+  const [sex, setSex] = useState<NonNullable<Decedent['sex']> | ''>('')
+  const [marital, setMarital] = useState('')
+  const [veteran, setVeteran] = useState(false)
+  const [placeOfDeath, setPlaceOfDeath] = useState('')
+  const [weight, setWeight] = useState('')
+  const [coronerNumber, setCoronerNumber] = useState('')
+  // SSN is never preloaded — it's fetched only when asked for, because every view is audit-logged
+  const [ssn, setSsn] = useState('')
+  const [ssnDirty, setSsnDirty] = useState(false)
+  const [ssnLoading, setSsnLoading] = useState(false)
+  const [ssnNotice, setSsnNotice] = useState<string | null>(null)
+
   const [initialized, setInitialized] = useState(false)
   const [sendMethod, setSendMethod] = useState<'text' | 'email' | null>(null)
   const [sendTarget, setSendTarget] = useState('')
@@ -26,7 +98,23 @@ export default function VitalSheetIntake() {
 
   useEffect(() => {
     if (c && !initialized) {
-      setF(c.vitalSheet ?? {})
+      const init = withSplitNames(c.vitalSheet)
+      init.education = normalizeEducation(init.education).value ?? init.education
+      init.race = normalizeRace(init.race).value ?? init.race
+      init.typeOfDisposition = normalizeDisposition(init.typeOfDisposition).value ?? init.typeOfDisposition
+      setF(init)
+      setFirstName(c.decedent.firstName)
+      setMiddleName(c.decedent.middleName ?? '')
+      setLastName(c.decedent.lastName)
+      setDob(c.decedent.dateOfBirth?.slice(0, 10) ?? '')
+      setDod(c.decedent.dateOfDeath?.slice(0, 10) ?? '')
+      setTimeOfDeath(c.firstCall?.timeOfDeath ?? '')
+      setSex(c.decedent.sex ?? '')
+      setMarital(normalizeMarital(c.decedent.maritalStatus).value ?? c.decedent.maritalStatus ?? '')
+      setVeteran(c.decedent.veteran ?? false)
+      setPlaceOfDeath(c.decedent.placeOfDeath ?? '')
+      setWeight(c.firstCall?.weight ?? '')
+      setCoronerNumber(c.firstCall?.coronerCaseNumber ?? '')
       setInitialized(true)
     }
   }, [c, initialized])
@@ -34,9 +122,48 @@ export default function VitalSheetIntake() {
   function set<K extends keyof VitalSheetInfo>(key: K, value: VitalSheetInfo[K]) {
     setF((prev) => ({ ...prev, [key]: value }))
   }
+  const text = (key: keyof VitalSheetInfo) => ({
+    value: (f[key] as string | undefined) ?? '',
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(key, e.target.value as never),
+    className: inputClass,
+  })
+
+  async function revealSsn() {
+    setSsnLoading(true)
+    setSsnNotice(null)
+    try {
+      const value = await api.getDecedentSsn(caseId!)
+      setSsn(value ?? '')
+      setSsnDirty(false)
+      if (!value) setSsnNotice('No Social Security number on file yet.')
+    } catch (err) {
+      setSsnNotice(getErrorMessage(err))
+    } finally {
+      setSsnLoading(false)
+    }
+  }
 
   const saveMutation = useMutation({
-    mutationFn: () => api.updateCase(caseId!, { vitalSheet: f }, currentUser!),
+    mutationFn: async () => {
+      if (!c) return
+      await api.updateCase(caseId!, {
+        vitalSheet: f,
+        decedent: {
+          ...c.decedent,
+          firstName, middleName: middleName || undefined, lastName,
+          dateOfBirth: dob || undefined, dateOfDeath: dod || undefined,
+          sex: sex || undefined, maritalStatus: marital || undefined, veteran,
+          placeOfDeath: placeOfDeath || undefined,
+        },
+        firstCall: {
+          ...(c.firstCall ?? {}),
+          timeOfDeath: timeOfDeath || undefined,
+          weight: weight || undefined,
+          coronerCaseNumber: coronerNumber || undefined,
+        },
+      }, currentUser!)
+      if (ssnDirty && ssn.trim()) await api.setDecedentSsn(caseId!, ssn, currentUser!)
+    },
   })
 
   const linkMutation = useMutation({
@@ -58,119 +185,156 @@ export default function VitalSheetIntake() {
 
   if (!c) return null
 
+  const age = computeAge({ ...c, decedent: { ...c.decedent, dateOfBirth: dob || undefined, dateOfDeath: dod || undefined } })
+  const contact = c.contacts[0]
+
   return (
     <div className="max-w-3xl">
-      <Link to={`/cases/${caseId}`} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4">
-        <ArrowLeft size={15} /> Back to case
-      </Link>
+      <div className="flex items-center justify-between mb-4">
+        <Link to={`/cases/${caseId}`} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800">
+          <ArrowLeft size={15} /> Back to case
+        </Link>
+        <Link to={`/cases/${caseId}/edrs`} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#3b4a35] border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50">
+          <ListChecks size={13} /> EDRS Entry
+        </Link>
+      </div>
       <SectionHeading
         title="Vital Sheet"
-        subtitle={`${c.decedent.firstName} ${c.decedent.lastName} — name, DOB, and other First Call info already filled in automatically. Send the rest to the family whenever you're ready.`}
+        subtitle="Every item carries the number printed on the state form, so you can find it again on the paper copy, the printout and the EDRS entry screen."
       />
 
       <div className="space-y-4">
+        <Card className="p-3 text-xs text-slate-500">
+          <span className="font-semibold text-slate-600 uppercase tracking-wide mr-2">Contact person</span>
+          {contact ? [contact.name, contact.phone, contact.email].filter(Boolean).join(' · ') : 'None on file'}
+          <span className="text-slate-400"> — set under Edit on the case</span>
+        </Card>
+
         <Card className="overflow-hidden">
-          <div className={sectionLabel}>BIRTH & IDENTITY</div>
+          <div className={sectionLabel}>DECEDENT</div>
           <div className="p-4 space-y-3">
-            <input value={f.alsoKnownAs ?? ''} onChange={(e) => set('alsoKnownAs', e.target.value)} placeholder="Also Known As" className={inputClass} />
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.ageUnderHours ?? ''} onChange={(e) => set('ageUnderHours', e.target.value)} placeholder="If under 24 hrs — Hours" className={inputClass} />
-              <input value={f.ageUnderDays ?? ''} onChange={(e) => set('ageUnderDays', e.target.value)} placeholder="If under 24 hrs — Days" className={inputClass} />
+            <div className="grid grid-cols-3 gap-3">
+              <L id="firstName"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></L>
+              <L id="middleName"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></L>
+              <L id="lastName"><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></L>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <L id="aka"><input {...text('alsoKnownAs')} /></L>
+              <L id="dob"><input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputClass} /></L>
+              <L id="age"><div className={readOnlyClass}>{age || '—'}</div></L>
+              <L id="sex">
+                <select value={sex} onChange={(e) => setSex(e.target.value as typeof sex)} className={inputClass}>
+                  <option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="unknown">Unknown/Undetermined</option><option value="nonbinary">Nonbinary</option>
+                </select>
+              </L>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <L id="ageHours"><input {...text('ageUnderHours')} /></L>
+              <L id="ageDays"><input {...text('ageUnderDays')} /></L>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <input value={f.birthCity ?? ''} onChange={(e) => set('birthCity', e.target.value)} placeholder="Birth City" className={inputClass} />
-              <input value={f.birthState ?? ''} onChange={(e) => set('birthState', e.target.value)} placeholder="Birth State" className={inputClass} />
-              <input value={f.birthCountry ?? ''} onChange={(e) => set('birthCountry', e.target.value)} placeholder="Birth Country" className={inputClass} />
+              <L id="birthCity"><input {...text('birthCity')} /></L>
+              <L id="birthState"><input {...text('birthState')} /></L>
+              <L id="birthCountry"><input {...text('birthCountry')} /></L>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.education ?? ''} onChange={(e) => set('education', e.target.value)} placeholder="Education" className={inputClass} />
-              <input value={f.race ?? ''} onChange={(e) => set('race', e.target.value)} placeholder="Race" className={inputClass} />
+            <div className="grid grid-cols-3 gap-3">
+              <L id="ssn">
+                <div className="flex gap-1.5">
+                  <input
+                    value={ssn}
+                    onChange={(e) => { setSsn(e.target.value); setSsnDirty(true) }}
+                    placeholder="Leave blank to keep what's on file"
+                    autoComplete="off"
+                    className={inputClass}
+                  />
+                  <button type="button" onClick={revealSsn} disabled={ssnLoading} title="Show the number on file (logged)" className="shrink-0 border border-slate-200 rounded-md px-2.5 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
+                    <Eye size={14} />
+                  </button>
+                </div>
+                {ssnNotice && <div className="text-[11px] text-amber-600 mt-1">{ssnNotice}</div>}
+              </L>
+              <L id="armedForces">
+                <div className="flex items-center gap-4 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={veteran} onChange={() => setVeteran(true)} className="accent-[#3b4a35]" /> Yes</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!veteran} onChange={() => setVeteran(false)} className="accent-[#3b4a35]" /> No</label>
+                </div>
+              </L>
+              <L id="maritalStatus"><VocabSelect value={marital} onChange={setMarital} options={EDRS_MARITAL} className={inputClass} /></L>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-600">Hispanic/Latino/Spanish?</span>
-              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!f.hispanicLatino} onChange={() => set('hispanicLatino', false)} className="accent-[#3b4a35]" /> No</label>
-              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.hispanicLatino ?? false} onChange={() => set('hispanicLatino', true)} className="accent-[#3b4a35]" /> Yes</label>
-              {f.hispanicLatino && <input value={f.hispanicSpecify ?? ''} onChange={(e) => set('hispanicSpecify', e.target.value)} placeholder="Specify" className={inputClass} />}
+            <div className="grid grid-cols-3 gap-3">
+              <L id="dod"><input type="date" value={dod} onChange={(e) => setDod(e.target.value)} className={inputClass} /></L>
+              <L id="timeOfDeath"><input type="time" value={timeOfDeath} onChange={(e) => setTimeOfDeath(e.target.value)} className={inputClass} /></L>
             </div>
           </div>
         </Card>
 
         <Card className="overflow-hidden">
-          <div className={sectionLabel}>OCCUPATION</div>
-          <div className="p-4 grid grid-cols-3 gap-3">
-            <input value={f.occupation ?? ''} onChange={(e) => set('occupation', e.target.value)} placeholder="Occupation" className={inputClass} />
-            <input value={f.kindOfBusiness ?? ''} onChange={(e) => set('kindOfBusiness', e.target.value)} placeholder="Kind of Business" className={inputClass} />
-            <input value={f.yearsInOccupation ?? ''} onChange={(e) => set('yearsInOccupation', e.target.value)} placeholder="Years in Occupation" className={inputClass} />
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className={sectionLabel}>DECEDENT'S RESIDENCE</div>
+          <div className={sectionLabel}>BACKGROUND</div>
           <div className="p-4 space-y-3">
-            <input value={f.residenceAddress ?? ''} onChange={(e) => set('residenceAddress', e.target.value)} placeholder="Address" className={inputClass} />
+            <div className="grid grid-cols-3 gap-3">
+              <L id="education"><VocabSelect value={f.education ?? ''} onChange={(v) => set('education', v)} options={EDRS_EDUCATION} className={inputClass} /></L>
+              <L id="hispanic">
+                <div className="flex items-center gap-3 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!f.hispanicLatino} onChange={() => set('hispanicLatino', false)} className="accent-[#3b4a35]" /> No</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.hispanicLatino ?? false} onChange={() => set('hispanicLatino', true)} className="accent-[#3b4a35]" /> Yes</label>
+                </div>
+              </L>
+              <L id="race"><VocabSelect value={f.race ?? ''} onChange={(v) => set('race', v)} options={EDRS_RACES} className={inputClass} /></L>
+            </div>
+            {f.hispanicLatino && (
+              <div className="grid grid-cols-3 gap-3">
+                <L id="hispanicSpecify" className="col-start-2"><input {...text('hispanicSpecify')} /></L>
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-3">
+              <L id="occupation"><input {...text('occupation')} /></L>
+              <L id="kindOfBusiness"><input {...text('kindOfBusiness')} /></L>
+              <L id="yearsInOccupation"><input {...text('yearsInOccupation')} /></L>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className={sectionLabel}>RESIDENCE</div>
+          <div className="p-4 space-y-3">
+            <L id="residence"><input {...text('residenceAddress')} /></L>
+            <div className="grid grid-cols-5 gap-3">
+              <L id="residenceCity"><input {...text('residenceCity')} /></L>
+              <L id="residenceCounty"><input {...text('residenceCounty')} /></L>
+              <L id="residenceZip"><input {...text('residenceZip')} /></L>
+              <L id="yearsInCounty"><input {...text('yearsInCounty')} /></L>
+              <L id="residenceState"><input {...text('residenceState')} /></L>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className={sectionLabel}>INFORMANT & FAMILY</div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <L id="informantName"><input {...text('informantName')} /></L>
+              <L id="informantRelationship">
+                <input {...text('informantRelationship')} list="edrs-relationships" />
+                <datalist id="edrs-relationships">{EDRS_RELATIONSHIPS.map((r) => <option key={r} value={r} />)}</datalist>
+              </L>
+            </div>
+            <L id="informantAddress"><input {...text('informantMailingAddress')} /></L>
+            <div className="grid grid-cols-3 gap-3">
+              <L id="spouseFirst"><input {...text('spouseFirstName')} /></L>
+              <L id="spouseMiddle"><input {...text('spouseMiddleName')} /></L>
+              <L id="spouseLast"><input {...text('spouseLastName')} /></L>
+            </div>
             <div className="grid grid-cols-4 gap-3">
-              <input value={f.residenceCity ?? ''} onChange={(e) => set('residenceCity', e.target.value)} placeholder="City" className={inputClass} />
-              <input value={f.residenceCounty ?? ''} onChange={(e) => set('residenceCounty', e.target.value)} placeholder="County" className={inputClass} />
-              <input value={f.residenceState ?? ''} onChange={(e) => set('residenceState', e.target.value)} placeholder="State" className={inputClass} />
-              <input value={f.residenceZip ?? ''} onChange={(e) => set('residenceZip', e.target.value)} placeholder="Zip" className={inputClass} />
+              <L id="fatherFirst"><input {...text('fatherFirstName')} /></L>
+              <L id="fatherMiddle"><input {...text('fatherMiddleName')} /></L>
+              <L id="fatherLast"><input {...text('fatherLastName')} /></L>
+              <L id="fatherBirthState"><input {...text('fatherBirthState')} /></L>
             </div>
-            <input value={f.yearsInCounty ?? ''} onChange={(e) => set('yearsInCounty', e.target.value)} placeholder="Years in County" className={inputClass + ' max-w-xs'} />
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className={sectionLabel}>INFORMANT</div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.informantName ?? ''} onChange={(e) => set('informantName', e.target.value)} placeholder="Name & Relationship" className={inputClass} />
-              <input value={f.informantRelationship ?? ''} onChange={(e) => set('informantRelationship', e.target.value)} placeholder="Relationship" className={inputClass} />
-            </div>
-            <input value={f.informantMailingAddress ?? ''} onChange={(e) => set('informantMailingAddress', e.target.value)} placeholder="Mailing Address" className={inputClass} />
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className={sectionLabel}>FAMILY</div>
-          <div className="p-4 space-y-3">
-            <input value={f.spouseName ?? ''} onChange={(e) => set('spouseName', e.target.value)} placeholder="Spouse Name" className={inputClass} />
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.fatherName ?? ''} onChange={(e) => set('fatherName', e.target.value)} placeholder="Father's Name" className={inputClass} />
-              <input value={f.fatherBirthState ?? ''} onChange={(e) => set('fatherBirthState', e.target.value)} placeholder="Father's Birth State" className={inputClass} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.motherName ?? ''} onChange={(e) => set('motherName', e.target.value)} placeholder="Mother's Name" className={inputClass} />
-              <input value={f.motherBirthState ?? ''} onChange={(e) => set('motherBirthState', e.target.value)} placeholder="Mother's Birth State" className={inputClass} />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className={sectionLabel}>SERVICES</div>
-          <div className="p-4 space-y-3">
-            <input value={f.visitationHours ?? ''} onChange={(e) => set('visitationHours', e.target.value)} placeholder="Visitation Hours" className={inputClass} />
-            <div className="grid grid-cols-5 gap-2 items-center">
-              <input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} />
-              <input type="time" value={f.rosaryTime ?? ''} onChange={(e) => set('rosaryTime', e.target.value)} className={inputClass} />
-              <select value={f.rosaryLanguage ?? ''} onChange={(e) => set('rosaryLanguage', e.target.value as VitalSheetInfo['rosaryLanguage'])} className={inputClass}>
-                <option value="">Rosary Lang.</option><option value="english">English</option><option value="spanish">Spanish</option>
-              </select>
-              <input value={f.rosaryPlace ?? ''} onChange={(e) => set('rosaryPlace', e.target.value)} placeholder="Rosary Place" className={inputClass} />
-              <input value={f.rosaryBy ?? ''} onChange={(e) => set('rosaryBy', e.target.value)} placeholder="By" className={inputClass} />
-            </div>
-            <div className="grid grid-cols-5 gap-2 items-center">
-              <input type="date" value={f.massDate ?? ''} onChange={(e) => set('massDate', e.target.value)} className={inputClass} />
-              <input type="time" value={f.massTime ?? ''} onChange={(e) => set('massTime', e.target.value)} className={inputClass} />
-              <select value={f.massLanguage ?? ''} onChange={(e) => set('massLanguage', e.target.value as VitalSheetInfo['massLanguage'])} className={inputClass}>
-                <option value="">Mass Lang.</option><option value="english">English</option><option value="spanish">Spanish</option>
-              </select>
-              <input value={f.massPlace ?? ''} onChange={(e) => set('massPlace', e.target.value)} placeholder="Mass Place" className={inputClass} />
-              <input value={f.massBy ?? ''} onChange={(e) => set('massBy', e.target.value)} placeholder="By" className={inputClass} />
-            </div>
-            <div className="grid grid-cols-4 gap-2 items-center">
-              <input type="date" value={f.gravesideDate ?? ''} onChange={(e) => set('gravesideDate', e.target.value)} className={inputClass} />
-              <input type="time" value={f.gravesideTime ?? ''} onChange={(e) => set('gravesideTime', e.target.value)} className={inputClass} />
-              <input value={f.gravesidePlace ?? ''} onChange={(e) => set('gravesidePlace', e.target.value)} placeholder="Graveside Place" className={inputClass} />
-              <input value={f.gravesideBy ?? ''} onChange={(e) => set('gravesideBy', e.target.value)} placeholder="By" className={inputClass} />
+            <div className="grid grid-cols-4 gap-3">
+              <L id="motherFirst"><input {...text('motherFirstName')} /></L>
+              <L id="motherMiddle"><input {...text('motherMiddleName')} /></L>
+              <L id="motherLast"><input {...text('motherLastName')} /></L>
+              <L id="motherBirthState"><input {...text('motherBirthState')} /></L>
             </div>
           </div>
         </Card>
@@ -179,25 +343,126 @@ export default function VitalSheetIntake() {
           <div className={sectionLabel}>OFFICE USE ONLY</div>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} placeholder="Disposition Date" className={inputClass} />
-              <input value={f.placeOfFinalDisposition ?? ''} onChange={(e) => set('placeOfFinalDisposition', e.target.value)} placeholder="Place of Final Disposition" className={inputClass} />
-            </div>
-            <input value={f.dispositionTypeOther ?? ''} onChange={(e) => set('dispositionTypeOther', e.target.value)} placeholder="CVC / DMP / Other" className={inputClass} />
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.typeOfDisposition ?? ''} onChange={(e) => set('typeOfDisposition', e.target.value)} placeholder="Type of Disposition (EMB, etc.)" className={inputClass} />
-              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.accidentOrViolentCause ?? false} onChange={(e) => set('accidentOrViolentCause', e.target.checked)} className="accent-[#3b4a35]" /> Accident / Violent Cause</label>
+              <L id="dispositionDate"><input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} className={inputClass} /></L>
+              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} /></L>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <input value={f.deathCounty ?? ''} onChange={(e) => set('deathCounty', e.target.value)} placeholder="County (of death)" className={inputClass} />
-              <input value={f.facilityAddressOrAddressFound ?? ''} onChange={(e) => set('facilityAddressOrAddressFound', e.target.value)} placeholder="Facility Address / Address Found" className={inputClass} />
-              <input value={f.deathCity ?? ''} onChange={(e) => set('deathCity', e.target.value)} placeholder="City (of death)" className={inputClass} />
+              <L id="cvcDmpOther"><input {...text('dispositionTypeOther')} /></L>
+              <L id="typeOfDisposition"><VocabSelect value={f.typeOfDisposition ?? ''} onChange={(v) => set('typeOfDisposition', v)} options={EDRS_DISPOSITIONS} className={inputClass} /></L>
+              <L id="accVc">
+                <div className="flex items-center gap-4 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.accidentOrViolentCause === true} onChange={() => set('accidentOrViolentCause', true)} className="accent-[#3b4a35]" /> Yes</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.accidentOrViolentCause === false} onChange={() => set('accidentOrViolentCause', false)} className="accent-[#3b4a35]" /> No</label>
+                </div>
+              </L>
             </div>
-            <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.obituary ?? false} onChange={(e) => set('obituary', e.target.checked)} className="accent-[#3b4a35]" /> Obituary</label>
-              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={f.pacemaker ?? false} onChange={(e) => set('pacemaker', e.target.checked)} className="accent-[#3b4a35]" /> Pacemaker</label>
-              <span className="text-sm text-slate-600">Language</span>
-              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'spanish'} onChange={() => set('documentLanguage', 'spanish')} className="accent-[#3b4a35]" /> SPN</label>
-              <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'english'} onChange={() => set('documentLanguage', 'english')} className="accent-[#3b4a35]" /> ENG</label>
+            <L id="placeOfDeath"><input value={placeOfDeath} onChange={(e) => setPlaceOfDeath(e.target.value)} className={inputClass} /></L>
+            <div className="grid grid-cols-3 gap-3">
+              <L id="deathCounty"><input {...text('deathCounty')} /></L>
+              <L id="facilityAddress"><input {...text('facilityAddressOrAddressFound')} /></L>
+              <L id="deathCity"><input {...text('deathCity')} /></L>
+            </div>
+            <div className="grid grid-cols-5 gap-3">
+              <L id="weight"><input value={weight} onChange={(e) => setWeight(e.target.value)} className={inputClass} /></L>
+              <L id="pacemaker">
+                <div className="flex items-center gap-3 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.pacemaker ?? false} onChange={() => set('pacemaker', true)} className="accent-[#3b4a35]" /> Yes</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!f.pacemaker} onChange={() => set('pacemaker', false)} className="accent-[#3b4a35]" /> No</label>
+                </div>
+              </L>
+              <L id="language">
+                <div className="flex items-center gap-3 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'spanish'} onChange={() => set('documentLanguage', 'spanish')} className="accent-[#3b4a35]" /> SPN</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.documentLanguage === 'english'} onChange={() => set('documentLanguage', 'english')} className="accent-[#3b4a35]" /> ENG</label>
+                </div>
+              </L>
+              <L id="coronerCase"><input value={coronerNumber} onChange={(e) => setCoronerNumber(e.target.value)} className={inputClass} /></L>
+              <L id="obituary">
+                <div className="flex items-center gap-3 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.obituary ?? false} onChange={() => set('obituary', true)} className="accent-[#3b4a35]" /> Yes</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={!f.obituary} onChange={() => set('obituary', false)} className="accent-[#3b4a35]" /> No</label>
+                </div>
+              </L>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className={sectionLabel}>EDRS ONLY — NOT ON THE PAPER FORM</div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-slate-400">The state's electronic system asks these; the paper Vital Sheet doesn't. The funeral establishment and its license number (44 and 45) come from the location's record, so there's nothing to enter here for them.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <EL num="102/103" label="Where death occurred">
+                <select value={f.placeOfDeathType ?? ''} onChange={(e) => set('placeOfDeathType', (e.target.value || undefined) as VitalSheetInfo['placeOfDeathType'])} className={inputClass}>
+                  <option value="">—</option>
+                  {Object.entries(PLACE_OF_DEATH_TYPES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </EL>
+              <EL num="25A" label="Homeless?">
+                <select value={f.homeless ?? ''} onChange={(e) => set('homeless', (e.target.value || undefined) as VitalSheetInfo['homeless'])} className={inputClass}>
+                  <option value="">—</option><option value="no">No</option><option value="yes">Yes</option><option value="unknown">Unknown</option>
+                </select>
+              </EL>
+              {f.homeless === 'yes' && (
+                <EL num="25A" label="Homeless?" hint="which" className="col-start-2">
+                  <select value={f.homelessKind ?? ''} onChange={(e) => set('homelessKind', (e.target.value || undefined) as VitalSheetInfo['homelessKind'])} className={inputClass}>
+                    <option value="">—</option><option value="unsheltered">Unsheltered</option><option value="sheltered">Sheltered</option><option value="in_institution">In Institution</option>
+                  </select>
+                </EL>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <EL num="42" label="Embalmed?">
+                <div className="flex items-center gap-4 h-[38px]">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.embalmed === 'yes'} onChange={() => set('embalmed', 'yes')} className="accent-[#3b4a35]" /> Yes</label>
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.embalmed === 'no'} onChange={() => set('embalmed', 'no')} className="accent-[#3b4a35]" /> No</label>
+                </div>
+              </EL>
+              <EL num="42" label="Embalmer" hint="name"><input {...text('embalmerName')} disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
+              <EL num="43" label="Embalmer's license number"><input {...text('embalmerLicense')} placeholder="EMB1234" disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className={sectionLabel}>VISITATION · ROSARY · MASS · GRAVESIDE</div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={labelClass}>Visitation — Hours</label>
+                <input {...text('visitationHours')} />
+              </div>
+              <div className="col-span-2 text-xs text-slate-400 self-end pb-2">Visitation and service dates and places are set under Edit on the case, so they stay in sync with the Calendar.</div>
+            </div>
+            <div className="grid grid-cols-5 gap-2 items-end">
+              <div><label className={labelClass}>Rosary — Date</label><input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><input type="time" value={f.rosaryTime ?? ''} onChange={(e) => set('rosaryTime', e.target.value)} className={inputClass} /></div>
+              <div>
+                <label className={labelClass}>ENG / SPAN</label>
+                <select value={f.rosaryLanguage ?? ''} onChange={(e) => set('rosaryLanguage', e.target.value as VitalSheetInfo['rosaryLanguage'])} className={inputClass}>
+                  <option value="">—</option><option value="english">English</option><option value="spanish">Spanish</option>
+                </select>
+              </div>
+              <div><label className={labelClass}>Place</label><input {...text('rosaryPlace')} /></div>
+              <div><label className={labelClass}>By</label><input {...text('rosaryBy')} /></div>
+            </div>
+            <div className="grid grid-cols-5 gap-2 items-end">
+              <div><label className={labelClass}>Mass — Date</label><input type="date" value={f.massDate ?? ''} onChange={(e) => set('massDate', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><input type="time" value={f.massTime ?? ''} onChange={(e) => set('massTime', e.target.value)} className={inputClass} /></div>
+              <div>
+                <label className={labelClass}>ENG / SPAN</label>
+                <select value={f.massLanguage ?? ''} onChange={(e) => set('massLanguage', e.target.value as VitalSheetInfo['massLanguage'])} className={inputClass}>
+                  <option value="">—</option><option value="english">English</option><option value="spanish">Spanish</option>
+                </select>
+              </div>
+              <div><label className={labelClass}>Place</label><input {...text('massPlace')} /></div>
+              <div><label className={labelClass}>By</label><input {...text('massBy')} /></div>
+            </div>
+            <div className="grid grid-cols-4 gap-2 items-end">
+              <div><label className={labelClass}>Graveside — Date</label><input type="date" value={f.gravesideDate ?? ''} onChange={(e) => set('gravesideDate', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><input type="time" value={f.gravesideTime ?? ''} onChange={(e) => set('gravesideTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Place</label><input {...text('gravesidePlace')} /></div>
+              <div><label className={labelClass}>By</label><input {...text('gravesideBy')} /></div>
             </div>
           </div>
         </Card>
@@ -205,10 +470,10 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>SURVIVED BY</div>
           <div className="p-4 grid grid-cols-2 gap-3">
-            <input value={f.sons ?? ''} onChange={(e) => set('sons', e.target.value)} placeholder="Sons" className={inputClass} />
-            <input value={f.daughters ?? ''} onChange={(e) => set('daughters', e.target.value)} placeholder="Daughters" className={inputClass} />
-            <input value={f.sisters ?? ''} onChange={(e) => set('sisters', e.target.value)} placeholder="Sisters" className={inputClass} />
-            <input value={f.brothers ?? ''} onChange={(e) => set('brothers', e.target.value)} placeholder="Brothers" className={inputClass} />
+            <div><label className={labelClass}>Sons</label><input {...text('sons')} /></div>
+            <div><label className={labelClass}>Daughters</label><input {...text('daughters')} /></div>
+            <div><label className={labelClass}>Sisters</label><input {...text('sisters')} /></div>
+            <div><label className={labelClass}>Brothers</label><input {...text('brothers')} /></div>
           </div>
         </Card>
 
@@ -216,12 +481,10 @@ export default function VitalSheetIntake() {
           <div className={sectionLabel}>CHURCH</div>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <input value={f.churchName ?? ''} onChange={(e) => set('churchName', e.target.value)} placeholder="Church" className={inputClass} />
-              <input value={f.pastorName ?? ''} onChange={(e) => set('pastorName', e.target.value)} placeholder="Pastor" className={inputClass} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <input value={f.churchAddress ?? ''} onChange={(e) => set('churchAddress', e.target.value)} placeholder="Church Address" className={inputClass} />
-              <input value={f.pastorPhone ?? ''} onChange={(e) => set('pastorPhone', e.target.value)} placeholder="Pastor Tel." className={inputClass} />
+              <div><label className={labelClass}>Church</label><input {...text('churchName')} /></div>
+              <div><label className={labelClass}>Pastor</label><input {...text('pastorName')} /></div>
+              <div><label className={labelClass}>Address</label><input {...text('churchAddress')} /></div>
+              <div><label className={labelClass}>Tel.</label><input {...text('pastorPhone')} /></div>
             </div>
           </div>
         </Card>
@@ -229,32 +492,32 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>FLOWERS, CARDS & EXTRAS</div>
           <div className="p-4 space-y-3">
-            <textarea value={f.flowersNotes ?? ''} onChange={(e) => set('flowersNotes', e.target.value)} placeholder="Flowers — vendor, items, ribbon text, color" className={inputClass} rows={2} />
-            <input value={f.cardsNameOn ?? ''} onChange={(e) => set('cardsNameOn', e.target.value)} placeholder="Name on Cards / Memorial Folders" className={inputClass} />
-            <textarea value={f.prayerCardsNotes ?? ''} onChange={(e) => set('prayerCardsNotes', e.target.value)} placeholder="Prayer Cards — design, verse, amount, language" className={inputClass} rows={2} />
-            <textarea value={f.memorialFoldersNotes ?? ''} onChange={(e) => set('memorialFoldersNotes', e.target.value)} placeholder="Memorial Folders — design, verse, amount, language" className={inputClass} rows={2} />
-            <input value={f.memorialBook ?? ''} onChange={(e) => set('memorialBook', e.target.value)} placeholder="Book" className={inputClass} />
+            <div><label className={labelClass}>Flowers — vendor, items, ribbon text, color</label><textarea {...text('flowersNotes')} rows={2} /></div>
+            <div><label className={labelClass}>Name on Cards / Mem Folders</label><input {...text('cardsNameOn')} /></div>
+            <div><label className={labelClass}>Prayer Cards — design, verse, amount, language</label><textarea {...text('prayerCardsNotes')} rows={2} /></div>
+            <div><label className={labelClass}>Mem. Folders — design, verse, amount, language</label><textarea {...text('memorialFoldersNotes')} rows={2} /></div>
+            <div><label className={labelClass}>Book</label><input {...text('memorialBook')} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <input value={f.doctorAddress ?? ''} onChange={(e) => set('doctorAddress', e.target.value)} placeholder="Doctor Address" className={inputClass} />
-              <input value={f.doctorFax ?? ''} onChange={(e) => set('doctorFax', e.target.value)} placeholder="Doctor Fax" className={inputClass} />
+              <div><label className={labelClass}>Doctor — Address</label><input {...text('doctorAddress')} /></div>
+              <div><label className={labelClass}>Doctor — Fax</label><input {...text('doctorFax')} /></div>
             </div>
-            <input value={f.makeupHair ?? ''} onChange={(e) => set('makeupHair', e.target.value)} placeholder="Make-up & Hair notes" className={inputClass} />
-            <input value={f.receivingFuneralDirector ?? ''} onChange={(e) => set('receivingFuneralDirector', e.target.value)} placeholder="Receiving Funeral Director" className={inputClass} />
-            <input value={f.receivingFuneralDirectorAddress ?? ''} onChange={(e) => set('receivingFuneralDirectorAddress', e.target.value)} placeholder="Receiving Funeral Director Address" className={inputClass} />
+            <div><label className={labelClass}>Make-up & Hair</label><input {...text('makeupHair')} /></div>
+            <div><label className={labelClass}>Receiving Funeral Director</label><input {...text('receivingFuneralDirector')} /></div>
+            <div><label className={labelClass}>Receiving FD — Address</label><input {...text('receivingFuneralDirectorAddress')} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <input value={f.receivingFuneralDirectorCharges ?? ''} onChange={(e) => set('receivingFuneralDirectorCharges', e.target.value)} placeholder="Charges $" className={inputClass} />
-              <input value={f.receivingFuneralDirectorPhone ?? ''} onChange={(e) => set('receivingFuneralDirectorPhone', e.target.value)} placeholder="Phone" className={inputClass} />
+              <div><label className={labelClass}>Charges $</label><input {...text('receivingFuneralDirectorCharges')} /></div>
+              <div><label className={labelClass}>Tel</label><input {...text('receivingFuneralDirectorPhone')} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <input value={f.medallions ?? ''} onChange={(e) => set('medallions', e.target.value)} placeholder="Medallions" className={inputClass} />
-              <input value={f.charms ?? ''} onChange={(e) => set('charms', e.target.value)} placeholder="Charms" className={inputClass} />
+              <div><label className={labelClass}>Medallions</label><input {...text('medallions')} /></div>
+              <div><label className={labelClass}>Charms</label><input {...text('charms')} /></div>
             </div>
           </div>
         </Card>
 
         {saveMutation.isError && (
           <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
-            {saveMutation.error instanceof Error ? saveMutation.error.message : 'Something went wrong saving this.'}
+            {getErrorMessage(saveMutation.error, 'Something went wrong saving this.')}
           </div>
         )}
 
@@ -283,7 +546,10 @@ export default function VitalSheetIntake() {
                 </button>
               </div>
             )}
-            <button onClick={() => navigate(`/cases/${caseId}`)} className="w-full text-sm font-medium text-slate-600 border border-slate-200 rounded-md px-3.5 py-2.5 hover:bg-slate-50">Back to Case →</button>
+            <div className="flex gap-2">
+              <button onClick={() => navigate(`/cases/${caseId}`)} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-md px-3.5 py-2.5 hover:bg-slate-50">Back to Case →</button>
+              <button onClick={() => navigate(`/cases/${caseId}/edrs`)} className="flex-1 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2.5 hover:bg-[#3b4a35]/5">EDRS Entry →</button>
+            </div>
           </Card>
         ) : (
           <div className="flex justify-end">

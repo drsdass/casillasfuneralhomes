@@ -50,6 +50,7 @@ export const en = {
       informantName: 'Name', informantRelationship: 'Relationship', informantMailingAddress: 'Mailing Address',
       familySection: 'Family',
       spouseName: "Spouse's Name", fatherName: "Father's Name", fatherBirthState: "Father's Birth State", motherName: "Mother's Name", motherBirthState: "Mother's Birth State",
+      firstName: 'First Name', middleName: 'Middle Name', lastName: 'Last Name', lastNameMaiden: 'Last Name (maiden)',
       survivedBySection: 'Survived By',
       sons: 'Sons', daughters: 'Daughters', sisters: 'Sisters', brothers: 'Brothers',
       save: 'Save',

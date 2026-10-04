@@ -1,4 +1,5 @@
 import type { FuneralCase } from '@/types'
+import { resolveName } from '@/lib/vitalFields'
 
 // ---------------------------------------------------------------------------
 // These templates reproduce the exact text/layout of Casillas Funeral
@@ -476,9 +477,12 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
 // single place all of it comes together, not a fourth place to type it.
 // ---------------------------------------------------------------------------
 
-export function VitalSheetForm({ c }: { c: FuneralCase }) {
+export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null }) {
   const fc = c.firstCall
   const vs = c.vitalSheet
+  const spouse = resolveName(vs, 'spouse')
+  const father = resolveName(vs, 'father')
+  const mother = resolveName(vs, 'mother')
   const ro = 'border-b border-slate-400 flex-1 min-w-0 px-1 py-0.5 text-xs bg-slate-50'
   const box = 'h-3 w-3 border border-slate-500 inline-block align-middle text-center text-[9px] leading-3 mr-1'
 
@@ -529,7 +533,7 @@ export function VitalSheetForm({ c }: { c: FuneralCase }) {
           </div>
           <div className="grid grid-cols-5 border-b border-slate-400">
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">9. BIRTH CITY/ STATE/ COUNTRY</div><div>{[vs?.birthCity, vs?.birthState, vs?.birthCountry].filter(Boolean).join(', ')}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">10. SOCIAL SECURITY NUMBER</div><div>{c.decedent.ssn ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">10. SOCIAL SECURITY NUMBER</div><div>{ssn ?? ''}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">11. EVER IN ARMED FORCES?</div><div>{c.decedent.veteran ? 'Y' : 'N'}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">12. MARITAL STATUS</div><div className="capitalize">{c.decedent.maritalStatus ?? ''}</div></div>
             <div className="p-1"><div className="text-[9px] text-slate-500">7. DATE OF DEATH</div><div>{c.decedent.dateOfDeath ?? ''}</div><div className="text-[9px] text-slate-500 mt-0.5">8 TIME</div><div>{fc?.timeOfDeath ?? ''}</div></div>
@@ -560,20 +564,20 @@ export function VitalSheetForm({ c }: { c: FuneralCase }) {
             <div className="p-1"><div className="text-[9px] text-slate-500">27. MAILING ADDRESS</div><div>{vs?.informantMailingAddress ?? ''}</div></div>
           </div>
           <div className="grid grid-cols-3 border-b border-slate-400">
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">28. NAME OF SPOUSE</div><div>{vs?.spouseName ?? ''}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">29. MIDDLE</div><div></div></div>
-            <div className="p-1"><div className="text-[9px] text-slate-500">30. LAST - MAIDEN</div><div></div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">28. NAME OF SPOUSE</div><div>{spouse.first}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">29. MIDDLE</div><div>{spouse.middle}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">30. LAST - MAIDEN</div><div>{spouse.last}</div></div>
           </div>
           <div className="grid grid-cols-4 border-b border-slate-400">
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">31. NAME OF FATHER</div><div>{vs?.fatherName ?? ''}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">32. MIDDLE</div><div></div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">33. LAST</div><div></div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">31. NAME OF FATHER</div><div>{father.first}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">32. MIDDLE</div><div>{father.middle}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">33. LAST</div><div>{father.last}</div></div>
             <div className="p-1"><div className="text-[9px] text-slate-500">34. BIRTH STATE</div><div>{vs?.fatherBirthState ?? ''}</div></div>
           </div>
           <div className="grid grid-cols-4">
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">35. NAME OF MOTHER</div><div>{vs?.motherName ?? ''}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">34. MIDDLE</div><div></div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">36. LAST - MAIDEN</div><div></div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">35. NAME OF MOTHER</div><div>{mother.first}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">36. MIDDLE</div><div>{mother.middle}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">37. LAST - MAIDEN</div><div>{mother.last}</div></div>
             <div className="p-1"><div className="text-[9px] text-slate-500">38. BIRTH STATE</div><div>{vs?.motherBirthState ?? ''}</div></div>
           </div>
         </div>

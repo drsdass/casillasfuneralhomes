@@ -43,10 +43,10 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
     row.decedent_sex = c.decedent.sex ?? null
     row.decedent_marital_status = c.decedent.maritalStatus ?? null
     row.decedent_veteran = c.decedent.veteran ?? false
-    // decedent.ssn intentionally not mapped — encrypt at the application
-    // layer before ever sending it to the database (see schema.sql comment
-    // on decedent_ssn_encrypted). Not implemented yet; don't collect SSNs
-    // in the UI until it is.
+    // decedent.ssn intentionally not mapped. SSNs are encrypted by a database
+    // trigger and read back only through api.getDecedentSsn() (an audited,
+    // access-checked function) — see src/db/ssn_encryption.sql. They never
+    // travel on the normal case row.
   }
 
   return row

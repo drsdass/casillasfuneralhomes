@@ -91,7 +91,7 @@ export interface Decedent {
   dateOfDeath?: string
   placeOfDeath?: string
   ssn?: string // stored encrypted at rest in real deployment
-  sex?: 'male' | 'female' | 'unknown'
+  sex?: 'male' | 'female' | 'unknown' | 'nonbinary'
   maritalStatus?: string
   veteran?: boolean
 }
@@ -150,11 +150,26 @@ export interface VitalSheetInfo {
   informantName?: string
   informantRelationship?: string
   informantMailingAddress?: string
-  spouseName?: string
-  fatherName?: string
+  // Spouse / father / mother are separate first-middle-last fields, exactly
+  // as the state form prints them (28-30, 31-33, 35-36). The "Last" boxes
+  // for spouse and mother are the maiden name, per the form.
+  spouseFirstName?: string
+  spouseMiddleName?: string
+  spouseLastName?: string
+  fatherFirstName?: string
+  fatherMiddleName?: string
+  fatherLastName?: string
   fatherBirthState?: string
-  motherName?: string
+  motherFirstName?: string
+  motherMiddleName?: string
+  motherLastName?: string
   motherBirthState?: string
+  /** @deprecated single-box names from before the split — still read as a fallback for older cases, never written. */
+  spouseName?: string
+  /** @deprecated see spouseName */
+  fatherName?: string
+  /** @deprecated see spouseName */
+  motherName?: string
   placeOfFinalDisposition?: string
   dispositionDate?: string
   dispositionTypeOther?: string // "CVC / DMP / OTHER:" line
@@ -164,6 +179,16 @@ export interface VitalSheetInfo {
   facilityAddressOrAddressFound?: string
   deathCity?: string
   documentLanguage?: 'spanish' | 'english' // the top-level "LENGUAGE SPN ENG" box
+
+  // --- EDRS-only items: required by the state's electronic system but not
+  // printed on the paper Vital Sheet, so they live in their own card on the
+  // staff form and appear only on the EDRS Entry screen. ---
+  placeOfDeathType?: 'doa' | 'er_op' | 'ip' | 'home' | 'hospice' | 'nursing' | 'other' // items 102/103
+  homeless?: 'yes' | 'no' | 'unknown' // item 25A
+  homelessKind?: 'unsheltered' | 'sheltered' | 'in_institution'
+  embalmed?: 'yes' | 'no' // item 42
+  embalmerName?: string // item 42
+  embalmerLicense?: string // item 43
   obituary?: boolean
   pacemaker?: boolean
   visitationHours?: string
@@ -429,7 +454,7 @@ export interface Payment {
 // This is the record of who touched what and when; treat it as append-only.
 // ---------------------------------------------------------------------------
 
-export type AuditAction = 'create' | 'update' | 'delete' | 'status_change'
+export type AuditAction = 'create' | 'update' | 'delete' | 'status_change' | 'view'
 
 export interface AuditLogEntry {
   id: string
