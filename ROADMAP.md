@@ -282,3 +282,6 @@ spots — confirm everything routes through Supabase Storage consistently.
 | SignRequest Business + API usage | ~$50–65 |
 | Linxup GPS (if added, 6 vehicles) | ~$150 (get exact quote) |
 | Stripe | 2.9% + $0.30 per transaction (not monthly) |
+
+
+- [x] EDRS Assist extension scaffold (bridge, fill core, panel, structure capture, tests) — mapping pending EDRS host + page structure captures.

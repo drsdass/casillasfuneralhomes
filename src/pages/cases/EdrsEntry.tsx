@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -33,6 +33,19 @@ export default function EdrsEntry() {
   const [ssn, setSsn] = useState<string | null | undefined>(undefined)
   const [ssnLoading, setSsnLoading] = useState(false)
   const [ssnError, setSsnError] = useState<string | null>(null)
+
+  // EDRS Assist browser extension (optional). It answers a ping if installed.
+  const [assist, setAssist] = useState<'unknown' | 'ready' | 'sent' | 'failed'>('unknown')
+  useEffect(() => {
+    const onMsg = (ev: MessageEvent) => {
+      if (ev.source !== window || ev.origin !== window.location.origin || ev.data?.channel !== 'casillas-edrs-assist') return
+      if (ev.data.type === 'pong') setAssist((a) => (a === 'unknown' ? 'ready' : a))
+      if (ev.data.type === 'sent') setAssist(ev.data.ok ? 'sent' : 'failed')
+    }
+    window.addEventListener('message', onMsg)
+    window.postMessage({ channel: 'casillas-edrs-assist', type: 'ping' }, window.location.origin)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
 
   if (!c) return null
 
@@ -75,6 +88,21 @@ export default function EdrsEntry() {
         title={`EDRS Entry — ${c.decedent.firstName} ${c.decedent.lastName}`}
         subtitle="Each value is already in the form EDRS wants it, with the item number from the state's numbering. Click any row to copy it."
       />
+
+      {assist !== 'unknown' && (
+        <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-4 text-sm">
+          <div className="text-slate-600">
+            {assist === 'sent' ? 'Sent to EDRS Assist (held in browser memory for 30 minutes). Open the EDRS screen and click "Fill this screen" in the panel.'
+              : assist === 'failed' ? 'Could not reach EDRS Assist. Reload the page and try again.'
+              : 'EDRS Assist is installed. It only fills empty fields when you click it in EDRS, and never saves or submits.'}
+            {ssn === undefined && assist !== 'sent' && <span className="block text-xs text-slate-400">The Social Security number is not included unless you reveal it first.</span>}
+          </div>
+          <button
+            onClick={() => window.postMessage({ channel: 'casillas-edrs-assist', type: 'send', caseLabel: `${c.decedent.firstName} ${c.decedent.lastName}`, rows: rows.map((r) => ({ key: r.key, number: r.number, label: r.label, value: r.value })) }, window.location.origin)}
+            className="shrink-0 px-3 py-1.5 rounded-md border border-[#3b4a35] text-[#3b4a35] font-medium hover:bg-[#f4f6f2]"
+          >Send to EDRS Assist</button>
+        </div>
+      )}
 
       {ready ? (
         <div className="flex items-start gap-2.5 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg px-4 py-3 mb-4 text-sm">

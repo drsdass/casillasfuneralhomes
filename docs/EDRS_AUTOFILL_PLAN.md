@@ -87,3 +87,7 @@ mostly a mapping from "item 41 → this control on this page".
   the second field to appear.
 - **Browser lookups** (embalmer, funeral establishment, occupation, country)
   use EDRS's magnifying-glass browsers. Those may stay manual at first.
+
+
+## Update: CDPH reply and decision
+CDPH replied there is no API/IJE/FHIR, no vendor integrations, and it will not review or approve third-party/browser helper tools (consult county counsel). Casillas chose to proceed with a conservative, user-initiated extension (`extension/`): click-only, never submits, never overwrites, memory-only data, SSN only if revealed. Field mapping stays empty until real EDRS page structure is captured with the extension's structure tool. Tests: `npm run check:extension`.
