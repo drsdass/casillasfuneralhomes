@@ -34,8 +34,25 @@
     if (!p) return refresh()
     const screen = (mapping.screens || []).find((s) => core.screenMatches(document, location, s))
     if (!screen) { out.innerHTML = '<li>No field mapping for this screen yet. Use "Capture structure".</li>'; return }
-    const res = core.fillScreen(document, screen, p.rows)
-    for (const r of res) { const li = document.createElement('li'); li.textContent = `${r.number ? 'Item ' + r.number + ' ' : ''}${r.label}: ${r.status}`; out.appendChild(li) }
+    // Choosing one box (e.g. Age type) makes the next box appear, so repeat a few times, filling only what is still empty.
+    const best = new Map()
+    const rank = { filled: 3, 'skipped-has-value': 2, 'skipped-locked': 2, 'no-option': 1, missing: 0, 'skipped-empty': 0 }
+    for (let pass = 0; pass < 4; pass++) {
+      for (const r of core.fillScreen(document, screen, p.rows)) {
+        const prev = best.get(r.key)
+        if (!prev || rank[r.status] > rank[prev.status]) best.set(r.key, r)
+      }
+      await new Promise((r) => setTimeout(r, 350))
+    }
+    const label = { filled: 'filled', 'skipped-has-value': 'already had a value - left alone', 'skipped-locked': 'locked - left alone', 'no-option': 'EDRS has no matching choice - pick it yourself', missing: 'not found on this screen', 'skipped-empty': 'nothing to fill' }
+    const list = Array.from(best.values())
+    const count = (st) => list.filter((r) => r.status === st).length
+    const sum = document.createElement('li'); sum.style.fontWeight = '600'
+    sum.textContent = `${count('filled')} filled, ${count('no-option')} need a manual choice, ${count('skipped-has-value') + count('skipped-locked')} left alone`
+    out.appendChild(sum)
+    for (const r of list.filter((x) => x.status === 'filled' || x.status === 'no-option' || x.status === 'missing')) {
+      const li = document.createElement('li'); li.textContent = `${r.number ? 'Item ' + r.number + ' ' : ''}${r.label}: ${label[r.status]}`; out.appendChild(li)
+    }
   }
   $('cap').onclick = async () => {
     const json = JSON.stringify(core.captureStructure(document), null, 2)

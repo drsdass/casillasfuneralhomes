@@ -11,10 +11,14 @@ Helps a licensed funeral director copy case values from Casillas OS into the EDR
 - Has no permissions beyond `storage`; it runs only on the Casillas OS site and the EDRS host.
 
 ## Install (developer mode)
-1. Replace `REPLACE-WITH-EDRS-HOST` in `manifest.json` with the EDRS host (e.g. the hostname you see in the address bar after login).
+1. The manifest is already set to the EDRS death-certificate site (`https://edrs.calivrs.org/ca-edrs/*`). It deliberately does NOT run on the Cal-IVRS administration site (`casadm.calivrs.org`).
 2. Chrome/Edge → `chrome://extensions` → Developer mode → **Load unpacked** → choose this `extension` folder.
 3. In Casillas OS open a case → EDRS Entry → **Send to EDRS Assist**.
 4. In EDRS open a screen → panel (bottom right) → **Fill this screen**.
+
+## What is mapped now
+`mapping.js` fills the EDRS death certificate (Single Page View, EDRS 4.6.4.12): date of birth, age type, sex, date and time of death, SSN (if revealed), armed forces, marital status, education, Hispanic, race, occupation, industry, years, residence address, AKA, spouse, informant relationship and name, disposition, funeral establishment and license, county, place and city of death.
+Locked fields (EDRS locks the record once it is submitted or abandoned) are left alone. Boxes that only appear after another is chosen (age number, birth state, parents, embalmer, Hispanic origin, informant address) are not mapped yet.
 
 ## Building the field mapping
 `mapping.js` is empty, so the extension is inert except for "Capture structure". On each EDRS screen (use a test/blank record) click **Capture this screen's structure**; it copies field ids, names, labels and dropdown option labels — never values or passwords. Send those to Claude to build `mapping.js`, keyed by the row keys in `src/lib/edrsFormat.ts` (`firstName`, `dob`, `sex`, `dod`, `timeOfDeath`, `res-city`, …).

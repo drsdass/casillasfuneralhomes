@@ -73,7 +73,7 @@ export const PLACE_OF_DEATH_TYPES: Record<NonNullable<NonNullable<FuneralCase['v
   er_op: 'ER/OP — emergency room or outpatient (hospital)',
   ip: 'IP — inpatient (hospital)',
   home: "DECEDENT'S HOME",
-  hospice: 'HOSPICE',
+  hospice: 'HOSPICE FACILITY',
   nursing: 'NURSING HOME/LTC',
   other: 'OTHER',
 }

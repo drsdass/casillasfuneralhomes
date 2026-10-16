@@ -12,7 +12,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://REPLACE-WITH-EDRS-HOST/*"],
+      "matches": ["https://edrs.calivrs.org/ca-edrs/*"],
       "js": ["mapping.js", "fill-core.js", "content.js"],
       "run_at": "document_idle",
       "all_frames": false
