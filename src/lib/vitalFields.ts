@@ -180,6 +180,7 @@ export const VITAL_FIELDS: VitalField[] = [
   // --- Office use only ---------------------------------------------------
   { id: 'dispositionDate', number: '39', label: 'DISPOSITION DATE', section: 'office', edrs: true, get: (c) => formatDate(c.vitalSheet?.dispositionDate) },
   { id: 'finalDisposition', number: '40', label: 'PLACE OF FINAL DISPOSITION', section: 'office', edrs: true, get: (c) => c.vitalSheet?.placeOfFinalDisposition ?? '' },
+  { id: 'dispositionState', number: '40', label: 'PLACE OF FINAL DISPOSITION', hint: 'state / country', section: 'office', edrs: true, get: (c) => c.vitalSheet?.dispositionState ?? '' },
   { id: 'cvcDmpOther', number: '', label: 'CVC / DMP / OTHER', section: 'office', edrs: false, get: (c) => c.vitalSheet?.dispositionTypeOther ?? '' },
   { id: 'typeOfDisposition', number: '41', label: 'TYPE OF DISPOSITION', section: 'office', edrs: true, get: (c) => c.vitalSheet?.typeOfDisposition ?? '' },
   { id: 'accVc', number: '', label: 'ACC / VC', section: 'office', edrs: false, get: (c) => triState(c.vitalSheet?.accidentOrViolentCause) },
@@ -187,6 +188,7 @@ export const VITAL_FIELDS: VitalField[] = [
   { id: 'deathCounty', number: '104', label: 'COUNTY', section: 'office', edrs: true, get: (c) => c.vitalSheet?.deathCounty ?? '' },
   { id: 'facilityAddress', number: '105', label: 'FACILITY ADDRESS OR ADDRESS FOUND', section: 'office', edrs: true, get: (c) => c.vitalSheet?.facilityAddressOrAddressFound ?? '' },
   { id: 'deathCity', number: '106', label: 'CITY', section: 'office', edrs: true, get: (c) => c.vitalSheet?.deathCity ?? '' },
+  { id: 'deathZip', number: '106', label: 'ZIP CODE', section: 'office', edrs: true, get: (c) => c.vitalSheet?.deathZip ?? '' },
   { id: 'weight', number: '', label: 'WEIGHT', section: 'office', edrs: false, get: (c) => c.firstCall?.weight ?? '' },
   { id: 'pacemaker', number: '', label: 'PACEMAKER', section: 'office', edrs: false, get: (c) => yesNo(c.vitalSheet?.pacemaker) },
   { id: 'language', number: '', label: 'LANGUAGE', section: 'office', edrs: false, get: (c) => (c.vitalSheet?.documentLanguage === 'spanish' ? 'SPN' : c.vitalSheet?.documentLanguage === 'english' ? 'ENG' : '') },

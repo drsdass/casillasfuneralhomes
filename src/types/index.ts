@@ -178,6 +178,9 @@ export interface VitalSheetInfo {
   deathCounty?: string
   facilityAddressOrAddressFound?: string
   deathCity?: string
+  deathZip?: string
+  /** State or country of the place of final disposition (item 40) — EDRS asks for this as an "address type". */
+  dispositionState?: string
   documentLanguage?: 'spanish' | 'english' // the top-level "LANGUAGE SPN ENG" box
 
   // --- EDRS-only items: required by the state's electronic system but not

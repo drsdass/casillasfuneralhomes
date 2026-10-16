@@ -419,6 +419,7 @@ export default function VitalSheetIntake() {
             <div className="grid grid-cols-2 gap-3">
               <L id="dispositionDate"><input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} className={inputClass} /></L>
               <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} /></L>
+              <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA, Mexico, UNK…" /></L>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <L id="cvcDmpOther"><input {...text('dispositionTypeOther')} /></L>
@@ -435,6 +436,7 @@ export default function VitalSheetIntake() {
               <L id="deathCounty"><input {...text('deathCounty')} /></L>
               <L id="facilityAddress"><input {...text('facilityAddressOrAddressFound')} /></L>
               <L id="deathCity"><input {...text('deathCity')} /></L>
+              <L id="deathZip"><input {...text('deathZip')} placeholder="92236" /></L>
             </div>
             <div className="grid grid-cols-5 gap-3">
               <L id="weight"><input value={weight} onChange={(e) => setWeight(e.target.value)} className={inputClass} /></L>

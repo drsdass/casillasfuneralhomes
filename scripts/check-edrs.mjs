@@ -30,7 +30,7 @@ console.log('\n== item numbering ==')
 // Numbers exactly as printed on the uploaded form, in the order they appear, for everything keyed into EDRS
 const printedOrder = ['1','2','3','','4','5','','','6','9','9','9','10','11','12','7','8',
   '13','14','14','16','17','18','19','20','21','22','23','24','25','26','26','27',
-  '28','29','30','31','32','33','34','35','36','37','38','39','40','41','101','104','105','106']
+  '28','29','30','31','32','33','34','35','36','37','38','39','40','40','41','101','104','105','106','106']
 t('EDRS items carry the printed numbers, in paper-form order', () => {
   assert.deepStrictEqual(vf.VITAL_FIELDS.filter(f => f.edrs).map(f => f.number), printedOrder)
 })

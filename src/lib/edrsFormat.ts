@@ -397,6 +397,12 @@ export function buildEdrsRows(c: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] 
         break
       case 'residenceState':
         placeRows('res-state', '25', 'STATE/FOREIGN COUNTRY', undefined, 'residence', vs.residenceState, undefined)
+        {
+          // EDRS's residence "address type" list is different from the birth-place one: California is its own choice, other states are "Other US State".
+          const rp = placeFrom(vs.residenceState, undefined)
+          const kindAlt = rp.type === 'US State' ? (rp.value === 'California' ? 'California' : rp.value ? 'Other US State' : '') : rp.type
+          add('res-kindAlt', '25', 'STATE/FOREIGN COUNTRY', 'residence', kindAlt, [], { hint: 'address type' })
+        }
         // Items EDRS asks that the paper form doesn't: homeless status
         if (vs.homeless) {
           add('homeless', '25A', 'HOMELESS?', 'residence', vs.homeless === 'yes' ? 'Yes' : vs.homeless === 'no' ? 'No' : 'Unknown', [])
@@ -482,6 +488,10 @@ export function buildEdrsRows(c: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] 
       case 'finalDisposition':
         add('finalDisposition', '40', 'PLACE OF FINAL DISPOSITION', 'office', plain, plain ? [] : [note('error', 'Required — a name or a complete address; a dash only for a pending coroner case')])
         break
+      case 'dispositionState':
+        // EDRS asks for the state/country of the place of final disposition as an "Address Type" beside item 40.
+        placeRows('disp', '40', 'PLACE OF FINAL DISPOSITION — ADDRESS TYPE', 'state / country', 'office', vs.dispositionState, undefined)
+        break
       case 'typeOfDisposition': {
         const m = normalizeDisposition(vs.typeOfDisposition)
         // Only fall back to the case's disposition when nothing was entered — a typed value that isn't an EDRS choice must be flagged, never swapped out.
@@ -526,6 +536,24 @@ export function buildEdrsRows(c: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] 
       case 'facilityAddress': {
         const derived = home && !plain ? [c.firstCall?.locationAddress ?? vs.residenceAddress].filter(Boolean)[0] : undefined
         add('facilityAddress', '105', 'FACILITY ADDRESS OR LOCATION WHERE FOUND', 'office', plain || derived || '', plain ? [] : derived ? [note('info', "Taken from the residence address — EDRS fills this in for Decedent's Home")] : [note('error', 'Required')])
+
+        {
+          // EDRS wants the street split into number / name / unit (the rest of the line — city, state, zip — has its own boxes).
+          const full = (plain || derived || '').trim()
+          if (full) {
+            const a = splitStreet(full.split(',')[0].trim())
+            if (a.number) add('fac-number', '105', 'FACILITY ADDRESS', 'office', a.number, [], { hint: 'street number' })
+            add('fac-name', '105', 'FACILITY ADDRESS', 'office', a.name, [], { hint: 'street name' })
+            if (a.unit) add('fac-unit', '105', 'FACILITY ADDRESS', 'office', a.unit, [], { hint: 'apt / suite / unit' })
+          }
+        }
+        break
+      }
+      case 'deathZip': {
+        const digits = (vs.deathZip ?? '').replace(/\D/g, '')
+        const zip5 = digits.slice(0, 5), zip4 = digits.slice(5, 9)
+        add('fac-zip5', '106', 'ZIP CODE', 'office', zip5, zip5.length === 5 ? [] : [note('warn', 'Not recorded (5 digits) — EDRS asks for the zip of where death occurred')])
+        if (zip4) add('fac-zip4', '106', 'ZIP CODE', 'office', zip4, [], { hint: '+4' })
         break
       }
       case 'deathCity': {

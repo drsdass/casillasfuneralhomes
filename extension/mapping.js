@@ -4,7 +4,7 @@
 // NOT mapped yet (these boxes only appear after another box is chosen - capture them after choosing):
 //   age number (after Age type), birth state, residence state/county, informant mailing address, parents (after Relationship),
 //   embalmer name/license (after Embalmed = Yes), Hispanic origin boxes, facility street address.
-// (Parents 31-38 are mapped by caption.)
+// (Parents 31-38, address types and the place-of-death address are mapped from the real certificate capture.)
 const MODEL = "$parent.$ctrl.vm.cert."
 const M = (key, path, extra) => Object.assign({ key, model: MODEL + path }, extra)
 self.CASILLAS_EDRS_MAPPING = {
@@ -79,17 +79,29 @@ self.CASILLAS_EDRS_MAPPING = {
         M("deathCounty", "personalMedicalInfo.registrationDistrictId"),
         M("pod-type", "personalMedicalInfo.deathPlaceCategory"),
         M("placeOfDeath", "personalMedicalInfo.deathPlace"),
-        // Parents (31-38). Relationship is chosen first, which is what makes the name boxes appear; unknown parts go in as UNK.
-        { key: 'father-rel', cap: 'Relationship to Decedent:', nth: 0, literal: 'Father', always: true },
+        // Parents (31-38). The relationship is chosen first (Father in the first block, Mother in the second), which is what
+        // makes the name boxes appear. Anything unknown goes in as UNK / Unknown. Names are found by their printed number.
+        M("father-rel", "personalInfo.parent1Kind", { literal: "Father", always: true }),
         { key: 'fatherFirst', cap: '31. First Name:', unkIfEmpty: 'UNK' },
         { key: 'fatherMiddle', cap: '32. Middle Name:' },
         { key: 'fatherLast', cap: '33. Last (Birth) Name:', unkIfEmpty: 'UNK' },
-        { key: 'father-birth-value', cap: '34. Birth State/Foreign Country:', unkIfEmpty: 'Unknown' },
-        { key: 'mother-rel', cap: 'Relationship to Decedent:', nth: 1, literal: 'Mother', always: true },
+        M("father-birth-type", "personalInfo.fatherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
+        M("mother-rel", "personalInfo.parent2Kind", { literal: "Mother", always: true }),
         { key: 'motherFirst', cap: '35. First Name:', unkIfEmpty: 'UNK' },
         { key: 'motherMiddle', cap: '36. Middle Name:' },
         { key: 'motherLast', cap: '37. Last (Birth) Name:', unkIfEmpty: 'UNK' },
-        { key: 'mother-birth-value', cap: '38. Birth State/Foreign Country:', unkIfEmpty: 'Unknown' },
+        M("mother-birth-type", "personalInfo.motherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
+        // Address "types" and the pieces of the place-of-death address (from the real certificate capture).
+        M("age", "personalInfo.age.years"),
+        M("birth-value", "personalInfo.decedentBirthPlace.placeOther"),
+        M("res-kindAlt", "personalInfo.decedentAddress.kindAlt"),
+        M("inf-type", "personalInfo.informantMailingAddress.kind"),
+        M("disp-type", "funeralDirectorInfo.dispositionPlaceAddress.kind"),
+        M("fac-number", "personalMedicalInfo.deathPlaceAddress.streetNumber"),
+        M("fac-name", "personalMedicalInfo.deathPlaceAddress.streetName"),
+        M("fac-unit", "personalMedicalInfo.deathPlaceAddress.aptSte"),
+        M("fac-zip5", "personalMedicalInfo.deathPlaceAddress.zip5"),
+        M("fac-zip4", "personalMedicalInfo.deathPlaceAddress.zip4"),
         M("deathCity", "personalMedicalInfo.deathPlaceAddress.city"),
       ],
     },
