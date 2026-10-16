@@ -4,10 +4,36 @@
 // NOT mapped yet (these boxes only appear after another box is chosen - capture them after choosing):
 //   age number (after Age type), birth state, residence state/county, informant mailing address, parents (after Relationship),
 //   embalmer name/license (after Embalmed = Yes), Hispanic origin boxes, facility street address.
+// (Parents 31-38 are mapped by caption.)
 const MODEL = "$parent.$ctrl.vm.cert."
 const M = (key, path, extra) => Object.assign({ key, model: MODEL + path }, extra)
 self.CASILLAS_EDRS_MAPPING = {
   screens: [
+    {
+      // The certificate search page: look the decedent up first, so a duplicate is never created. Fills the boxes only; you press Search.
+      name: 'Search certificates (duplicate check)',
+      match: { urlIncludes: '#!/dc/search' },
+      fields: [
+        { key: 'lastName', cap: 'Last:', section: "Decedent's Names" },
+        { key: 'firstName', cap: 'First:', section: "Decedent's Names" },
+        { key: 'dod', selector: '#dod_from' },
+        { key: 'dod', selector: '#dod_to' },
+      ],
+    },
+    {
+      // The first page of a new certificate ("Create New Certificate"). Boxes are found by the number-and-caption printed beside them.
+      name: 'Create new certificate',
+      match: { urlIncludes: '#!/dc/new/' },
+      fields: [
+        { key: 'firstName', cap: "1. Decedent's Legal First Name:" },
+        { key: 'middleName', cap: '2. Legal Middle Name:' },
+        { key: 'lastName', cap: '3. Legal Last Name:' },
+        { key: 'dod', cap: '7. Date of Death (MM/DD/YYYY):' },
+        { key: 'timeOfDeath', cap: '8. Time of Death (HHMM 24 hour):' },
+        { key: 'sex', cap: '6. Sex:' },
+        { key: 'deathCounty', cap: '104. Jurisdiction of Death:' },
+      ],
+    },
     {
       name: 'Death certificate (single page view)',
       match: { urlIncludes: '#!/dc/cert/' },
@@ -53,6 +79,17 @@ self.CASILLAS_EDRS_MAPPING = {
         M("deathCounty", "personalMedicalInfo.registrationDistrictId"),
         M("pod-type", "personalMedicalInfo.deathPlaceCategory"),
         M("placeOfDeath", "personalMedicalInfo.deathPlace"),
+        // Parents (31-38). Relationship is chosen first, which is what makes the name boxes appear; unknown parts go in as UNK.
+        { key: 'father-rel', cap: 'Relationship to Decedent:', nth: 0, literal: 'Father', always: true },
+        { key: 'fatherFirst', cap: '31. First Name:', unkIfEmpty: 'UNK' },
+        { key: 'fatherMiddle', cap: '32. Middle Name:' },
+        { key: 'fatherLast', cap: '33. Last (Birth) Name:', unkIfEmpty: 'UNK' },
+        { key: 'father-birth-value', cap: '34. Birth State/Foreign Country:', unkIfEmpty: 'Unknown' },
+        { key: 'mother-rel', cap: 'Relationship to Decedent:', nth: 1, literal: 'Mother', always: true },
+        { key: 'motherFirst', cap: '35. First Name:', unkIfEmpty: 'UNK' },
+        { key: 'motherMiddle', cap: '36. Middle Name:' },
+        { key: 'motherLast', cap: '37. Last (Birth) Name:', unkIfEmpty: 'UNK' },
+        { key: 'mother-birth-value', cap: '38. Birth State/Foreign Country:', unkIfEmpty: 'Unknown' },
         M("deathCity", "personalMedicalInfo.deathPlaceAddress.city"),
       ],
     },

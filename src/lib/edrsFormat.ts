@@ -513,9 +513,16 @@ export function buildEdrsRows(c: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] 
         add('placeOfDeath', '101', 'PLACE OF DEATH', 'office', home ? 'RESIDENCE' : plain, home ? [note('info', "EDRS fills this in when you choose Decedent's Home")] : plain ? [] : [note('error', 'Required')])
         break
       }
-      case 'deathCounty':
-        add('deathCounty', '104', 'COUNTY/JURISDICTION OF DEATH', 'office', plain, plain ? [note('info', "Can't be amended — if it is wrong the certificate has to be sealed and replaced. Long Beach, Pasadena and Berkeley have their own choices.")] : [note('error', 'Required — and it cannot be amended later')])
+      case 'deathCounty': {
+        // Filled from the Vital Sheet if entered; otherwise worked out from where death happened — only for Coachella Valley / Riverside County places, never guessed elsewhere (104 can't be amended).
+        const where = [vs.deathCity, c.decedent.placeOfDeath, c.firstCall?.locationAddress, vs.facilityAddressOrAddressFound].filter(Boolean).join(' ')
+        const riverside = /\b(coachella|cathedral city|palm springs|indio|palm desert|rancho mirage|desert hot springs|la quinta|thousand palms|thermal|mecca|bermuda dunes|riverside)\b/i.test(where)
+        const county = plain || (riverside ? 'Riverside' : '')
+        add('deathCounty', '104', 'COUNTY/JURISDICTION OF DEATH', 'office', county, county
+          ? [note('info', plain ? "Can't be amended — if it is wrong the certificate has to be sealed and replaced. Long Beach, Pasadena and Berkeley have their own choices." : "Worked out from where death occurred (Riverside County) — it can't be amended later, so check it")]
+          : [note('error', 'Required — and it cannot be amended later')])
         break
+      }
       case 'facilityAddress': {
         const derived = home && !plain ? [c.firstCall?.locationAddress ?? vs.residenceAddress].filter(Boolean)[0] : undefined
         add('facilityAddress', '105', 'FACILITY ADDRESS OR LOCATION WHERE FOUND', 'office', plain || derived || '', plain ? [] : derived ? [note('info', "Taken from the residence address — EDRS fills this in for Decedent's Home")] : [note('error', 'Required')])

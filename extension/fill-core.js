@@ -88,8 +88,12 @@
       const row = byKey.get(f.key)
       const el = resolve(doc, f)
       // literal: a fixed choice made only when the case has a value for this row (e.g. age type "Years")
-      const value = row && row.value !== '' ? (f.literal !== undefined ? f.literal : row.value) : ''
-      const status = row ? fillElement(el, value) : 'skipped-empty'
+      // always: a fixed choice made even with no matching row (e.g. parent relationship Father/Mother).
+      // unkIfEmpty: the person said unknown parts are entered as UNK, so an empty row becomes that text.
+      let value = row && row.value !== '' ? (f.literal !== undefined ? f.literal : row.value) : ''
+      if (!value && f.always && f.literal !== undefined) value = f.literal
+      if (!value && row && f.unkIfEmpty) value = f.unkIfEmpty
+      const status = row || f.always ? fillElement(el, value) : 'skipped-empty'
       results.push({ key: f.key, number: row?.number || '', label: row?.label || f.key, status })
     }
     return results
