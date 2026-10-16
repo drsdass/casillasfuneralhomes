@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
@@ -9,9 +9,10 @@ import {
   EDRS_MARITAL, EDRS_EDUCATION, EDRS_RACES, EDRS_RELATIONSHIPS, EDRS_DISPOSITIONS, PLACE_OF_DEATH_TYPES,
   normalizeMarital, normalizeEducation, normalizeRace, normalizeDisposition,
 } from '@/lib/edrsFormat'
+import { buildEdrsRows, readiness, type EdrsNote } from '@/lib/edrsFormat'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check, ListChecks, Eye } from 'lucide-react'
-import type { VitalSheetInfo, Decedent } from '@/types'
+import type { VitalSheetInfo, Decedent, FuneralCase } from '@/types'
 
 const sectionLabel = 'bg-slate-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-t-md'
 const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
@@ -24,16 +25,28 @@ const byId = Object.fromEntries(VITAL_FIELDS.map((f) => [f.id, f]))
  * A labelled box whose number and wording come from the shared field list,
  * so what's on this screen is always what's printed on the paper form.
  */
+interface Issue { level: 'error' | 'warn'; messages: string[] }
+const IssueCtx = createContext<{ byKey: Map<string, Issue>; byNumber: Map<string, Issue> }>({ byKey: new Map(), byNumber: new Map() })
+
+/** Red (required) or amber (check it) marker for a box, with the reason underneath. */
+function IssueNote({ issue }: { issue?: Issue }) {
+  if (!issue) return null
+  return <div className={`mt-1 text-[11px] ${issue.level === 'error' ? 'text-red-600' : 'text-amber-700'}`}>{issue.messages.join(' · ')}</div>
+}
+
 function L({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   const f = byId[id]
+  const ctx = useContext(IssueCtx)
+  const issue = ctx.byKey.get(id) ?? (f.number ? ctx.byNumber.get(f.number) : undefined)
   return (
-    <div className={className}>
-      <label className={labelClass}>
+    <div className={className} data-field data-issue={issue ? issue.level : undefined}>
+      <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
         {f.number && <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{f.number}.</span>}
         {f.label}
         {f.hint && <span className="text-slate-400 font-normal normal-case"> — {f.hint}</span>}
       </label>
       {children}
+      <IssueNote issue={issue} />
     </div>
   )
 }
@@ -51,14 +64,16 @@ function VocabSelect({ value, onChange, options, className }: { value: string; o
 }
 
 /** Same look as L, for the items that exist in EDRS but not on the paper form. */
-function EL({ num, label, hint, children, className }: { num: string; label: string; hint?: string; children: ReactNode; className?: string }) {
+function EL({ num, label, hint, children, className, rowKey }: { num: string; label: string; hint?: string; children: ReactNode; className?: string; rowKey?: string }) {
+  const issue = useContext(IssueCtx).byKey.get(rowKey ?? '')
   return (
-    <div className={className}>
-      <label className={labelClass}>
+    <div className={className} data-field data-issue={issue ? issue.level : undefined}>
+      <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
         <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{num}.</span>{label}
         {hint && <span className="text-slate-400 font-normal normal-case"> — {hint}</span>}
       </label>
       {children}
+      <IssueNote issue={issue} />
     </div>
   )
 }
@@ -66,7 +81,7 @@ function EL({ num, label, hint, children, className }: { num: string; label: str
 export default function VitalSheetIntake() {
   const { caseId } = useParams<{ caseId: string }>()
   const navigate = useNavigate()
-  const { currentUser } = useSession()
+  const { currentUser, accessibleLocations } = useSession()
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
 
   // Vital Sheet fields proper
@@ -95,6 +110,7 @@ export default function VitalSheetIntake() {
   const [sendTarget, setSendTarget] = useState('')
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [onlyIssues, setOnlyIssues] = useState(false)
 
   useEffect(() => {
     if (c && !initialized) {
@@ -188,6 +204,29 @@ export default function VitalSheetIntake() {
   const age = computeAge({ ...c, decedent: { ...c.decedent, dateOfBirth: dob || undefined, dateOfDeath: dod || undefined } })
   const contact = c.contacts[0]
 
+  // What EDRS would still reject, worked out from what is on screen right now (so the red clears as you type).
+  const live = {
+    ...c,
+    decedent: { ...c.decedent, firstName, middleName: middleName || undefined, lastName, dateOfBirth: dob || undefined, dateOfDeath: dod || undefined, sex: (sex || undefined) as Decedent['sex'], maritalStatus: marital || undefined, veteran, placeOfDeath: placeOfDeath || undefined },
+    firstCall: { ...c.firstCall, timeOfDeath: timeOfDeath || undefined },
+    vitalSheet: f,
+  } as FuneralCase
+  const loc = accessibleLocations.find((l) => l.id === c.locationId)
+  const liveRows = buildEdrsRows(live, { location: loc && { name: loc.name, licenseNumber: loc.licenseNumber } })
+  const issueByKey = new Map<string, Issue>()
+  const issueByNumber = new Map<string, Issue>()
+  for (const r of liveRows) {
+    if (r.key === 'ssn') continue // only checked on the EDRS Entry screen, where it can be revealed
+    const worst = (['error', 'warn'] as const).find((lv) => r.notes.some((n: EdrsNote) => n.level === lv))
+    if (!worst) continue
+    const issue: Issue = { level: worst, messages: r.notes.filter((n: EdrsNote) => n.level === worst).map((n: EdrsNote) => n.text) }
+    issueByKey.set(r.key, issue)
+    if (r.number && !issueByNumber.has(r.number)) issueByNumber.set(r.number, issue)
+  }
+  const errorCount = Array.from(issueByKey.values()).filter((i) => i.level === 'error').length
+  const warnCount = issueByKey.size - errorCount
+  void readiness
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-4">
@@ -203,7 +242,29 @@ export default function VitalSheetIntake() {
         subtitle="Every item carries the number printed on the state form, so you can find it again on the paper copy, the printout and the EDRS entry screen."
       />
 
-      <div className="space-y-4">
+      <style>{`
+        [data-issue="error"] input, [data-issue="error"] select, [data-issue="error"] textarea { border-color: #f87171; background-color: #fef2f2; }
+        [data-issue="warn"] input, [data-issue="warn"] select, [data-issue="warn"] textarea { border-color: #fbbf24; background-color: #fffbeb; }
+        .only-issues > div:not([data-keep]):not(:has([data-issue])) { display: none; }
+        .only-issues [data-field]:not([data-issue]) { display: none; }
+      `}</style>
+
+      {issueByKey.size > 0 ? (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 mb-4 text-sm">
+          <div>
+            <b>{errorCount} to fix</b> before this can be filed in EDRS{warnCount > 0 && <span className="text-amber-700"> · {warnCount} to double-check</span>}
+            <span className="block text-xs text-red-700/80">They're marked in red below (amber = worth a second look).</span>
+          </div>
+          <button type="button" onClick={() => setOnlyIssues((v) => !v)} className="shrink-0 px-3 py-1.5 rounded-md border border-red-300 bg-white text-red-700 font-medium hover:bg-red-50">
+            {onlyIssues ? 'Show everything' : 'Show only what needs fixing'}
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg px-4 py-3 mb-4 text-sm">Everything EDRS requires is filled in.</div>
+      )}
+
+      <IssueCtx.Provider value={{ byKey: issueByKey, byNumber: issueByNumber }}>
+      <div className={`space-y-4 ${onlyIssues ? 'only-issues' : ''}`}>
         <Card className="p-3 text-xs text-slate-500">
           <span className="font-semibold text-slate-600 uppercase tracking-wide mr-2">Contact person</span>
           {contact ? [contact.name, contact.phone, contact.email].filter(Boolean).join(' · ') : 'None on file'}
@@ -392,19 +453,19 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <p className="text-xs text-slate-400">The state's electronic system asks these; the paper Vital Sheet doesn't. The funeral establishment and its license number (44 and 45) come from the location's record, so there's nothing to enter here for them.</p>
             <div className="grid grid-cols-2 gap-3">
-              <EL num="102/103" label="Where death occurred">
+              <EL num="102/103" label="Where death occurred" rowKey="pod-type">
                 <select value={f.placeOfDeathType ?? ''} onChange={(e) => set('placeOfDeathType', (e.target.value || undefined) as VitalSheetInfo['placeOfDeathType'])} className={inputClass}>
                   <option value="">—</option>
                   {Object.entries(PLACE_OF_DEATH_TYPES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
                 </select>
               </EL>
-              <EL num="25A" label="Homeless?">
+              <EL num="25A" label="Homeless?" rowKey="homeless">
                 <select value={f.homeless ?? ''} onChange={(e) => set('homeless', (e.target.value || undefined) as VitalSheetInfo['homeless'])} className={inputClass}>
                   <option value="">—</option><option value="no">No</option><option value="yes">Yes</option><option value="unknown">Unknown</option>
                 </select>
               </EL>
               {f.homeless === 'yes' && (
-                <EL num="25A" label="Homeless?" hint="which" className="col-start-2">
+                <EL num="25A" label="Homeless?" hint="which" className="col-start-2" rowKey="homeless-kind">
                   <select value={f.homelessKind ?? ''} onChange={(e) => set('homelessKind', (e.target.value || undefined) as VitalSheetInfo['homelessKind'])} className={inputClass}>
                     <option value="">—</option><option value="unsheltered">Unsheltered</option><option value="sheltered">Sheltered</option><option value="in_institution">In Institution</option>
                   </select>
@@ -412,14 +473,14 @@ export default function VitalSheetIntake() {
               )}
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <EL num="42" label="Embalmed?">
+              <EL num="42" label="Embalmed?" rowKey="embalmed">
                 <div className="flex items-center gap-4 h-[38px]">
                   <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.embalmed === 'yes'} onChange={() => set('embalmed', 'yes')} className="accent-[#3b4a35]" /> Yes</label>
                   <label className="flex items-center gap-1.5 text-sm text-slate-600"><input type="radio" checked={f.embalmed === 'no'} onChange={() => set('embalmed', 'no')} className="accent-[#3b4a35]" /> No</label>
                 </div>
               </EL>
-              <EL num="42" label="Embalmer" hint="name"><input {...text('embalmerName')} disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
-              <EL num="43" label="Embalmer's license number"><input {...text('embalmerLicense')} placeholder="EMB1234" disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
+              <EL num="42" label="Embalmer" hint="name" rowKey="embalmer-name"><input {...text('embalmerName')} disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
+              <EL num="43" label="Embalmer's license number" rowKey="embalmer-license"><input {...text('embalmerLicense')} placeholder="EMB1234" disabled={f.embalmed !== 'yes'} className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-300`} /></EL>
             </div>
           </div>
         </Card>
@@ -552,7 +613,7 @@ export default function VitalSheetIntake() {
             </div>
           </Card>
         ) : (
-          <div className="flex justify-end">
+          <div className="flex justify-end" data-keep>
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
@@ -563,6 +624,7 @@ export default function VitalSheetIntake() {
           </div>
         )}
       </div>
+      </IssueCtx.Provider>
     </div>
   )
 }
