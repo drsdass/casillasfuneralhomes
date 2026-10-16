@@ -26,7 +26,7 @@ const byId = Object.fromEntries(VITAL_FIELDS.map((f) => [f.id, f]))
  * so what's on this screen is always what's printed on the paper form.
  */
 interface Issue { level: 'error' | 'warn'; messages: string[] }
-const IssueCtx = createContext<{ byKey: Map<string, Issue>; byNumber: Map<string, Issue> }>({ byKey: new Map(), byNumber: new Map() })
+const IssueCtx = createContext<{ byKey: Map<string, Issue>; byNumber: Map<string, Issue>; pinned: Set<string> | null }>({ byKey: new Map(), byNumber: new Map(), pinned: null })
 
 /** Red (required) or amber (check it) marker for a box, with the reason underneath. */
 function IssueNote({ issue }: { issue?: Issue }) {
@@ -38,8 +38,9 @@ function L({ id, children, className }: { id: string; children: ReactNode; class
   const f = byId[id]
   const ctx = useContext(IssueCtx)
   const issue = ctx.byKey.get(id) ?? (f.number ? ctx.byNumber.get(f.number) : undefined)
+  const pinned = !!ctx.pinned && (ctx.pinned.has(id) || (!!f.number && ctx.pinned.has('#' + f.number)))
   return (
-    <div className={className} data-field data-issue={issue ? issue.level : undefined}>
+    <div className={className} data-field data-issue={issue ? issue.level : undefined} data-pinned={pinned ? '' : undefined}>
       <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
         {f.number && <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{f.number}.</span>}
         {f.label}
@@ -65,9 +66,11 @@ function VocabSelect({ value, onChange, options, className }: { value: string; o
 
 /** Same look as L, for the items that exist in EDRS but not on the paper form. */
 function EL({ num, label, hint, children, className, rowKey }: { num: string; label: string; hint?: string; children: ReactNode; className?: string; rowKey?: string }) {
-  const issue = useContext(IssueCtx).byKey.get(rowKey ?? '')
+  const ictx = useContext(IssueCtx)
+  const issue = ictx.byKey.get(rowKey ?? '')
+  const pinned = !!ictx.pinned && !!rowKey && ictx.pinned.has(rowKey)
   return (
-    <div className={className} data-field data-issue={issue ? issue.level : undefined}>
+    <div className={className} data-field data-issue={issue ? issue.level : undefined} data-pinned={pinned ? '' : undefined}>
       <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
         <span className="font-bold text-[#b3925a] mr-1 normal-case tracking-normal">{num}.</span>{label}
         {hint && <span className="text-slate-400 font-normal normal-case"> — {hint}</span>}
@@ -111,6 +114,8 @@ export default function VitalSheetIntake() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [onlyIssues, setOnlyIssues] = useState(false)
+  // Boxes that needed fixing when the filter was switched on stay on screen while you type in them, even once they stop being flagged.
+  const [pinned, setPinned] = useState<Set<string> | null>(null)
 
   useEffect(() => {
     if (c && !initialized) {
@@ -223,6 +228,14 @@ export default function VitalSheetIntake() {
     issueByKey.set(r.key, issue)
     if (r.number && !issueByNumber.has(r.number)) issueByNumber.set(r.number, issue)
   }
+  const toggleOnly = () => {
+    if (onlyIssues) { setOnlyIssues(false); setPinned(null); return }
+    const keep = new Set<string>()
+    issueByKey.forEach((_, k) => keep.add(k))
+    issueByNumber.forEach((_, n) => keep.add('#' + n))
+    setPinned(keep)
+    setOnlyIssues(true)
+  }
   const errorCount = Array.from(issueByKey.values()).filter((i) => i.level === 'error').length
   const warnCount = issueByKey.size - errorCount
   void readiness
@@ -245,17 +258,17 @@ export default function VitalSheetIntake() {
       <style>{`
         [data-issue="error"] input, [data-issue="error"] select, [data-issue="error"] textarea { border-color: #f87171; background-color: #fef2f2; }
         [data-issue="warn"] input, [data-issue="warn"] select, [data-issue="warn"] textarea { border-color: #fbbf24; background-color: #fffbeb; }
-        .only-issues > div:not([data-keep]):not(:has([data-issue])) { display: none; }
-        .only-issues [data-field]:not([data-issue]) { display: none; }
+        .only-issues > div:not([data-keep]):not(:has([data-issue], [data-pinned])) { display: none; }
+        .only-issues [data-field]:not([data-issue]):not([data-pinned]) { display: none; }
       `}</style>
 
-      {issueByKey.size > 0 ? (
+      {issueByKey.size > 0 || onlyIssues ? (
         <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 mb-4 text-sm">
           <div>
-            <b>{errorCount} to fix</b> before this can be filed in EDRS{warnCount > 0 && <span className="text-amber-700"> · {warnCount} to double-check</span>}
+            {errorCount === 0 && warnCount === 0 ? <b>All fixed — nothing left to flag.</b> : <><b>{errorCount} to fix</b> before this can be filed in EDRS</>}{warnCount > 0 && <span className="text-amber-700"> · {warnCount} to double-check</span>}
             <span className="block text-xs text-red-700/80">They're marked in red below (amber = worth a second look).</span>
           </div>
-          <button type="button" onClick={() => setOnlyIssues((v) => !v)} className="shrink-0 px-3 py-1.5 rounded-md border border-red-300 bg-white text-red-700 font-medium hover:bg-red-50">
+          <button type="button" onClick={toggleOnly} className="shrink-0 px-3 py-1.5 rounded-md border border-red-300 bg-white text-red-700 font-medium hover:bg-red-50">
             {onlyIssues ? 'Show everything' : 'Show only what needs fixing'}
           </button>
         </div>
@@ -263,7 +276,7 @@ export default function VitalSheetIntake() {
         <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-lg px-4 py-3 mb-4 text-sm">Everything EDRS requires is filled in.</div>
       )}
 
-      <IssueCtx.Provider value={{ byKey: issueByKey, byNumber: issueByNumber }}>
+      <IssueCtx.Provider value={{ byKey: issueByKey, byNumber: issueByNumber, pinned }}>
       <div className={`space-y-4 ${onlyIssues ? 'only-issues' : ''}`}>
         <Card className="p-3 text-xs text-slate-500">
           <span className="font-semibold text-slate-600 uppercase tracking-wide mr-2">Contact person</span>
