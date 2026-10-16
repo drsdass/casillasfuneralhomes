@@ -178,7 +178,7 @@ export interface VitalSheetInfo {
   deathCounty?: string
   facilityAddressOrAddressFound?: string
   deathCity?: string
-  documentLanguage?: 'spanish' | 'english' // the top-level "LENGUAGE SPN ENG" box
+  documentLanguage?: 'spanish' | 'english' // the top-level "LANGUAGE SPN ENG" box
 
   // --- EDRS-only items: required by the state's electronic system but not
   // printed on the paper Vital Sheet, so they live in their own card on the

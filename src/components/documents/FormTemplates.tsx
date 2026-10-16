@@ -606,7 +606,7 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
           <div className="grid grid-cols-5">
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">WEIGHT</div><div>{fc?.weight ?? ''}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">PACEMAKER</div><div>{vs?.pacemaker ? 'YES' : 'NO'}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">LENGUAGE</div><div>{vs?.documentLanguage === 'spanish' ? 'SPN' : vs?.documentLanguage === 'english' ? 'ENG' : ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">LANGUAGE</div><div>{vs?.documentLanguage === 'spanish' ? 'SPN' : vs?.documentLanguage === 'english' ? 'ENG' : ''}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">CORONER'S CASE#</div><div>{fc?.coronerCaseNumber ?? ''}</div></div>
             <div className="p-1"><div className="text-[9px] text-slate-500">OBITUARY</div><div>{vs?.obituary ? 'YES' : 'NO'}</div></div>
           </div>

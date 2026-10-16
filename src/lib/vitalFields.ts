@@ -189,7 +189,7 @@ export const VITAL_FIELDS: VitalField[] = [
   { id: 'deathCity', number: '106', label: 'CITY', section: 'office', edrs: true, get: (c) => c.vitalSheet?.deathCity ?? '' },
   { id: 'weight', number: '', label: 'WEIGHT', section: 'office', edrs: false, get: (c) => c.firstCall?.weight ?? '' },
   { id: 'pacemaker', number: '', label: 'PACEMAKER', section: 'office', edrs: false, get: (c) => yesNo(c.vitalSheet?.pacemaker) },
-  { id: 'language', number: '', label: 'LENGUAGE', section: 'office', edrs: false, get: (c) => (c.vitalSheet?.documentLanguage === 'spanish' ? 'SPN' : c.vitalSheet?.documentLanguage === 'english' ? 'ENG' : '') },
+  { id: 'language', number: '', label: 'LANGUAGE', section: 'office', edrs: false, get: (c) => (c.vitalSheet?.documentLanguage === 'spanish' ? 'SPN' : c.vitalSheet?.documentLanguage === 'english' ? 'ENG' : '') },
   { id: 'coronerCase', number: '', label: "CORONER'S CASE #", section: 'office', edrs: false, get: (c) => c.firstCall?.coronerCaseNumber ?? '' },
   { id: 'obituary', number: '', label: 'OBITUARY', section: 'office', edrs: false, get: (c) => yesNo(c.vitalSheet?.obituary) },
 ]

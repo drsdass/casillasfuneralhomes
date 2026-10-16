@@ -1,5 +1,6 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
+  Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
   Volume2, VolumeX, X, Users2, MapPin,
@@ -34,6 +35,8 @@ export default function AppShell() {
   const { currentUser, activeLocationId, setActiveLocationId, accessibleLocations, logout } = useSession()
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const onFirstCall = pathname.endsWith('/first-call')
   const queryClient = useQueryClient()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [soundOn, setSoundOn] = useState(isMessageSoundEnabled())
@@ -198,6 +201,14 @@ export default function AppShell() {
             {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </div>
           <div className="flex items-center gap-4">
+            {!onFirstCall && (
+              <button
+                onClick={() => navigate('/cases/first-call')}
+                className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-3.5 py-1.5 rounded-md hover:bg-[#4d5f45] transition"
+              >
+                <Phone size={15} /> First Call
+              </button>
+            )}
             <a
               href="https://www.icloud.com/find"
               target="_blank"
