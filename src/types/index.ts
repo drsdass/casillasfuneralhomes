@@ -325,6 +325,7 @@ export interface FuneralCase {
   // family successfully saves it once, and only a staff action can
   // reopen it — the family never sees a "save again" path on their own.
   intakeOpenForFamily?: boolean
+  obituaryCompleted?: boolean
   assignedDirectorId?: string
   assignedEmbalmerId?: string
   visitationDate?: string

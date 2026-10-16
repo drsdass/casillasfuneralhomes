@@ -173,6 +173,8 @@ create table cases (
   -- Auto-flips to false the moment the family saves it once; only staff
   -- can flip it back via the "Reopen for Family" action.
   intake_open_for_family boolean not null default true,
+  -- Obituary written and finished (the * the old board used)
+  obituary_completed boolean not null default false,
 
   assigned_director_id uuid references staff_members(id),
   assigned_embalmer_id uuid references staff_members(id),

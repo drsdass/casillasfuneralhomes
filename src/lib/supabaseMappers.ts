@@ -20,6 +20,7 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if (c.vitalSheet !== undefined) row.vital_sheet = c.vitalSheet
   if (c.fieldDiscrepancies !== undefined) row.field_discrepancies = c.fieldDiscrepancies
   if (c.intakeOpenForFamily !== undefined) row.intake_open_for_family = c.intakeOpenForFamily
+  if (c.obituaryCompleted !== undefined) row.obituary_completed = c.obituaryCompleted
   if (c.caseNumber !== undefined) row.case_number = c.caseNumber
   if (c.type !== undefined) row.type = c.type
   if (c.status !== undefined) row.status = c.status
@@ -63,6 +64,7 @@ export function rowToCase(row: any): FuneralCase {
     vitalSheet: row.vital_sheet ?? undefined,
     fieldDiscrepancies: row.field_discrepancies ?? undefined,
     intakeOpenForFamily: row.intake_open_for_family ?? true,
+    obituaryCompleted: row.obituary_completed ?? false,
     caseNumber: row.case_number,
     type: row.type,
     status: row.status,

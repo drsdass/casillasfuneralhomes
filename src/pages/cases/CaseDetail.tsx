@@ -131,6 +131,11 @@ export default function CaseDetail() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case', caseId] }),
   })
 
+  const obituaryMutation = useMutation({
+    mutationFn: (done: boolean) => api.updateCase(caseId!, { obituaryCompleted: done }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
+  })
+
   const [newTaskLabel, setNewTaskLabel] = useState('')
   const [newTaskCategory, setNewTaskCategory] = useState<CaseTask['category']>('other')
   const addTaskMutation = useMutation({
@@ -292,6 +297,10 @@ export default function CaseDetail() {
         </div>
         <div className="flex items-center gap-2">
           <CaseStatusBadge status={c.status} />
+          <label className={`inline-flex items-center gap-1.5 text-xs font-medium border rounded-md px-2.5 py-1.5 ${canEdit ? 'cursor-pointer' : ''} ${c.obituaryCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600'}`}>
+            <input type="checkbox" checked={!!c.obituaryCompleted} disabled={!canEdit || obituaryMutation.isPending} onChange={(e) => obituaryMutation.mutate(e.target.checked)} />
+            Obituary done
+          </label>
           {canEdit && (
             <>
               <Link

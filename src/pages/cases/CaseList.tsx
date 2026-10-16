@@ -133,6 +133,7 @@ export default function CaseList() {
                   <Link to={`/cases/${c.id}`} className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
                     <span className="font-medium text-slate-900">{c.decedent.firstName} {c.decedent.lastName}</span>
+                    {c.obituaryCompleted && <span title="Obituary completed" className="ml-1.5 text-emerald-600 text-xs">✓ obit</span>}
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-slate-500">{c.caseNumber}</td>
