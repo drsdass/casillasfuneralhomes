@@ -43,6 +43,21 @@ export default function CaseList() {
       if (!name.includes(q) && !c.caseNumber.toLowerCase().includes(q)) return false
     }
     return true
+  }).sort((a, b) => {
+    // Open cases first (new first calls with no dates, then soonest service); completed cases last, most recent first.
+    const done = (c: typeof a) => (c.status === 'completed' ? 1 : 0)
+    if (done(a) !== done(b)) return done(a) - done(b)
+    const when = (c: typeof a) => {
+      const d = c.serviceDate ?? c.visitationDate
+      return d ? new Date(d).getTime() : null
+    }
+    const created = (c: typeof a) => new Date(c.createdAt ?? 0).getTime()
+    const wa = when(a), wb = when(b)
+    if (done(a) === 1) return (wb ?? created(b)) - (wa ?? created(a))
+    if (wa === null && wb === null) return created(b) - created(a)
+    if (wa === null) return -1
+    if (wb === null) return 1
+    return wa - wb
   })
 
   return (
