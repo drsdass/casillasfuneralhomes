@@ -31,3 +31,9 @@ body {
   }
 }
 
+
+/* Phones: 16px text in boxes stops iPhones zooming in on tap; wide tables scroll sideways instead of breaking the page. */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px !important; }
+  main table { display: block; overflow-x: auto; }
+}

@@ -157,7 +157,7 @@ export default function AdminPage() {
       </div>
 
       {subTab === 'staff' && (
-        <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             {!canAssign ? (
@@ -305,7 +305,7 @@ export default function AdminPage() {
       )}
 
       {subTab === 'vendors' && (
-        <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-slate-400">Who documents get sent to — removal companies, crematories, florists, and more.</div>
@@ -357,7 +357,7 @@ export default function AdminPage() {
       )}
 
       {subTab === 'tasks' && (
-        <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-slate-400">The standard checklist every new case starts with. Changes here don't affect existing cases' tasks.</div>

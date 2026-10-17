@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import DriverView from '@/pages/driver/DriverView'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SessionProvider } from '@/context/SessionContext'
@@ -79,6 +80,7 @@ export default function App() {
                 <Route path="/cases/:caseId/edit" element={<CaseForm />} />
                 <Route path="/cases/:caseId" element={<CaseDetail />} />
                 <Route path="/custody" element={<CustodyBoard />} />
+                <Route path="/driver" element={<DriverView />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/staff-schedule" element={<StaffSchedule />} />
                 <Route path="/messages" element={<Messages />} />

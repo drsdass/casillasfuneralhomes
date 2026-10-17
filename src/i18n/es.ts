@@ -164,6 +164,7 @@ export const es: TranslationKeys = {
     cases: 'Casos',
     families: 'Familias',
     custody: 'Cadena de Custodia',
+    driver: 'Chofer',
     calendar: 'Calendario',
     staffSchedule: 'Horario del Personal',
     messages: 'Mensajes',

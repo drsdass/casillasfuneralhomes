@@ -163,6 +163,7 @@ export const en = {
     cases: 'Cases',
     families: 'Families',
     custody: 'Chain of Custody',
+    driver: 'Driver',
     calendar: 'Calendar',
     staffSchedule: 'Staff Schedule',
     messages: 'Messages',

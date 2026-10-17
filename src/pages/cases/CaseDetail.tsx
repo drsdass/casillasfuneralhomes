@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom'
+import { DictateButton } from '@/components/ui/DictateButton'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { TASK_STATUS_LABELS } from '@/types'
@@ -275,7 +276,7 @@ export default function CaseDetail() {
 
   return (
     <>
-    <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
     <div>
       <Link to="/cases" className="no-print inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4">
         <ArrowLeft size={15} /> Back to cases
@@ -766,7 +767,8 @@ export default function CaseDetail() {
                 placeholder="Add a note about this case…"
                 className="w-full border border-slate-200 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a] resize-none"
               />
-              <div className="flex items-center justify-between mt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                <DictateButton onText={(t) => setNoteText((prev) => (prev ? prev.trimEnd() + ' ' : '') + t)} />
                 <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                   <input type="checkbox" checked={noteIsSpecialRequest} onChange={(e) => setNoteIsSpecialRequest(e.target.checked)} className="accent-[#3b4a35]" />
                   <AlertTriangle size={12} className="text-amber-500" /> Special Request — also show on TV Board

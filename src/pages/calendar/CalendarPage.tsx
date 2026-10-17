@@ -213,7 +213,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <div className={canEdit ? 'grid grid-cols-[1fr_220px] gap-6 items-start' : ''}>
+      <div className={canEdit ? 'grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start' : ''}>
         <div>
           {viewMode === 'list' ? (
             <div className="space-y-6">

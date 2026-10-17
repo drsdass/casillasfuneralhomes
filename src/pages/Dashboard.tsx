@@ -52,7 +52,7 @@ export default function Dashboard() {
   const locationName = (id: string) => accessibleLocations.find((l) => l.id === id)?.name ?? id
 
   return (
-    <div className="grid grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
     <div>
       <SectionHeading
         title={`${t('dashboard.welcomeBack')}, ${currentUser.name.split(' ')[0]}`}

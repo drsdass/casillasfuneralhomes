@@ -94,7 +94,7 @@ export default function Messages() {
     <div>
       <SectionHeading title="Messages" subtitle="Direct and group messages between staff — live while you're both in the app" />
 
-      <div className="grid grid-cols-[280px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[400px]">
+      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[400px]">
         <Card className="overflow-y-auto p-2">
           <button
             onClick={() => setShowNewConversation(true)}

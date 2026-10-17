@@ -3,7 +3,7 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Volume2, VolumeX, X, Users2, MapPin,
+  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { useState, useEffect } from 'react'
@@ -20,6 +20,7 @@ const allNavItems = [
   { key: 'cases', to: '/cases', label: 'nav.cases', icon: FolderKanban, end: false },
   { key: 'families', to: '/families', label: 'nav.families', icon: Users2, end: false },
   { key: 'custody', to: '/custody', label: 'nav.custody', icon: Truck, end: false },
+  { key: 'driver', to: '/driver', label: 'nav.driver', icon: Smartphone, end: false },
   { key: 'calendar', to: '/calendar', label: 'nav.calendar', icon: CalendarDays, end: false },
   { key: 'staff-schedule', to: '/staff-schedule', label: 'nav.staffSchedule', icon: Users, end: false },
   { key: 'messages', to: '/messages', label: 'nav.messages', icon: MessageCircle, end: false },
@@ -39,6 +40,8 @@ export default function AppShell() {
   const onFirstCall = pathname.endsWith('/first-call')
   const queryClient = useQueryClient()
   const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false) // phone: the sidebar is a slide-over drawer
+  useEffect(() => { setMenuOpen(false) }, [pathname])
   const [soundOn, setSoundOn] = useState(isMessageSoundEnabled())
   const [toast, setToast] = useState<{ senderName: string; body: string } | null>(null)
 
@@ -106,15 +109,18 @@ export default function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900">
-      {/* Sidebar */}
-      <aside className="w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col">
+    <div className="flex h-[100dvh] bg-slate-50 text-slate-900">
+      {/* Phone: dim the page behind the open menu */}
+      {menuOpen && <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setMenuOpen(false)} />}
+      {/* Sidebar — always visible on a computer; a slide-over drawer on a phone */}
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
           <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-10 w-auto shrink-0 brightness-0 invert opacity-90" />
-          <div>
+          <div className="flex-1">
             <div className="text-lg font-display font-semibold tracking-tight">Casillas OS</div>
             <div className="text-xs text-slate-300">Casillas Funeral Home</div>
           </div>
+          <button onClick={() => setMenuOpen(false)} className="lg:hidden text-slate-300 hover:text-white" aria-label="Close menu"><X size={20} /></button>
         </div>
 
         {/* Location switcher */}
@@ -155,7 +161,7 @@ export default function AppShell() {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition ${
+                `flex items-center gap-3 rounded-md px-3 py-3 lg:py-2 text-sm transition ${
                   isActive ? 'bg-[#b3925a] text-[#2b3327] font-medium' : 'text-slate-200 hover:bg-white/10'
                 }`
               }
@@ -196,17 +202,22 @@ export default function AppShell() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-6 justify-between">
-          <div className="text-sm text-slate-500">
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-3 sm:px-6 justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <button onClick={() => setMenuOpen(true)} className="lg:hidden h-10 w-10 -ml-1 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-100" aria-label="Menu">
+              <Menu size={22} />
+            </button>
+            <div className="hidden md:block text-sm text-slate-500 truncate">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {!onFirstCall && (
               <button
                 onClick={() => navigate('/cases/first-call')}
-                className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-3.5 py-1.5 rounded-md hover:bg-[#4d5f45] transition"
+                className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-3.5 h-10 sm:h-auto sm:py-1.5 rounded-md hover:bg-[#4d5f45] transition"
               >
-                <Phone size={15} /> First Call
+                <Phone size={15} /> <span className="hidden sm:inline">First Call</span><span className="sm:hidden">Call</span>
               </button>
             )}
             <a
@@ -227,13 +238,13 @@ export default function AppShell() {
             </button>
             <LanguageToggle variant="dark" />
             {accessibleLocations.length > 0 && (
-              <div className="text-sm text-slate-500">
+              <div className="hidden xl:block text-sm text-slate-500">
                 {accessibleLocations.length} {t('nav.locationsAccessible')}
               </div>
             )}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6">
           <Outlet />
         </main>
       </div>
