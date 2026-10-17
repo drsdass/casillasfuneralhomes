@@ -101,7 +101,7 @@ export interface Decedent {
 // duplicated here.
 export interface FirstCallInfo {
   timeOfDeath?: string
-  locationType?: 'residence' | 'jfk' | 'drmc' | 'emc' | 'other'
+  locationType?: 'residence' | 'jfk' | 'drmc' | 'emc' | 'rcco' | 'other'
   locationAddress?: string
   gateCode?: string
   weight?: string

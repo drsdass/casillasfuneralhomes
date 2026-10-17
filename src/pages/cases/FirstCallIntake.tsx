@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { isKnownPlace, isBuiltInAddress, knownAddress } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
@@ -90,6 +91,13 @@ export default function FirstCallIntake() {
       setTimeOfRemoval(fc.timeOfRemoval ?? '')
     }
   }, [existing])
+
+  // Picking a hospital or the Coroner's office fills the address (unless something else was already typed there).
+  const chooseLocation = (t: NonNullable<FirstCallInfo['locationType']>) => {
+    setLocationType(t)
+    if (isKnownPlace(t)) { if (isBuiltInAddress(locationAddress)) setLocationAddress(knownAddress(t)) }
+    else if (isBuiltInAddress(locationAddress)) setLocationAddress('')
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -196,9 +204,9 @@ export default function FirstCallIntake() {
             <div className={sectionLabel}>LOCATION</div>
             <div className="p-4 space-y-3">
               <div className="flex flex-wrap gap-4">
-                {(['residence', 'jfk', 'drmc', 'emc', 'other'] as const).map((t) => (
+                {(['residence', 'jfk', 'drmc', 'emc', 'rcco', 'other'] as const).map((t) => (
                   <label key={t} className="flex items-center gap-1.5 text-sm text-slate-600">
-                    <input type="radio" checked={locationType === t} onChange={() => setLocationType(t)} className="accent-[#3b4a35]" />
+                    <input type="radio" checked={locationType === t} onChange={() => chooseLocation(t)} className="accent-[#3b4a35]" />
                     {t === 'residence' ? 'RES' : t.toUpperCase()}
                   </label>
                 ))}

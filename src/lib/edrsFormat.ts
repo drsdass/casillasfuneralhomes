@@ -1,4 +1,5 @@
 import type { FuneralCase } from '@/types'
+import { withFirstCallDefaults } from './firstCallPlace'
 import { VITAL_FIELDS, resolveName, splitName, computeAge, type VitalContext, type VitalSection } from './vitalFields'
 
 /**
@@ -233,7 +234,8 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
 
 const SPOUSE_LOCKED = new Set(['Never married', 'Widowed', 'Divorced', 'Unknown', 'SRDP SURV'])
 
-export function buildEdrsRows(c: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] {
+export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsRow[] {
+  const c = withFirstCallDefaults(caseIn) // pickup place from the First Call fills the place-of-death items when the Vital Sheet is empty
   const vs = c.vitalSheet ?? {}
   const rows: EdrsRow[] = []
   const marital = normalizeMarital(c.decedent.maritalStatus)

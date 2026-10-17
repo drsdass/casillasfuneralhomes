@@ -367,7 +367,7 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
       <div className="bg-slate-600 text-white text-xs font-semibold px-2 py-1 mb-3">LOCATION</div>
       <div className="space-y-2 mb-5">
         <div className="flex items-center gap-4 text-xs font-medium">
-          <span className={checkboxClass}></span>RES <span className={checkboxClass}></span>JFK <span className={checkboxClass}></span>DRMC <span className={checkboxClass}></span>EMC
+          <span className={checkboxClass}></span>RES <span className={checkboxClass}></span>JFK <span className={checkboxClass}></span>DRMC <span className={checkboxClass}></span>EMC <span className={checkboxClass}></span>RCCO
           <span className="flex items-baseline gap-2 flex-1">other <input className={fieldClass + ' w-full'} /></span>
         </div>
         <input className={fieldClass + ' w-full'} placeholder="Address" />

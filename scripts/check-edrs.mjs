@@ -9,10 +9,10 @@ import assert from 'node:assert'
 import { createRequire } from 'node:module'
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'edrs-check-'))
-for (const f of ['vitalFields', 'edrsFormat']) {
+for (const f of ['vitalFields', 'firstCallPlace', 'edrsFormat']) {
   const src = fs.readFileSync(new URL(`../src/lib/${f}.ts`, import.meta.url), 'utf8')
   const out = ts.transpileModule(src, { compilerOptions: { module: 'CommonJS', target: 'ES2022' } }).outputText
-  fs.writeFileSync(path.join(dir, `${f}.cjs`), out.replace(/require\("\.\/vitalFields"\)/g, 'require("./vitalFields.cjs")'))
+  fs.writeFileSync(path.join(dir, `${f}.cjs`), out.replace(/require\("\.\/(vitalFields|firstCallPlace)"\)/g, 'require("./$1.cjs")'))
 }
 const require = createRequire(import.meta.url)
 const vf = require(path.join(dir, 'vitalFields.cjs'))
@@ -226,5 +226,20 @@ t('a bare First Call case is blocked on the placeholder names and the missing ba
 
 
 fs.rmSync(dir, { recursive: true, force: true })
+console.log('\n== First Call pickup place carries over ==')
+t('a JFK pickup fills place, address, city, zip and county on the EDRS rows', () => {
+  const c = base(); c.vitalSheet = {}; c.decedent.placeOfDeath = ''; c.firstCall = { locationType: 'jfk' }
+  const r = E.buildEdrsRows(c, ctx)
+  assert.match(row(r, 'placeOfDeath').value, /KENNEDY/)
+  assert.strictEqual(row(r, 'fac-number').value, '47111'); assert.strictEqual(row(r, 'fac-name').value, 'Monroe St')
+  assert.strictEqual(row(r, 'deathCity').value, 'Indio'); assert.strictEqual(row(r, 'fac-zip5').value, '92201')
+  assert.strictEqual(row(r, 'deathCounty').value, 'Riverside') })
+t('what is typed on the Vital Sheet wins over the pickup place', () => {
+  const c = base(); c.vitalSheet.deathCity = 'Palm Springs'; c.firstCall = { locationType: 'jfk' }
+  assert.strictEqual(row(E.buildEdrsRows(c, ctx), 'deathCity').value, 'Palm Springs') })
+t('a Coroner pickup does not pretend death happened at the Coroner office', () => {
+  const c = base(); c.vitalSheet = {}; c.decedent.placeOfDeath = ''; c.firstCall = { locationType: 'rcco' }
+  assert.strictEqual(row(E.buildEdrsRows(c, ctx), 'placeOfDeath').value, '') })
+
 console.log(`\n${passed} passed, ${failures.length} failed`)
 process.exit(failures.length ? 1 : 0)

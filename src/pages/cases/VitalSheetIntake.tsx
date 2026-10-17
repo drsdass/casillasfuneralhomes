@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
+import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
@@ -119,7 +120,8 @@ export default function VitalSheetIntake() {
 
   useEffect(() => {
     if (c && !initialized) {
-      const init = withSplitNames(c.vitalSheet)
+      const seeded = withFirstCallDefaults(c) // First Call pickup place → place-of-death boxes, where still empty
+      const init = withSplitNames(seeded.vitalSheet)
       init.education = normalizeEducation(init.education).value ?? init.education
       init.race = normalizeRace(init.race).value ?? init.race
       init.typeOfDisposition = normalizeDisposition(init.typeOfDisposition).value ?? init.typeOfDisposition
@@ -133,7 +135,7 @@ export default function VitalSheetIntake() {
       setSex(c.decedent.sex ?? '')
       setMarital(normalizeMarital(c.decedent.maritalStatus).value ?? c.decedent.maritalStatus ?? '')
       setVeteran(c.decedent.veteran ?? false)
-      setPlaceOfDeath(c.decedent.placeOfDeath ?? '')
+      setPlaceOfDeath(seeded.decedent.placeOfDeath ?? '')
       setWeight(c.firstCall?.weight ?? '')
       setCoronerNumber(c.firstCall?.coronerCaseNumber ?? '')
       setInitialized(true)
