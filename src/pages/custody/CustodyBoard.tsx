@@ -127,6 +127,17 @@ export default function CustodyBoard() {
                       <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName}</div>
                       <div className="text-xs text-slate-500">{c.caseNumber}</div>
                       <div className="text-xs text-slate-400 capitalize mt-1">{c.disposition}</div>
+                      {canEdit && (
+                        <select
+                          value=""
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => { const to = e.target.value as CustodyStage; if (to) moveMutation.mutate({ caseId: c.id, toStage: to }) }}
+                          className="md:hidden mt-2 w-full border border-slate-200 rounded-md px-2 py-2 text-sm bg-white text-slate-600"
+                        >
+                          <option value="">Move to…</option>
+                          {CUSTODY_STAGES.filter((st) => st !== c.custodyStage).map((st) => <option key={st} value={st}>{CUSTODY_STAGE_LABELS[st]}</option>)}
+                        </select>
+                      )}
                     </div>
                   </div>
                 </div>
