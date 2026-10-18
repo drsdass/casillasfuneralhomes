@@ -292,6 +292,7 @@ export default function CaseDetail() {
           <div className="text-sm text-slate-500 mt-1">
             {c.caseNumber} · {c.type.replace('_', '-')} · {c.disposition}
           </div>
+          <div className="mt-2"><CaseStatusBadge status={c.status} /></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">
               <Users2 size={11} /> {linkedFamily.name}
@@ -299,7 +300,6 @@ export default function CaseDetail() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CaseStatusBadge status={c.status} />
           <label className={`inline-flex items-center gap-1.5 text-xs font-medium border rounded-md px-2.5 py-1.5 ${canEdit ? 'cursor-pointer' : ''} ${c.obituaryCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600'}`}>
             <input type="checkbox" checked={!!c.obituaryCompleted} disabled={!canEdit || obituaryMutation.isPending} onChange={(e) => obituaryMutation.mutate(e.target.checked)} />
             Obituary done

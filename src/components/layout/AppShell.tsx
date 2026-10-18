@@ -34,6 +34,11 @@ const allNavItems = [
   { key: 'invoices', to: '/invoices', label: 'nav.invoices', icon: Receipt, end: false },
 ]
 
+const NAV_GROUP: Record<string, string> = {
+  cases: 'Cases', families: 'Cases', custody: 'Cases', driver: 'Cases',
+  calendar: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
+  financials: 'Business', reports: 'Business', board: 'Business', invoices: 'Business', admin: 'Business',
+}
 const EASY_NAV = ['dashboard', 'cases', 'families', 'custody', 'driver', 'calendar', 'messages', 'invoices']
 
 export default function AppShell() {
@@ -141,7 +146,7 @@ export default function AppShell() {
                 <Building2 size={16} className="shrink-0 text-slate-300" />
                 <span className="truncate">{activeLocation?.name ?? 'Select location'}</span>
               </span>
-              <ChevronDown size={14} className="shrink-0 text-slate-400" />
+              <ChevronDown size={14} className="shrink-0 text-slate-300" />
             </button>
             {switcherOpen && (
               <div className="absolute left-3 right-3 mt-1 rounded-md bg-white text-slate-800 shadow-lg overflow-hidden z-20">
@@ -152,7 +157,7 @@ export default function AppShell() {
                     className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-100 ${loc.id === activeLocationId ? 'bg-slate-100 font-medium' : ''}`}
                   >
                     {loc.name}
-                    <div className="text-xs text-slate-400">{loc.city}, {loc.state}</div>
+                    <div className="text-xs text-slate-300">{loc.city}, {loc.state}</div>
                   </button>
                 ))}
               </div>
@@ -162,13 +167,16 @@ export default function AppShell() {
 
         {/* Nav */}
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
-          {navItems.map(({ key, to, label, icon: Icon, end }) => (
+          {navItems.map(({ key, to, label, icon: Icon, end }, i) => (
+            <div key={key}>
+            {!easy && NAV_GROUP[key] && NAV_GROUP[key] !== NAV_GROUP[navItems[i - 1]?.key] && (
+              <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300/70">{NAV_GROUP[key]}</div>
+            )}
             <NavLink
-              key={key}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-3 lg:py-2 text-sm transition ${
+                `flex items-center gap-3 rounded-md px-3 py-3 lg:py-1.5 text-sm transition ${
                   isActive ? 'bg-[#b3925a] text-[#2b3327] font-medium' : 'text-slate-200 hover:bg-white/10'
                 }`
               }
@@ -181,6 +189,7 @@ export default function AppShell() {
                 </span>
               )}
             </NavLink>
+            </div>
           ))}
         </nav>
 
@@ -195,7 +204,7 @@ export default function AppShell() {
             </div>
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{currentUser.name}</div>
-              <div className="text-xs text-slate-400 truncate">{ROLE_LABELS[currentUser.role]}</div>
+              <div className="text-xs text-slate-300 truncate">{ROLE_LABELS[currentUser.role]}</div>
             </div>
           </div>
           <button
@@ -254,7 +263,7 @@ export default function AppShell() {
             </button>
             <LanguageToggle variant="dark" />
             {accessibleLocations.length > 0 && (
-              <div className="hidden xl:block text-sm text-slate-500">
+              <div className="hidden 2xl:block text-sm text-slate-500">
                 {accessibleLocations.length} {t('nav.locationsAccessible')}
               </div>
             )}

@@ -136,8 +136,8 @@ export default function CaseList() {
                     {c.obituaryCompleted && <span title="Obituary completed" className="ml-1.5 text-emerald-600 text-xs">✓ obit</span>}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-slate-500">{c.caseNumber}</td>
-                {isAllLocations && <td className="px-4 py-3 text-slate-500">{locationName(c.locationId)}</td>}
+                <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}</td>
+                {isAllLocations && <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{locationName(c.locationId).replace(/^Casillas Funeral Home\s*[—-]\s*/, '')}</td>}
                 <td className="px-4 py-3 text-slate-500 capitalize">{c.disposition}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}

@@ -22,20 +22,21 @@ export function SectionHeading({ title, subtitle, action }: { title: string; sub
   )
 }
 
+// Amber = needs action, green shades = moving along, grey = waiting/done, red = problem.
 const caseStatusStyles: Record<CaseStatus, string> = {
-  first_call: 'bg-slate-100 text-slate-700',
-  arrangement_pending: 'bg-amber-100 text-amber-800',
-  arrangement_scheduled: 'bg-blue-100 text-blue-800',
-  in_progress: 'bg-indigo-100 text-indigo-800',
-  service_scheduled: 'bg-purple-100 text-purple-800',
-  completed: 'bg-emerald-100 text-emerald-800',
+  first_call: 'bg-amber-100 text-amber-900',
+  arrangement_pending: 'bg-amber-100 text-amber-900',
+  arrangement_scheduled: 'bg-sky-100 text-sky-900',
+  in_progress: 'bg-emerald-100 text-emerald-900',
+  service_scheduled: 'bg-emerald-200 text-emerald-950',
+  completed: 'bg-slate-200 text-slate-700',
   on_hold: 'bg-red-100 text-red-800',
 }
 
 export function CaseStatusBadge({ status }: { status: CaseStatus }) {
   const { t } = useLanguage()
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${caseStatusStyles[status]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${caseStatusStyles[status]}`}>
       {t(`enums.caseStatus.${status}`)}
     </span>
   )

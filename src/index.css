@@ -3,7 +3,21 @@
 @theme {
   --font-display: 'Playfair Display', Georgia, serif;
   --font-sans: 'Open Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* Warm stone neutrals instead of cool blue-grey, with the two "light grey text" shades darkened for readability. */
+  --color-slate-50: #faf8f4;
+  --color-slate-100: #f3f0e9;
+  --color-slate-200: #e6e1d6;
+  --color-slate-300: #d2ccbd;
+  --color-slate-400: #766f64;
+  --color-slate-500: #57524a;
+  --color-slate-600: #46423b;
+  --color-slate-700: #38342e;
+  --color-slate-800: #292622;
+  --color-slate-900: #1c1a17;
 }
+
+html { font-size: 17px; }
 
 body {
   font-family: var(--font-sans);
@@ -39,7 +53,7 @@ body {
 }
 
 /* Easy view: everything a little larger and easier to hit. Turned on per person from the top bar. */
-html.easy { font-size: 18px; }
+html.easy { font-size: 19px; }
 html.easy main button:not([data-compact]),
 html.easy main input:not([type='checkbox']):not([type='radio']):not([type='range']),
 html.easy main select { min-height: 2.75rem; }
