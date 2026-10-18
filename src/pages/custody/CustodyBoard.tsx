@@ -294,10 +294,11 @@ export default function CustodyBoard() {
 
       {/* Custody log panel */}
       {selectedCase && (
-        <Card className="mt-6 p-5 max-w-xl">
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={() => setSelectedCase(null)}>
+        <div className="h-full w-full max-w-md overflow-y-auto bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-medium text-slate-800 flex items-center gap-2">
-              <History size={15} /> Custody History
+              <History size={15} /> Custody History{(() => { const c = cases.find((x) => x.id === selectedCase); return c ? ` — ${c.decedent.firstName} ${c.decedent.lastName}` : '' })()}
             </h3>
             <button onClick={() => setSelectedCase(null)} className="text-slate-400 hover:text-slate-600">
               <X size={16} />
@@ -332,7 +333,8 @@ export default function CustodyBoard() {
               ))}
             {log.length === 0 && <div className="text-sm text-slate-400 text-center py-6">No custody events recorded.</div>}
           </div>
-        </Card>
+        </div>
+        </div>
       )}
     </div>
     {showActivity && <ActivityPanel entityType="custody" title="Custody Activity" />}

@@ -2,7 +2,7 @@ import {
   staff, cases, contracts, custodyLog, caseTasks, caseNotes,
   vehicles, calendarEvents, gplItems, inboundEmails, signatureRequests,
 } from './mockData'
-import { TASK_STATUS_LABELS } from '@/types'
+import { TASK_STATUS_LABELS, CUSTODY_STAGE_LABELS } from '@/types'
 import type {
   StaffMember, FuneralCase, Contract, CustodyLogEntry, CustodyStage, UserRole,
   CaseTask, CaseNote, CaseDocument, Vehicle, CalendarEvent, SchedulingConflict,
@@ -318,7 +318,7 @@ export const mockStore = {
     custodyLogStore = [...custodyLogStore, entry]
     logAudit({
       entityType: 'custody', entityId: caseId, caseId, action: 'status_change',
-      summary: `Moved custody to "${toStage.replace(/_/g, ' ')}"`,
+      summary: `Moved ${existing ? `${existing.decedent.firstName} ${existing.decedent.lastName}` : 'case'} to ${CUSTODY_STAGE_LABELS[toStage] ?? toStage.replace(/_/g, ' ')}`,
       changedBy: movedBy.id, changedByName: movedBy.name,
     })
     return { cases: caseStore, log: custodyLogStore }

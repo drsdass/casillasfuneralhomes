@@ -1,6 +1,6 @@
 import { USE_MOCK, supabase, supabaseUrl, supabaseAnonKey } from './supabase'
 import { mockStore } from '@/data/mockStore'
-import { TASK_STATUS_LABELS } from '@/types'
+import { TASK_STATUS_LABELS, CUSTODY_STAGE_LABELS } from '@/types'
 import type {
   FuneralCase, Location, StaffMember, CaseTask, CaseNote, CaseDocument,
   GplItem, Contract, CalendarEvent, CustodyLogEntry, CustodyStage, UserRole,
@@ -815,7 +815,7 @@ export const api = {
     this.notifySlack(`📦 ${decedentName} moved to *${toStage.replace(/_/g, ' ')}* — by ${movedBy.name}`)
     logAuditReal({
       entityType: 'custody', entityId: caseId, caseId, action: 'status_change',
-      summary: `Moved custody to "${toStage.replace(/_/g, ' ')}"`, changedBy: movedBy.id,
+      summary: `Moved ${decedentName} to ${CUSTODY_STAGE_LABELS[toStage] ?? toStage.replace(/_/g, ' ')}`, changedBy: movedBy.id,
     })
     // One specific, meaningful moment gets a family text — not every stage
     // change, which would feel clinical rather than reassuring.
