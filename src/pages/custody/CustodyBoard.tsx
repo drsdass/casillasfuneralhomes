@@ -55,7 +55,7 @@ const sortLabels: Record<SortMode, string> = {
 }
 
 
-/** A column body that scrolls on its own, and tells you when there is more below. */
+/** A column body that scrolls on its own. When there is more below, a slim bar under the list says so (it never covers a card). */
 function ScrollColumn({ className, children }: { className: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [more, setMore] = useState(false)
@@ -66,15 +66,15 @@ function ScrollColumn({ className, children }: { className: string; children: Re
   useEffect(() => { check() })
   useEffect(() => { window.addEventListener('resize', check); return () => window.removeEventListener('resize', check) }, [])
   return (
-    <div className="relative md:flex-1 md:min-h-0">
-      <div ref={ref} onScroll={check} className={`${className} md:h-full md:overflow-y-auto`}>{children}</div>
+    <div className="md:flex md:flex-col md:flex-1 md:min-h-0">
+      <div ref={ref} onScroll={check} className={`${className} ${more ? 'md:rounded-b-none' : ''} md:flex-1 md:min-h-0 md:overflow-y-auto`}>{children}</div>
       {more && (
         <button
           type="button"
           onClick={() => ref.current?.scrollBy({ top: ref.current.clientHeight * 0.8, behavior: 'smooth' })}
-          className="hidden md:flex absolute bottom-0 inset-x-0 items-center justify-center gap-1 rounded-b-md bg-gradient-to-t from-slate-300 to-transparent pt-6 pb-1.5 text-xs font-semibold text-slate-700"
+          className="hidden md:flex shrink-0 items-center justify-center gap-1 rounded-b-md border border-t-0 border-slate-300 bg-slate-200 py-1 text-xs font-semibold text-slate-700 animate-pulse hover:bg-slate-300"
         >
-          <span className="flex items-center gap-1 rounded-full bg-white/90 px-3 py-0.5 shadow animate-pulse"><ChevronDown size={14} /> More below</span>
+          <ChevronDown size={14} /> More below
         </button>
       )}
     </div>
@@ -180,7 +180,11 @@ export default function CustodyBoard() {
         title="Chain of Custody"
         subtitle={canEdit ? 'Drag a case card to update its custody location' : 'Custody tracking (view only for your role)'}
         action={
-          <div className="flex items-center gap-1.5 text-sm">
+          <div className="flex items-center gap-2 text-sm">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a name or case number…" className="w-56 sm:w-72 border border-slate-200 rounded-md pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
+            </div>
             <ArrowDownUp size={14} className="text-slate-400" />
             <select
               value={sortMode}
@@ -195,10 +199,6 @@ export default function CustodyBoard() {
         }
       />
 
-      <div className="relative mb-3 max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a name or case number…" className="w-full border border-slate-200 rounded-md pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
-      </div>
 
       {/* Phone: pick a stage, see just that list */}
       <div className="md:hidden flex gap-2 overflow-x-auto pb-3 -mx-1 px-1">
@@ -211,7 +211,7 @@ export default function CustodyBoard() {
         ))}
       </div>
 
-      <div className="grid gap-3 md:h-[calc(100dvh-15.5rem)] md:min-h-[26rem] md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] md:auto-rows-fr pb-1">
+      <div className="grid gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[26rem] md:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] md:auto-rows-fr pb-1">
         {CUSTODY_STAGES.map((stage, stageIdx) => (
           <div
             key={stage}
@@ -232,26 +232,33 @@ export default function CustodyBoard() {
                 const rows = casesByStage(stage)
                 if (rows.length <= GROUP_THRESHOLD && !search) return rows.map(renderCard)
                 if (stage === 'completed' || rows.length > GROUP_THRESHOLD) {
-                  return groupByYearMonth(rows).map((g) => {
+                  const groups = groupByYearMonth(rows)
+                  // Only one month in this stage? No folders at all — just the list.
+                  if (!search && groups.length === 1 && groups[0].months.length === 1) return groups[0].months[0].rows.map(renderCard)
+                  const oneYear = groups.length === 1
+                  const renderMonths = (g: typeof groups[number]) => g.months.map((m) => {
+                    const mOpen = isOpen(stage, m.key) || !!search
+                    return (
+                      <div key={m.key} className={oneYear ? '' : 'ml-2'}>
+                        <button onClick={() => toggle(stage, m.key)} className="w-full flex items-center gap-1.5 text-xs font-medium text-slate-600 py-0.5">
+                          {mOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {m.label}
+                          <span className="ml-auto text-[10px] text-slate-500">{m.rows.length}</span>
+                        </button>
+                        {mOpen && <div className="space-y-1.5 pb-1">{m.rows.map(renderCard)}</div>}
+                      </div>
+                    )
+                  })
+                  return groups.map((g) => {
+                    // One year only: skip the year row and show months directly.
+                    if (oneYear) return <div key={g.year}>{renderMonths(g)}</div>
                     const yOpen = isOpen(stage, g.year) || !!search
                     return (
                       <div key={g.year}>
-                        <button onClick={() => toggle(stage, g.year)} className="w-full flex items-center gap-1.5 text-xs font-semibold text-slate-600 py-1.5">
+                        <button onClick={() => toggle(stage, g.year)} className="w-full flex items-center gap-1.5 text-xs font-semibold text-slate-700 py-0.5">
                           {yOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {g.year}
-                          <span className="ml-auto text-[10px] font-normal text-slate-400">{g.total}</span>
+                          <span className="ml-auto text-[10px] font-normal text-slate-500">{g.total}</span>
                         </button>
-                        {yOpen && g.months.map((m) => {
-                          const mOpen = isOpen(stage, m.key) || !!search
-                          return (
-                            <div key={m.key} className="ml-2">
-                              <button onClick={() => toggle(stage, m.key)} className="w-full flex items-center gap-1.5 text-xs text-slate-500 py-1">
-                                {mOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {m.label}
-                                <span className="ml-auto text-[10px] text-slate-400">{m.rows.length}</span>
-                              </button>
-                              {mOpen && <div className="space-y-1.5 pb-2">{m.rows.map(renderCard)}</div>}
-                            </div>
-                          )
-                        })}
+                        {yOpen && renderMonths(g)}
                       </div>
                     )
                   })
