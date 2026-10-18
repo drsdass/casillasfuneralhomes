@@ -25,6 +25,19 @@ type SortMode = 'newest' | 'oldest' | 'name'
 
 // A long column (every finished case, for example) is filed under Year > Month so it can be folded away.
 const GROUP_THRESHOLD = 12
+
+// Big screens (2xl): six equal columns, two rows. Funeral Home takes two columns and both rows; the other eight stages fill around it.
+const BIG_SCREEN_SPOT: Record<CustodyStage, string> = {
+  scene_first_call: '2xl:col-start-1 2xl:row-start-1',
+  in_transit: '2xl:col-start-2 2xl:row-start-1',
+  funeral_home: '2xl:col-start-3 2xl:col-span-2 2xl:row-start-1 2xl:row-span-2',
+  chapel_service: '2xl:col-start-5 2xl:row-start-1',
+  crematory: '2xl:col-start-6 2xl:row-start-1',
+  ashes_received: '2xl:col-start-1 2xl:row-start-2',
+  cemetery_burial: '2xl:col-start-2 2xl:row-start-2',
+  shipped_released: '2xl:col-start-5 2xl:row-start-2',
+  completed: '2xl:col-start-6 2xl:row-start-2',
+}
 const monthKey = (c: FuneralCase): string => (c.decedent.dateOfDeath || c.createdAt || c.updatedAt || '').slice(0, 7) || 'undated'
 function groupByYearMonth(rows: FuneralCase[]): { year: string; months: { key: string; label: string; rows: FuneralCase[] }[]; total: number }[] {
   const byYear = new Map<string, Map<string, FuneralCase[]>>()
@@ -87,6 +100,7 @@ export default function CustodyBoard() {
   const queryClient = useQueryClient()
   const [dragCaseId, setDragCaseId] = useState<string | null>(null)
   const [selectedCase, setSelectedCase] = useState<string | null>(null)
+  const [showActivity, setShowActivity] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [search, setSearch] = useState('')
   const [phoneStage, setPhoneStage] = useState<CustodyStage>('scene_first_call') // phone: one column at a time
@@ -174,7 +188,7 @@ export default function CustodyBoard() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className={`grid grid-cols-1 gap-6 items-start ${showActivity ? 'lg:grid-cols-[1fr_280px]' : ''}`}>
     <div>
       <SectionHeading
         title="Chain of Custody"
@@ -185,6 +199,7 @@ export default function CustodyBoard() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a name or case number…" className="w-56 sm:w-72 border border-slate-200 rounded-md pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]" />
             </div>
+            <button onClick={() => setShowActivity((v) => !v)} className={`hidden lg:inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm ${showActivity ? 'border-[#b3925a] bg-[#b3925a]/15 text-[#5b4524]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}><History size={14} /> Activity</button>
             <ArrowDownUp size={14} className="text-slate-400" />
             <select
               value={sortMode}
@@ -211,13 +226,13 @@ export default function CustodyBoard() {
         ))}
       </div>
 
-      <div className="grid gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[26rem] md:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] md:auto-rows-fr pb-1">
+      <div className="grid gap-3 md:h-[calc(100dvh-11rem)] md:min-h-[26rem] md:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] md:auto-rows-fr 2xl:grid-cols-6 2xl:grid-rows-2 pb-1">
         {CUSTODY_STAGES.map((stage, stageIdx) => (
           <div
             key={stage}
             onDragOver={(e) => canEdit && e.preventDefault()}
             onDrop={() => handleDrop(stage)}
-            className={`w-full min-w-0 md:min-h-0 md:flex md:flex-col ${phoneStage === stage ? 'block' : 'hidden md:flex'}`}
+            className={`w-full min-w-0 md:min-h-0 md:flex md:flex-col ${BIG_SCREEN_SPOT[stage]} ${phoneStage === stage ? 'block' : 'hidden md:flex'}`}
           >
             <div
               className="flex items-center gap-2 rounded-t-md px-3 py-2 text-white text-xs font-semibold uppercase tracking-wide"
@@ -230,11 +245,15 @@ export default function CustodyBoard() {
             <ScrollColumn className="bg-slate-100 rounded-b-md p-2 min-h-[120px] md:min-h-0 space-y-1.5 border border-t-0 border-slate-200">
               {(() => {
                 const rows = casesByStage(stage)
-                if (rows.length <= GROUP_THRESHOLD && !search) return rows.map(renderCard)
+                // Funeral Home gets a double-wide spot on big screens, so its people are listed in two columns.
+                const cards = (list: FuneralCase[]) => stage === 'funeral_home'
+                  ? <div className="space-y-1.5 2xl:space-y-0 2xl:grid 2xl:grid-cols-2 2xl:gap-1.5">{list.map(renderCard)}</div>
+                  : list.map(renderCard)
+                if (rows.length <= GROUP_THRESHOLD && !search) return cards(rows)
                 if (stage === 'completed' || rows.length > GROUP_THRESHOLD) {
                   const groups = groupByYearMonth(rows)
                   // Only one month in this stage? No folders at all — just the list.
-                  if (!search && groups.length === 1 && groups[0].months.length === 1) return groups[0].months[0].rows.map(renderCard)
+                  if (!search && groups.length === 1 && groups[0].months.length === 1) return cards(groups[0].months[0].rows)
                   const oneYear = groups.length === 1
                   const renderMonths = (g: typeof groups[number]) => g.months.map((m) => {
                     const mOpen = isOpen(stage, m.key) || !!search
@@ -244,7 +263,7 @@ export default function CustodyBoard() {
                           {mOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {m.label}
                           <span className="ml-auto text-[10px] text-slate-500">{m.rows.length}</span>
                         </button>
-                        {mOpen && <div className="space-y-1.5 pb-1">{m.rows.map(renderCard)}</div>}
+                        {mOpen && <div className="space-y-1.5 pb-1">{cards(m.rows)}</div>}
                       </div>
                     )
                   })
@@ -263,7 +282,7 @@ export default function CustodyBoard() {
                     )
                   })
                 }
-                return rows.map(renderCard)
+                return cards(rows)
               })()}
               {casesByStage(stage).length === 0 && (
                 <div className="text-xs text-slate-400 text-center py-6">No cases here</div>
@@ -316,7 +335,7 @@ export default function CustodyBoard() {
         </Card>
       )}
     </div>
-    <ActivityPanel entityType="custody" title="Custody Activity" />
+    {showActivity && <ActivityPanel entityType="custody" title="Custody Activity" />}
     </div>
   )
 }
