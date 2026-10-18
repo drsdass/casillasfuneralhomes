@@ -8,8 +8,15 @@ import { AlertCircle, CalendarClock, CheckCircle2, Clock, HeartHandshake } from 
 import { format, isToday, parseISO } from 'date-fns'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { useLanguage } from '@/i18n/LanguageContext'
+import { useEasyView } from '@/context/EasyViewContext'
+import TodayHome from '@/pages/TodayHome'
 
 export default function Dashboard() {
+  const { easy } = useEasyView()
+  return easy ? <TodayHome /> : <FullDashboard />
+}
+
+function FullDashboard() {
   const { activeLocationId, accessibleLocations, currentUser } = useSession()
   const { t } = useLanguage()
   const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false

@@ -388,6 +388,15 @@ export const api = {
     return this.getCase(caseRow.id) as Promise<FuneralCase>
   },
 
+  /** Practice cases (case number starts with PRACTICE-) can be removed by anyone with access to the location — real cases cannot. */
+  async deletePracticeCase(id: string): Promise<void> {
+    if (USE_MOCK) throw new Error('Practice cases can only be removed on the live site.')
+    const { data } = await supabase!.from('cases').select('case_number').eq('id', id).single()
+    if (!data || !String(data.case_number).startsWith('PRACTICE-')) throw new Error('Only practice cases can be removed here.')
+    const { error } = await supabase!.from('cases').delete().eq('id', id)
+    if (error) throw error
+  },
+
   async updateCase(id: string, patch: Partial<FuneralCase>, changedBy: StaffMember): Promise<FuneralCase | undefined> {
     if (USE_MOCK) return delay(mockStore.updateCase(id, patch, changedBy))
     const { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)

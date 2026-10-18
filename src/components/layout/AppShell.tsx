@@ -3,7 +3,7 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone,
+  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { useState, useEffect } from 'react'
@@ -14,6 +14,7 @@ import { ROLE_LABELS } from '@/types'
 import { playMessageChime, isMessageSoundEnabled, setMessageSoundEnabled } from '@/lib/notificationSound'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
+import { useEasyView } from '@/context/EasyViewContext'
 
 const allNavItems = [
   { key: 'dashboard', to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
@@ -32,9 +33,12 @@ const allNavItems = [
   { key: 'invoices', to: '/invoices', label: 'nav.invoices', icon: Receipt, end: false },
 ]
 
+const EASY_NAV = ['dashboard', 'cases', 'families', 'custody', 'driver', 'calendar', 'messages', 'invoices']
+
 export default function AppShell() {
+  const { easy, toggle: toggleEasy } = useEasyView()
   const { currentUser, activeLocationId, setActiveLocationId, accessibleLocations, logout } = useSession()
-  const { t } = useLanguage()
+  const { t, language } = useLanguage()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const onFirstCall = pathname.endsWith('/first-call')
@@ -100,7 +104,9 @@ export default function AppShell() {
 
   if (!currentUser) return null // RequireAuth guarantees this won't render, but keeps TS happy
 
-  const navItems = allNavItems.filter((item) => visibleNavKeys(currentUser).includes(item.key))
+  const navItems = allNavItems
+    .filter((item) => visibleNavKeys(currentUser).includes(item.key))
+    .filter((item) => !easy || EASY_NAV.includes(item.key))
   const activeLocation = accessibleLocations.find((l) => l.id === activeLocationId)
 
   function handleLogout() {
@@ -167,7 +173,7 @@ export default function AppShell() {
               }
             >
               <Icon size={17} />
-              <span className="flex-1">{t(label)}</span>
+              <span className="flex-1">{easy && key === 'dashboard' ? (language === 'es' ? 'Hoy' : 'Today') : t(label)}</span>
               {key === 'messages' && unreadCount > 0 && (
                 <span className="text-[10px] font-semibold bg-red-500 text-white rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">
                   {unreadCount}
@@ -212,6 +218,14 @@ export default function AppShell() {
             </div>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
+            <button
+              onClick={toggleEasy}
+              title={easy ? 'Go back to the full screens' : 'Bigger text, fewer menus, simple home'}
+              className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 h-10 sm:h-9 rounded-md border transition ${easy ? 'border-[#b3925a] bg-[#b3925a]/15 text-[#5b4524]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+            >
+              {easy ? <LayoutGrid size={15} /> : <Sparkles size={15} />}
+              <span>{easy ? (language === 'es' ? 'Vista completa' : 'Full view') : (language === 'es' ? 'Vista fácil' : 'Easy view')}</span>
+            </button>
             {!onFirstCall && (
               <button
                 onClick={() => navigate('/cases/first-call')}

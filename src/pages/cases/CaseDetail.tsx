@@ -16,6 +16,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
+import { nextStep } from '@/lib/nextStep'
 const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
@@ -282,8 +283,8 @@ export default function CaseDetail() {
         <ArrowLeft size={15} /> Back to cases
       </Link>
 
-      <div className="no-print flex items-start justify-between mb-1">
-        <div>
+      <div className="no-print flex flex-wrap items-start justify-between gap-3 mb-1">
+        <div className="min-w-[14rem]">
           <h1 className="text-2xl font-display font-semibold text-slate-900">
             {c.decedent.firstName} {c.decedent.middleName ? c.decedent.middleName + ' ' : ''}{c.decedent.lastName}
           </h1>
@@ -296,7 +297,7 @@ export default function CaseDetail() {
             </Link>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CaseStatusBadge status={c.status} />
           <label className={`inline-flex items-center gap-1.5 text-xs font-medium border rounded-md px-2.5 py-1.5 ${canEdit ? 'cursor-pointer' : ''} ${c.obituaryCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600'}`}>
             <input type="checkbox" checked={!!c.obituaryCompleted} disabled={!canEdit || obituaryMutation.isPending} onChange={(e) => obituaryMutation.mutate(e.target.checked)} />
@@ -378,6 +379,24 @@ export default function CaseDetail() {
           </div>
         </Card>
       )}
+
+      {/* Next step — one plain sentence and one button, so nobody has to know the whole process */}
+      {(() => {
+        const step = nextStep(c, { contract: caseContract, tasks })
+        return (
+          <div className={`no-print mt-4 flex items-center gap-3 rounded-lg border px-4 py-3 ${step.done ? 'border-emerald-200 bg-emerald-50' : 'border-[#b3925a]/40 bg-[#b3925a]/10'}`}>
+            <div className="flex-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{step.done ? 'Status' : 'Next step'}</div>
+              <div className="text-base font-medium text-slate-900">{step.text}</div>
+            </div>
+            {step.button && canEdit && (
+              step.to
+                ? <Link to={step.to} className="shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]">{step.button}</Link>
+                : <button onClick={() => { setTab(step.tab!); setPreviewTemplate(null) }} className="shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]">{step.button}</button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       <div className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5">

@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SessionProvider } from '@/context/SessionContext'
 import { LanguageProvider } from '@/i18n/LanguageContext'
+import { EasyViewProvider } from '@/context/EasyViewContext'
 import AppShell from '@/components/layout/AppShell'
 import RequireAuth from '@/components/layout/RequireAuth'
 import LoginPage from '@/pages/auth/LoginPage'
@@ -43,6 +44,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
+        <EasyViewProvider>
         <BrowserRouter>
           <Routes>
             {/* Public routes — no staff auth */}
@@ -111,6 +113,7 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </EasyViewProvider>
       </SessionProvider>
     </QueryClientProvider>
   )

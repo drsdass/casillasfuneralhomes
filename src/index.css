@@ -37,3 +37,10 @@ body {
   input, select, textarea { font-size: 16px !important; }
   main table { display: block; overflow-x: auto; }
 }
+
+/* Easy view: everything a little larger and easier to hit. Turned on per person from the top bar. */
+html.easy { font-size: 18px; }
+html.easy main button:not([data-compact]),
+html.easy main input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html.easy main select { min-height: 2.75rem; }
+html.easy main input[type='checkbox'], html.easy main input[type='radio'] { width: 1.25rem; height: 1.25rem; }
