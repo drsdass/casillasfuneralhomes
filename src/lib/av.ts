@@ -28,6 +28,8 @@ export interface ServiceAv {
   volume: number
   musicRoom: string
   replayUrl: string
+  remotePin: string
+  createdAt: string
 }
 
 export interface AvStatus { bridgeOnline: boolean; playerConfigured: boolean; bridgeInfo: { rooms?: string[]; obs?: boolean } }
@@ -40,7 +42,7 @@ function rowToAv(r: any): ServiceAv {
     remoteToken: r.remote_token, remoteEnabled: r.remote_enabled, remoteMusic: r.remote_music,
     remoteCameras: r.remote_cameras, live: r.live, liveStartedAt: r.live_started_at, currentScene: r.current_scene,
     musicState: r.music_state, nowPlaying: r.now_playing, volume: r.volume, musicRoom: r.music_room ?? '',
-    replayUrl: r.replay_url ?? '',
+    replayUrl: r.replay_url ?? '', remotePin: r.remote_pin ?? '', createdAt: r.created_at,
   }
 }
 
@@ -77,7 +79,7 @@ export const av = {
   /** Fresh private links (old ones stop working). */
   async resetLinks(caseId: string): Promise<void> {
     const rnd = () => (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '')
-    const { error } = await supabase!.from('service_av').update({ watch_token: rnd(), remote_token: rnd() }).eq('case_id', caseId)
+    const { error } = await supabase!.from('service_av').update({ watch_token: rnd(), remote_token: rnd(), remote_pin: String(Math.floor(Math.random() * 10000)).padStart(4, '0'), pin_fails: 0, pin_locked_until: null }).eq('case_id', caseId)
     if (error) throw error
   },
 

@@ -24,6 +24,7 @@ const json = (body: unknown, status = 200) =>
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
 const MUSIC_KINDS = ['music_play', 'music_pause', 'music_resume', 'music_next', 'music_stop', 'volume']
+const ENDED_STAGES = ['crematory', 'ashes_received', 'cemetery_burial', 'shipped_released', 'completed']
 const SCENES = ['speaker', 'front', 'audience', 'slate']
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
@@ -40,23 +41,45 @@ Deno.serve(async (req) => {
     const { data: svc } = await supabase.from('service_av').select('*').eq(column, token).maybeSingle()
     if (!svc) return json({ error: 'This link is invalid.' }, 404)
 
-    if (svc.link_expires_at && new Date(svc.link_expires_at) < new Date()) {
+    const { data: caseRow } = await supabase.from('cases')
+      .select('id, location_id, decedent_first_name, decedent_last_name, service_date, custody_stage').eq('id', svc.case_id).single()
+    if (!caseRow) return json({ error: 'This link is invalid.' }, 404)
+
+    // Links end automatically: the date staff chose, else 24 hours after the service, else 3 days after setup.
+    const expires = svc.link_expires_at
+      ? new Date(svc.link_expires_at)
+      : caseRow.service_date
+        ? new Date(new Date(caseRow.service_date).getTime() + 24 * 3600 * 1000)
+        : new Date(new Date(svc.created_at).getTime() + 3 * 24 * 3600 * 1000)
+    if (expires < new Date()) {
       return json({ error: 'This link has expired. Please contact the funeral home.' }, 410)
     }
-    if (kind === 'remote' && !svc.remote_enabled) {
-      return json({ error: 'This link is not turned on. Please ask the funeral home.' }, 403)
-    }
-    if (svc.pin) {
-      if (!pin) return json({ needPin: true })
-      if (String(pin) !== String(svc.pin)) {
-        await sleep(1000) // slows guessing
-        return json({ needPin: true, wrongPin: true })
+    if (kind === 'remote') {
+      if (!svc.remote_enabled) return json({ error: 'This link is not turned on. Please ask the funeral home.' }, 403)
+      if (ENDED_STAGES.includes(caseRow.custody_stage)) {
+        return json({ error: 'The service has ended, so this remote is closed. Thank you.' }, 410)
       }
     }
 
-    const { data: caseRow } = await supabase.from('cases')
-      .select('id, location_id, decedent_first_name, decedent_last_name').eq('id', svc.case_id).single()
-    if (!caseRow) return json({ error: 'This link is invalid.' }, 404)
+    // PIN: the remote ALWAYS needs one; the watch link only if staff set one. 5 wrong tries locks for 15 minutes.
+    const requiredPin: string | null = kind === 'remote' ? svc.remote_pin : (svc.pin || null)
+    if (kind === 'remote' && !requiredPin) return json({ error: 'This link is not set up. Please ask the funeral home.' }, 403)
+    if (requiredPin) {
+      if (svc.pin_locked_until && new Date(svc.pin_locked_until) > new Date()) {
+        return json({ error: 'Too many wrong PINs. Please wait 15 minutes and try again.' }, 429)
+      }
+      if (!pin) return json({ needPin: true })
+      if (String(pin) !== String(requiredPin)) {
+        await sleep(1000) // slows guessing
+        const fails = (svc.pin_fails ?? 0) + 1
+        await supabase.from('service_av').update(fails >= 5
+          ? { pin_fails: 0, pin_locked_until: new Date(Date.now() + 15 * 60 * 1000).toISOString() }
+          : { pin_fails: fails }).eq('case_id', svc.case_id)
+        return json({ needPin: true, wrongPin: true })
+      }
+      if (svc.pin_fails) await supabase.from('service_av').update({ pin_fails: 0 }).eq('case_id', svc.case_id)
+    }
+
     const [{ data: location }, { data: av }] = await Promise.all([
       supabase.from('locations').select('name').eq('id', caseRow.location_id).single(),
       supabase.from('av_locations').select('player_embed_url').eq('location_id', caseRow.location_id).maybeSingle(),
@@ -78,6 +101,12 @@ Deno.serve(async (req) => {
 
     // ----- remote -----
     if (command) {
+      // At most 30 button presses a minute per link.
+      const now = Date.now()
+      const fresh = !svc.cmd_window_start || now - new Date(svc.cmd_window_start).getTime() > 60000
+      const count = fresh ? 1 : (svc.cmd_count ?? 0) + 1
+      if (count > 30) return json({ error: 'Too many button presses. Please wait a moment.' }, 429)
+      await supabase.from('service_av').update(fresh ? { cmd_window_start: new Date(now).toISOString(), cmd_count: 1 } : { cmd_count: count }).eq('case_id', svc.case_id)
       const k = String(command.kind)
       const allowed = MUSIC_KINDS.includes(k) ? svc.remote_music : (k === 'scene' && svc.remote_cameras)
       if (!allowed) return json({ error: 'That control is not available on this link.' }, 403)

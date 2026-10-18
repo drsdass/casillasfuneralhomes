@@ -184,6 +184,8 @@ export default function ServiceRoom() {
         {svc.remoteEnabled && (
           <div className="pl-7 space-y-2">
             <CopyLink label="Remote link — only for the family member running the music" path={`/remote/${svc.remoteToken}`} />
+            <div className="text-sm text-slate-700">Remote PIN (give it to them separately): <span className="font-mono font-semibold tracking-widest">{svc.remotePin}</span></div>
+            <p className="text-xs text-slate-500">The remote closes by itself when you press End stream, when the case moves past the chapel stage, or when the links expire.</p>
             <Toggle label="Remote can control music" checked={svc.remoteMusic} onChange={(v) => save.mutate({ remoteMusic: v })} />
             <Toggle label="Remote can also switch camera views" hint="Only views the family allowed above are ever offered." checked={svc.remoteCameras} onChange={(v) => save.mutate({ remoteCameras: v })} />
           </div>
@@ -192,7 +194,7 @@ export default function ServiceRoom() {
           <label className="text-xs text-slate-500">PIN (optional)
             <input className={input} defaultValue={svc.pin} placeholder="e.g. 4821" onBlur={(e) => e.target.value !== svc.pin && save.mutate({ pin: e.target.value })} />
           </label>
-          <label className="text-xs text-slate-500">Links stop working after
+          <label className="text-xs text-slate-500">Links stop working after (blank = 24 hours after the service)
             <input type="date" className={input} defaultValue={svc.linkExpiresAt?.slice(0, 10) ?? ''}
               onBlur={(e) => save.mutate({ linkExpiresAt: e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : (null as unknown as string) })} />
           </label>

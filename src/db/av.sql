@@ -127,3 +127,25 @@ language sql security definer stable as $$
   from locations l left join av_locations a on a.location_id = l.id
   where l.id = loc and has_location_access(l.id);
 $$;
+
+-- ===========================================================================
+-- Safety upgrade (safe to run again): remote PIN, automatic link end, lockouts, rate limit.
+-- ===========================================================================
+alter table service_av add column if not exists created_at timestamptz not null default now();
+alter table service_av add column if not exists remote_pin text default lpad((floor(random() * 10000))::int::text, 4, '0');
+alter table service_av add column if not exists pin_fails integer not null default 0;
+alter table service_av add column if not exists pin_locked_until timestamptz;
+alter table service_av add column if not exists cmd_window_start timestamptz;
+alter table service_av add column if not exists cmd_count integer not null default 0;
+update service_av set remote_pin = lpad((floor(random() * 10000))::int::text, 4, '0') where remote_pin is null;
+
+-- When staff end the stream, the family remote switches itself off (staff can turn it back on).
+create or replace function av_close_remote_on_stop() returns trigger language plpgsql as $$
+begin
+  if new.kind = 'stream_stop' then
+    update service_av set remote_enabled = false, updated_at = now() where case_id = new.case_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists av_commands_close_remote on av_commands;
+create trigger av_commands_close_remote after insert on av_commands for each row execute function av_close_remote_on_stop();
