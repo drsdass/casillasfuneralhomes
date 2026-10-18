@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
@@ -52,6 +52,33 @@ const sortLabels: Record<SortMode, string> = {
   newest: 'Newest first',
   oldest: 'Oldest first',
   name: 'Name A–Z',
+}
+
+
+/** A column body that scrolls on its own, and tells you when there is more below. */
+function ScrollColumn({ className, children }: { className: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState(false)
+  const check = () => {
+    const el = ref.current
+    if (el) setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 12)
+  }
+  useEffect(() => { check() })
+  useEffect(() => { window.addEventListener('resize', check); return () => window.removeEventListener('resize', check) }, [])
+  return (
+    <div className="relative">
+      <div ref={ref} onScroll={check} className={`${className} md:overflow-y-auto`}>{children}</div>
+      {more && (
+        <button
+          type="button"
+          onClick={() => ref.current?.scrollBy({ top: ref.current.clientHeight * 0.8, behavior: 'smooth' })}
+          className="hidden md:flex absolute bottom-0 inset-x-0 items-center justify-center gap-1 rounded-b-md bg-gradient-to-t from-slate-300 to-transparent pt-6 pb-1.5 text-xs font-semibold text-slate-700"
+        >
+          <span className="flex items-center gap-1 rounded-full bg-white/90 px-3 py-0.5 shadow animate-pulse"><ChevronDown size={14} /> More below</span>
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default function CustodyBoard() {
@@ -117,16 +144,15 @@ export default function CustodyBoard() {
                   onDragStart={() => setDragCaseId(c.id)}
                   onDragEnd={() => setDragCaseId(null)}
                   onClick={() => setSelectedCase(c.id)}
-                  className={`bg-white rounded-md border border-slate-200 shadow-sm p-3 text-sm hover:shadow-md transition ${
+                  className={`bg-white rounded-md border border-slate-200 shadow-sm px-2.5 py-1.5 md:py-1 text-sm hover:shadow-md transition ${
                     canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                   } ${dragCaseId === c.id ? 'opacity-40' : ''}`}
                 >
                   <div className="flex items-start gap-1.5">
-                    {canEdit && <GripVertical size={14} className="text-slate-300 mt-0.5 shrink-0" />}
+                    {canEdit && <GripVertical size={14} className="text-slate-300 mt-1 shrink-0" />}
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName}</div>
-                      <div className="text-xs text-slate-500">{c.caseNumber}</div>
-                      <div className="text-xs text-slate-400 capitalize mt-1">{c.disposition}</div>
+                      <div className="text-xs text-slate-500 truncate">{c.caseNumber} <span className="text-slate-400 capitalize">· {c.disposition}</span></div>
                       {canEdit && (
                         <select
                           value=""
@@ -182,23 +208,23 @@ export default function CustodyBoard() {
         ))}
       </div>
 
-      <div className="flex gap-4 md:overflow-x-auto pb-4">
-        {CUSTODY_STAGES.map((stage) => (
+      <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] pb-4 items-start">
+        {CUSTODY_STAGES.map((stage, stageIdx) => (
           <div
             key={stage}
             onDragOver={(e) => canEdit && e.preventDefault()}
             onDrop={() => handleDrop(stage)}
-            className={`w-full md:w-64 md:shrink-0 ${phoneStage === stage ? 'block' : 'hidden md:block'}`}
+            className={`w-full min-w-0 ${phoneStage === stage ? 'block' : 'hidden md:block'}`}
           >
             <div
               className="flex items-center gap-2 rounded-t-md px-3 py-2 text-white text-xs font-semibold uppercase tracking-wide"
               style={{ backgroundColor: stageAccent[stage] }}
             >
-              <span className="h-2 w-2 rounded-full bg-white/60" />
+              <span className="hidden md:flex h-5 w-5 items-center justify-center rounded-full bg-white/25 text-[11px]">{stageIdx + 1}</span>
               {CUSTODY_STAGE_LABELS[stage]}
               <span className="ml-auto bg-white/20 rounded-full px-1.5 py-0.5 text-[10px]">{casesByStage(stage).length}</span>
             </div>
-            <div className="bg-slate-100 rounded-b-md p-2 md:min-h-[420px] min-h-[120px] space-y-2 border border-t-0 border-slate-200">
+            <ScrollColumn className="bg-slate-100 rounded-b-md p-2 md:min-h-[120px] md:max-h-[66vh] min-h-[120px] space-y-1.5 border border-t-0 border-slate-200">
               {(() => {
                 const rows = casesByStage(stage)
                 if (rows.length <= GROUP_THRESHOLD && !search) return rows.map(renderCard)
@@ -219,7 +245,7 @@ export default function CustodyBoard() {
                                 {mOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {m.label}
                                 <span className="ml-auto text-[10px] text-slate-400">{m.rows.length}</span>
                               </button>
-                              {mOpen && <div className="space-y-2 pb-2">{m.rows.map(renderCard)}</div>}
+                              {mOpen && <div className="space-y-1.5 pb-2">{m.rows.map(renderCard)}</div>}
                             </div>
                           )
                         })}
@@ -232,7 +258,7 @@ export default function CustodyBoard() {
               {casesByStage(stage).length === 0 && (
                 <div className="text-xs text-slate-400 text-center py-6">No cases here</div>
               )}
-            </div>
+            </ScrollColumn>
           </div>
         ))}
       </div>
