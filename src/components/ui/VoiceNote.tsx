@@ -19,10 +19,11 @@ export function VoiceNoteButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 bg-[#b3925a] text-[#2b3327] text-sm font-semibold px-4 h-10 rounded-full hover:bg-[#c4a36b] shadow-sm transition"
+        className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-[#b3925a] text-[#2b3327] text-sm font-semibold px-3 sm:px-4 h-10 rounded-full hover:bg-[#c4a36b] shadow-sm transition"
         title={language === 'es' ? 'Dictar una nota' : 'Say a note and save it to a file'}
+        aria-label={language === 'es' ? 'Nota de voz' : 'Voice note'}
       >
-        <Mic size={17} /> <span>{language === 'es' ? 'Nota de voz' : 'Voice note'}</span>
+        <Mic size={18} /> <span className="hidden sm:inline">{language === 'es' ? 'Nota de voz' : 'Voice note'}</span>
       </button>
       {open && <VoiceNoteDialog onClose={() => setOpen(false)} />}
     </>

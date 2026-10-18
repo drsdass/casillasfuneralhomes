@@ -227,20 +227,21 @@ export default function AppShell() {
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}
               title={easy ? 'Go back to the full screens' : 'Bigger text, fewer menus, simple home'}
-              className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 h-10 sm:h-9 rounded-md border transition ${easy ? 'border-[#b3925a] bg-[#b3925a]/15 text-[#5b4524]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+              aria-label={easy ? 'Full view' : 'Easy view'}
+              className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-medium px-2.5 sm:px-3 h-10 sm:h-9 rounded-md border transition ${easy ? 'border-[#b3925a] bg-[#b3925a]/15 text-[#5b4524]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
             >
               {easy ? <LayoutGrid size={15} /> : <Sparkles size={15} />}
-              <span>{easy ? (language === 'es' ? 'Vista completa' : 'Full view') : (language === 'es' ? 'Vista fácil' : 'Easy view')}</span>
+              <span className="hidden sm:inline">{easy ? (language === 'es' ? 'Vista completa' : 'Full view') : (language === 'es' ? 'Vista fácil' : 'Easy view')}</span>
             </button>
             {!onFirstCall && (
               <button
                 onClick={() => navigate('/cases/first-call')}
-                className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-3.5 h-10 sm:h-auto sm:py-1.5 rounded-md hover:bg-[#4d5f45] transition"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap bg-[#3b4a35] text-white text-sm font-medium px-3 h-10 sm:h-auto sm:py-1.5 rounded-md hover:bg-[#4d5f45] transition"
               >
                 <Phone size={15} /> <span className="hidden sm:inline">First Call</span><span className="sm:hidden">Call</span>
               </button>
@@ -250,14 +251,14 @@ export default function AppShell() {
               target="_blank"
               rel="noopener noreferrer"
               title="Track vehicles (opens Apple Find My — logs in with whatever Apple ID this browser is already signed into, same as any bookmark)"
-              className="text-slate-400 hover:text-slate-600 transition"
+              className="hidden sm:block text-slate-400 hover:text-slate-600 transition"
             >
               <MapPin size={16} />
             </a>
             <button
               onClick={() => { const next = !soundOn; setSoundOn(next); setMessageSoundEnabled(next) }}
               title={soundOn ? 'Message sound on — click to mute' : 'Message sound muted — click to unmute'}
-              className="text-slate-400 hover:text-slate-600 transition"
+              className="hidden sm:block text-slate-400 hover:text-slate-600 transition"
             >
               {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
