@@ -7,34 +7,15 @@ import { api } from '@/lib/api'
 import { Card } from '@/components/ui/Primitives'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
+import { suggestStage, casesNamedIn } from '@/lib/voiceNote'
 import { canViewAllLocations } from '@/lib/permissions'
 import { useLanguage } from '@/i18n/LanguageContext'
-import { CUSTODY_STAGE_LABELS, type CustodyStage, type FuneralCase } from '@/types'
+import { CUSTODY_STAGE_LABELS, type CustodyStage } from '@/types'
 
 // The next step for a case, in plain words a driver would use.
 const NEXT_STEP: Partial<Record<CustodyStage, { to: CustodyStage; label: string }>> = {
   scene_first_call: { to: 'in_transit', label: 'Picked up — on the way' },
   in_transit: { to: 'funeral_home', label: 'Arrived at the funeral home' },
-}
-
-/** What a spoken note suggests about where the decedent is now. Only ever a suggestion — the driver taps to confirm. */
-export function suggestStage(text: string): CustodyStage | null {
-  const has = (words: string) => new RegExp(`(?<!\\p{L})(${words})(?!\\p{L})`, 'iu').test(text)
-  if (has('arrived|back at|got back|delivered|dropped off|drop off|llegu[eé]|llegamos|ya llegamos|entregu[eé]')) return 'funeral_home'
-  if (has('on (the|my) way|en route|heading (back|to)|transporting|en camino|voy para|llevando')) return 'in_transit'
-  // "moving John Doe to the funeral home" — said as a plain move into our care
-  if (has('mov(e|ed|ing)|brought|bringing|took|taking') && has('funeral home|mortuary|casillas|coachella|cathedral city|desert hot springs|indio')) return 'funeral_home'
-  if (has('picked up|pick up|recog[ií]|recogimos')) return 'scene_first_call'
-  return null
-}
-
-/** Cases whose decedent name (first and last) is spoken in the text. */
-export function casesNamedIn(text: string, cases: FuneralCase[]): FuneralCase[] {
-  const t = ` ${text.toLowerCase().replace(/[^a-z0-9áéíóúñü ]+/g, ' ')} `
-  return cases.filter((c) => {
-    const f = c.decedent.firstName.toLowerCase().trim(), l = c.decedent.lastName.toLowerCase().trim()
-    return f.length > 1 && l.length > 1 && f !== 'unknown' && t.includes(` ${f} `) && t.includes(` ${l} `)
-  })
 }
 
 export default function DriverView() {

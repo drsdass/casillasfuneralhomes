@@ -15,6 +15,7 @@ import { playMessageChime, isMessageSoundEnabled, setMessageSoundEnabled } from 
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
+import { VoiceNoteButton } from '@/components/ui/VoiceNote'
 
 const allNavItems = [
   { key: 'dashboard', to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
@@ -218,6 +219,7 @@ export default function AppShell() {
             </div>
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
+            {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}
               title={easy ? 'Go back to the full screens' : 'Bigger text, fewer menus, simple home'}
