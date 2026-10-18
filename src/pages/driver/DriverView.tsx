@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Primitives'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
 import { canViewAllLocations } from '@/lib/permissions'
+import { useLanguage } from '@/i18n/LanguageContext'
 import { CUSTODY_STAGE_LABELS, type CustodyStage, type FuneralCase } from '@/types'
 
 // The next step for a case, in plain words a driver would use.
@@ -39,6 +40,8 @@ export function casesNamedIn(text: string, cases: FuneralCase[]): FuneralCase[] 
 export default function DriverView() {
   const { activeLocationId, currentUser } = useSession()
   const queryClient = useQueryClient()
+  const { language } = useLanguage()
+  const es = language === 'es'
   const all = currentUser ? canViewAllLocations(currentUser.role) : false
   const [text, setText] = useState('')
   const [caseId, setCaseId] = useState('')
@@ -98,6 +101,29 @@ export default function DriverView() {
     })
   }
 
+  /** Starter sentences: one tap fills in the note (and the file, and where they are now); the driver can still add to it by voice. */
+  function chosenCase() { return open.find((c) => c.id === caseId) ?? (active.length === 1 ? active[0] : null) }
+  const starters: { label: string; text: (n: string) => string; stage: CustodyStage | null }[] = es
+    ? [
+        { label: 'Recogí a…', text: (n) => `Recogí a ${n} en `, stage: 'scene_first_call' },
+        { label: 'En camino a la funeraria', text: (n) => `En camino a la funeraria con ${n}.`, stage: 'in_transit' },
+        { label: 'Llegué a la funeraria', text: (n) => `Llegué a la funeraria con ${n}.`, stage: 'funeral_home' },
+        { label: 'Solo una nota', text: () => '', stage: null },
+      ]
+    : [
+        { label: 'Picked up…', text: (n) => `Picked up ${n} from `, stage: 'scene_first_call' },
+        { label: 'On the way to the funeral home', text: (n) => `On the way to the funeral home with ${n}.`, stage: 'in_transit' },
+        { label: 'Arrived at the funeral home', text: (n) => `Arrived at the funeral home with ${n}.`, stage: 'funeral_home' },
+        { label: 'Just a note', text: () => '', stage: null },
+      ]
+  function applyStarter(st: typeof starters[number]) {
+    const c = chosenCase()
+    setSaved(null); setMoved(null)
+    if (c) setCaseId(c.id)
+    setText(st.text(c ? `${c.decedent.firstName} ${c.decedent.lastName}` : (es ? 'el fallecido' : 'the decedent')))
+    setStage(st.stage)
+  }
+
   const chosen = open.find((c) => c.id === caseId)
   const canSave = !!text.trim() && !!caseId && !saveNote.isPending
 
@@ -110,6 +136,15 @@ export default function DriverView() {
 
       <Card className="p-4 space-y-3">
         <DictateButton size="lg" onText={onSpoken} onStop={onStopped} />
+        <div>
+          <div className="text-xs font-medium text-slate-500 mb-1.5">{es ? 'Toque para empezar:' : 'Tap to start:'}</div>
+          <div className="flex flex-wrap gap-2">
+            {starters.map((st) => (
+              <button key={st.label} type="button" onClick={() => applyStarter(st)}
+                className="rounded-full border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 active:bg-slate-100">{st.label}</button>
+            ))}
+          </div>
+        </div>
         <textarea
           value={text}
           onChange={(e) => { setText(e.target.value); setSaved(null) }}
