@@ -101,6 +101,7 @@ export default function CustodyBoard() {
   const [dragCaseId, setDragCaseId] = useState<string | null>(null)
   const [selectedCase, setSelectedCase] = useState<string | null>(null)
   const [showActivity, setShowActivity] = useState(false)
+  const [showOlder, setShowOlder] = useState(false) // Completed column: older than 30 days stays tucked away
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [search, setSearch] = useState('')
   const [phoneStage, setPhoneStage] = useState<CustodyStage>('scene_first_call') // phone: one column at a time
@@ -244,11 +245,12 @@ export default function CustodyBoard() {
             </div>
             <ScrollColumn className="bg-slate-100 rounded-b-md p-2 min-h-[120px] md:min-h-0 space-y-1.5 border border-t-0 border-slate-200">
               {(() => {
-                const rows = casesByStage(stage)
+                const all = casesByStage(stage)
                 // Funeral Home gets a double-wide spot on big screens, so its people are listed in two columns.
                 const cards = (list: FuneralCase[]) => stage === 'funeral_home'
                   ? <div className="space-y-1.5 2xl:space-y-0 2xl:grid 2xl:grid-cols-2 2xl:gap-1.5">{list.map(renderCard)}</div>
                   : list.map(renderCard)
+                const build = (rows: FuneralCase[]) => {
                 if (rows.length <= GROUP_THRESHOLD && !search) return cards(rows)
                 if (stage === 'completed' || rows.length > GROUP_THRESHOLD) {
                   const groups = groupByYearMonth(rows)
@@ -283,6 +285,26 @@ export default function CustodyBoard() {
                   })
                 }
                 return cards(rows)
+                }
+                // Completed is the long one: show the last 30 days, and tuck the rest behind a button.
+                if (stage === 'completed' && !search) {
+                  const cutoff = Date.now() - 30 * 86400000
+                  const recent = all.filter((c) => parseISO(c.updatedAt).getTime() >= cutoff)
+                  const older = all.filter((c) => parseISO(c.updatedAt).getTime() < cutoff)
+                  return (
+                    <>
+                      {cards(recent)}
+                      {recent.length === 0 && <div className="text-xs text-slate-400 text-center py-3">Nothing completed in the last 30 days</div>}
+                      {older.length > 0 && (
+                        <button onClick={() => setShowOlder((v) => !v)} className="w-full rounded-md border border-slate-300 bg-white py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                          {showOlder ? 'Hide older' : `Show older (${older.length})`}
+                        </button>
+                      )}
+                      {showOlder && build(older)}
+                    </>
+                  )
+                }
+                return build(all)
               })()}
               {casesByStage(stage).length === 0 && (
                 <div className="text-xs text-slate-400 text-center py-6">No cases here</div>

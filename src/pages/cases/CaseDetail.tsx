@@ -18,6 +18,7 @@ import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
+import { useLanguage } from '@/i18n/LanguageContext'
 const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
@@ -69,6 +70,11 @@ export default function CaseDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formPreviewRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const { language } = useLanguage()
+  const setDispositionMutation = useMutation({
+    mutationFn: (disposition: import('@/types').DispositionType) => api.updateCase(caseId!, { disposition }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
+  })
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
 
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
@@ -383,13 +389,20 @@ export default function CaseDetail() {
 
       {/* Next step — one plain sentence and one button, so nobody has to know the whole process */}
       {(() => {
-        const step = nextStep(c, { contract: caseContract, tasks })
+        const step = nextStep(c, { contract: caseContract, tasks }, language)
         return (
           <div className={`no-print mt-4 flex items-center gap-3 rounded-lg border px-4 py-3 ${step.done ? 'border-emerald-200 bg-emerald-50' : 'border-[#b3925a]/40 bg-[#b3925a]/10'}`}>
             <div className="flex-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{step.done ? 'Status' : 'Next step'}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{step.done ? (language === 'es' ? 'Estado' : 'Status') : (language === 'es' ? 'Siguiente paso' : 'Next step')}</div>
               <div className="text-base font-medium text-slate-900">{step.text}</div>
             </div>
+            {step.choices && canEdit && (
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {step.choices.map((ch) => (
+                  <button key={ch.value} disabled={setDispositionMutation.isPending} onClick={() => setDispositionMutation.mutate(ch.value)} className="rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45] disabled:opacity-50">{ch.label}</button>
+                ))}
+              </div>
+            )}
             {step.button && canEdit && (
               step.to
                 ? <Link to={step.to} className="shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]">{step.button}</Link>

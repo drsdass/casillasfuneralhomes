@@ -8,6 +8,7 @@ import { useLanguage } from '@/i18n/LanguageContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
 import { Card, CaseStatusBadge } from '@/components/ui/Primitives'
+import { FirstDayTour } from '@/components/ui/FirstDayTour'
 
 /** The Easy view home: a few big buttons and what needs attention today — nothing else. */
 export default function TodayHome() {
@@ -17,6 +18,10 @@ export default function TodayHome() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [practiceMsg, setPracticeMsg] = useState<string | null>(null)
+  // The tour opens by itself the first time a person sees this page, then only when they ask for it.
+  const tourKey = `casillas_tour_seen_${currentUser?.id ?? ''}`
+  const [tour, setTour] = useState(() => { try { return !!currentUser && localStorage.getItem(tourKey) !== '1' } catch { return false } })
+  const closeTour = () => { setTour(false); try { localStorage.setItem(tourKey, '1') } catch { /* ignore */ } }
   const all = currentUser ? canViewAllLocations(currentUser.role) : false
 
   const { data: cases = [] } = useQuery({ queryKey: ['cases', all ? 'all' : activeLocationId], queryFn: () => api.getCases(all ? undefined : activeLocationId) })
@@ -53,6 +58,7 @@ export default function TodayHome() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {tour && <FirstDayTour onClose={closeTour} onPractice={() => makePractice.mutate()} />}
       <div>
         <h1 className="text-3xl font-display font-semibold text-slate-900">{greeting}, {currentUser.name.split(' ')[0]}</h1>
         <p className="text-slate-500 mt-1">{format(new Date(), 'EEEE, MMMM d')}</p>
@@ -103,6 +109,7 @@ export default function TodayHome() {
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-1"><GraduationCap size={20} /> {tx('Practice', 'Práctica')}</h2>
         <p className="text-slate-600 mb-3">{tx('Want to try things without worrying? Make a practice case, click around, and delete it when you are done. It never affects a real family.', '¿Quiere probar sin preocuparse? Cree un caso de práctica, explore y bórrelo cuando termine. Nunca afecta a una familia real.')}</p>
         <div className="flex gap-3 flex-wrap">
+          <button className="rounded-lg border border-[#3b4a35] bg-white text-[#3b4a35] px-4 py-2 font-medium" onClick={() => setTour(true)}>{tx('Take the 2-minute tour', 'Hacer el recorrido de 2 minutos')}</button>
           <button className="rounded-lg bg-slate-900 text-white px-4 py-2 font-medium disabled:opacity-50" disabled={makePractice.isPending} onClick={() => makePractice.mutate()}>{tx('Make a practice case', 'Crear caso de práctica')}</button>
           <button className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium disabled:opacity-50" disabled={clearPractice.isPending} onClick={() => { if (confirm(tx('Delete all practice cases? Real cases are never touched.', '¿Borrar todos los casos de práctica? Los casos reales no se tocan.'))) clearPractice.mutate() }}>{tx('Delete practice cases', 'Borrar casos de práctica')}</button>
         </div>
