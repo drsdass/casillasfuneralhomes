@@ -29,6 +29,9 @@ import InvoicesPage from '@/pages/financials/InvoicesPage'
 import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
+import ServiceRoom from '@/pages/service/ServiceRoom'
+import WatchPage from '@/pages/service/WatchPage'
+import RemotePage from '@/pages/service/RemotePage'
 
 // Code-split: recharts is a heavy dependency only needed by manager+ roles
 // viewing the Reports page, so it shouldn't bloat everyone else's initial load.
@@ -56,6 +59,9 @@ export default function App() {
               }
             />
 
+            <Route path="/watch/:token" element={<WatchPage />} />
+            <Route path="/remote/:token" element={<RemotePage />} />
+
             {/* Staff-facing app, behind auth */}
             <Route element={<RequireAuth />}>
               {/* Full-screen, no sidebar — meant for a TV/monitor, not staff browsing */}
@@ -76,6 +82,7 @@ export default function App() {
                 <Route path="/cases/:caseId/vital-sheet" element={<VitalSheetIntake />} />
                 <Route path="/cases/:caseId/edrs" element={<EdrsEntry />} />
                 <Route path="/cases/:caseId/slideshow" element={<SlideshowPlayer />} />
+                <Route path="/cases/:caseId/service" element={<ServiceRoom />} />
                 <Route path="/cases/new" element={<CaseForm />} />
                 <Route path="/cases/:caseId/edit" element={<CaseForm />} />
                 <Route path="/cases/:caseId" element={<CaseDetail />} />

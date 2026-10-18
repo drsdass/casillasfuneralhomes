@@ -329,6 +329,12 @@ export default function CaseDetail() {
                 Slideshow
               </Link>
               <Link
+                to={`/cases/${c.id}/service`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
+              >
+                Service Room
+              </Link>
+              <Link
                 to={`/cases/${c.id}/edit`}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
               >

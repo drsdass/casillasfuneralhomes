@@ -1,0 +1,9 @@
+{
+  "name": "casillas-chapel-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runs on the chapel computer. Carries out Service Room button presses (OBS cameras + Sonos music).",
+  "scripts": { "start": "node bridge.mjs", "test": "node --test" },
+  "dependencies": { "obs-websocket-js": "^5.0.6", "sonos": "^1.14.2" }
+}

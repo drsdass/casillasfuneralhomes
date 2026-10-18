@@ -1,0 +1,8 @@
+{
+  "supabaseUrl": "https://kduvajnzussalxihgyfv.supabase.co",
+  "anonKey": "PASTE_THE_ANON_PUBLIC_KEY_HERE",
+  "bridgeKey": "PASTE_THIS_LOCATION'S_KEY_FROM_THE_SERVICE_ROOM_PAGE",
+  "obsUrl": "ws://127.0.0.1:4455",
+  "obsPassword": "",
+  "scenes": { "speaker": "Speaker", "front": "Front", "audience": "Audience", "slate": "Slate" }
+}
