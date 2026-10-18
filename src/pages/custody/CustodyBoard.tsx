@@ -66,8 +66,8 @@ function ScrollColumn({ className, children }: { className: string; children: Re
   useEffect(() => { check() })
   useEffect(() => { window.addEventListener('resize', check); return () => window.removeEventListener('resize', check) }, [])
   return (
-    <div className="relative">
-      <div ref={ref} onScroll={check} className={`${className} md:overflow-y-auto`}>{children}</div>
+    <div className="relative md:flex-1 md:min-h-0">
+      <div ref={ref} onScroll={check} className={`${className} md:h-full md:overflow-y-auto`}>{children}</div>
       {more && (
         <button
           type="button"
@@ -90,8 +90,11 @@ export default function CustodyBoard() {
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [search, setSearch] = useState('')
   const [phoneStage, setPhoneStage] = useState<CustodyStage>('scene_first_call') // phone: one column at a time
-  const [open, setOpen] = useState<Set<string>>(() => new Set([format(new Date(), 'yyyy'), format(new Date(), 'yyyy-MM')])) // current year and month start unfolded
-  const toggle = (k: string) => setOpen((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n })
+  // Each stage keeps its own open/closed folders. The current year and month start open; anything a person clicks flips only that stage's folder.
+  const [flipped, setFlipped] = useState<Set<string>>(() => new Set())
+  const defaultOpen = (k: string) => k === format(new Date(), 'yyyy') || k === format(new Date(), 'yyyy-MM')
+  const isOpen = (stage: string, k: string) => defaultOpen(k) !== flipped.has(`${stage}:${k}`)
+  const toggle = (stage: string, k: string) => setFlipped((prev) => { const n = new Set(prev); const key = `${stage}:${k}`; n.has(key) ? n.delete(key) : n.add(key); return n })
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
 
   const { data: cases = [] } = useQuery({
@@ -208,13 +211,13 @@ export default function CustodyBoard() {
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] pb-4 items-start">
+      <div className="grid gap-3 md:h-[calc(100dvh-15.5rem)] md:min-h-[26rem] md:grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] md:auto-rows-fr pb-1">
         {CUSTODY_STAGES.map((stage, stageIdx) => (
           <div
             key={stage}
             onDragOver={(e) => canEdit && e.preventDefault()}
             onDrop={() => handleDrop(stage)}
-            className={`w-full min-w-0 ${phoneStage === stage ? 'block' : 'hidden md:block'}`}
+            className={`w-full min-w-0 md:min-h-0 md:flex md:flex-col ${phoneStage === stage ? 'block' : 'hidden md:flex'}`}
           >
             <div
               className="flex items-center gap-2 rounded-t-md px-3 py-2 text-white text-xs font-semibold uppercase tracking-wide"
@@ -224,24 +227,24 @@ export default function CustodyBoard() {
               {CUSTODY_STAGE_LABELS[stage]}
               <span className="ml-auto bg-white/20 rounded-full px-1.5 py-0.5 text-[10px]">{casesByStage(stage).length}</span>
             </div>
-            <ScrollColumn className="bg-slate-100 rounded-b-md p-2 md:min-h-[120px] md:max-h-[66vh] min-h-[120px] space-y-1.5 border border-t-0 border-slate-200">
+            <ScrollColumn className="bg-slate-100 rounded-b-md p-2 min-h-[120px] md:min-h-0 space-y-1.5 border border-t-0 border-slate-200">
               {(() => {
                 const rows = casesByStage(stage)
                 if (rows.length <= GROUP_THRESHOLD && !search) return rows.map(renderCard)
                 if (stage === 'completed' || rows.length > GROUP_THRESHOLD) {
                   return groupByYearMonth(rows).map((g) => {
-                    const yOpen = open.has(g.year) || !!search
+                    const yOpen = isOpen(stage, g.year) || !!search
                     return (
                       <div key={g.year}>
-                        <button onClick={() => toggle(g.year)} className="w-full flex items-center gap-1.5 text-xs font-semibold text-slate-600 py-1.5">
+                        <button onClick={() => toggle(stage, g.year)} className="w-full flex items-center gap-1.5 text-xs font-semibold text-slate-600 py-1.5">
                           {yOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />} {g.year}
                           <span className="ml-auto text-[10px] font-normal text-slate-400">{g.total}</span>
                         </button>
                         {yOpen && g.months.map((m) => {
-                          const mOpen = open.has(m.key) || !!search
+                          const mOpen = isOpen(stage, m.key) || !!search
                           return (
                             <div key={m.key} className="ml-2">
-                              <button onClick={() => toggle(m.key)} className="w-full flex items-center gap-1.5 text-xs text-slate-500 py-1">
+                              <button onClick={() => toggle(stage, m.key)} className="w-full flex items-center gap-1.5 text-xs text-slate-500 py-1">
                                 {mOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {m.label}
                                 <span className="ml-auto text-[10px] text-slate-400">{m.rows.length}</span>
                               </button>
