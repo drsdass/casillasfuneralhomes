@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
+import { appendChunk } from '@/lib/dictation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { TASK_STATUS_LABELS } from '@/types'
@@ -793,7 +794,7 @@ export default function CaseDetail() {
                 className="w-full border border-slate-200 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a] resize-none"
               />
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-                <DictateButton onText={(t) => setNoteText((prev) => (prev ? prev.trimEnd() + ' ' : '') + t)} />
+                <DictateButton onText={(t) => setNoteText((prev) => appendChunk(prev, t))} />
                 <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
                   <input type="checkbox" checked={noteIsSpecialRequest} onChange={(e) => setNoteIsSpecialRequest(e.target.checked)} className="accent-[#3b4a35]" />
                   <AlertTriangle size={12} className="text-amber-500" /> Special Request — also show on TV Board

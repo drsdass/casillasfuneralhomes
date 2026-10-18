@@ -3,9 +3,9 @@ import { useDictation } from '@/lib/dictation'
 import { useLanguage } from '@/i18n/LanguageContext'
 
 /** A microphone button: tap, talk, tap again. The spoken words are appended (as text) through onText. */
-export function DictateButton({ onText, size = 'md' }: { onText: (text: string) => void; size?: 'md' | 'lg' }) {
+export function DictateButton({ onText, onStop, size = 'md' }: { onText: (text: string) => void; onStop?: () => void; size?: 'md' | 'lg' }) {
   const { language } = useLanguage()
-  const d = useDictation(language === 'es' ? 'es-US' : 'en-US', onText)
+  const d = useDictation(language === 'es' ? 'es-US' : 'en-US', onText, onStop)
   if (!d.supported) return null
   const big = size === 'lg'
   return (

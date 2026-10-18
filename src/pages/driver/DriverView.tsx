@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronRight, Truck } from 'lucide-react'
@@ -6,6 +6,7 @@ import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { Card } from '@/components/ui/Primitives'
 import { DictateButton } from '@/components/ui/DictateButton'
+import { appendChunk } from '@/lib/dictation'
 import { canViewAllLocations } from '@/lib/permissions'
 import { CUSTODY_STAGE_LABELS, type CustodyStage, type FuneralCase } from '@/types'
 
@@ -18,8 +19,10 @@ const NEXT_STEP: Partial<Record<CustodyStage, { to: CustodyStage; label: string 
 /** What a spoken note suggests about where the decedent is now. Only ever a suggestion — the driver taps to confirm. */
 export function suggestStage(text: string): CustodyStage | null {
   const has = (words: string) => new RegExp(`(?<!\\p{L})(${words})(?!\\p{L})`, 'iu').test(text)
-  if (has('arrived|back at|got back|llegu[eé]|llegamos|ya llegamos')) return 'funeral_home'
+  if (has('arrived|back at|got back|delivered|dropped off|drop off|llegu[eé]|llegamos|ya llegamos|entregu[eé]')) return 'funeral_home'
   if (has('on (the|my) way|en route|heading (back|to)|transporting|en camino|voy para|llevando')) return 'in_transit'
+  // "moving John Doe to the funeral home" — said as a plain move into our care
+  if (has('mov(e|ed|ing)|brought|bringing|took|taking') && has('funeral home|mortuary|casillas|coachella|cathedral city|desert hot springs|indio')) return 'funeral_home'
   if (has('picked up|pick up|recog[ií]|recogimos')) return 'scene_first_call'
   return null
 }
@@ -55,19 +58,38 @@ export default function DriverView() {
     mutationFn: ({ id, to, note }: { id: string; to: CustodyStage; note?: string }) => api.moveCustody(id, to, currentUser!, note),
     onSuccess: refresh,
   })
+  const [moved, setMoved] = useState<{ id: string; name: string; from: CustodyStage; to: CustodyStage } | null>(null)
   const saveNote = useMutation({
-    mutationFn: async () => {
-      const body = `[Voice] ${text.trim()}`
-      await api.addNote(caseId, currentUser!, body)
-      if (stage) await api.moveCustody(caseId, stage, currentUser!, text.trim())
+    mutationFn: async (v: { text: string; caseId: string; stage: CustodyStage | null }) => {
+      await api.addNote(v.caseId, currentUser!, `[Voice] ${v.text.trim()}`)
+      const c = open.find((x) => x.id === v.caseId)
+      if (v.stage && c && v.stage !== c.custodyStage) {
+        await api.moveCustody(v.caseId, v.stage, currentUser!, v.text.trim())
+        return { id: c.id, name: `${c.decedent.firstName} ${c.decedent.lastName}`, from: c.custodyStage, to: v.stage }
+      }
+      return null
     },
-    onSuccess: () => { refresh(); setSaved(caseId); setText(''); setStage(null); setCaseId('') },
+    onSuccess: (m, v) => { refresh(); setSaved(v.caseId); setMoved(m); setText(''); setStage(null); setCaseId('') },
   })
+  const undo = useMutation({
+    mutationFn: (m: { id: string; from: CustodyStage }) => api.moveCustody(m.id, m.from, currentUser!, 'Undo: moved by mistake from a voice note'),
+    onSuccess: () => { refresh(); setMoved(null); setSaved(null) },
+  })
+
+  // Latest values, readable from the microphone's "stopped" callback.
+  const latest = useRef({ text: '', caseId: '', stage: null as CustodyStage | null })
+  latest.current = { text, caseId, stage }
+  /** When the driver stops talking and the file AND the new location were both understood, save and move right away (with Undo). */
+  function onStopped() {
+    const { text: t, caseId: id, stage: st } = latest.current
+    const c = open.find((x) => x.id === id)
+    if (t.trim() && c && st && st !== c.custodyStage && !saveNote.isPending) saveNote.mutate({ text: t, caseId: id, stage: st })
+  }
 
   function onSpoken(chunk: string) {
     setSaved(null)
     setText((prev) => {
-      const next = (prev ? prev.trimEnd() + ' ' : '') + chunk
+      const next = appendChunk(prev, chunk)
       const named = casesNamedIn(next, open)
       if (named.length === 1) setCaseId(named[0].id)
       const s = suggestStage(next)
@@ -83,11 +105,11 @@ export default function DriverView() {
     <div className="max-w-xl mx-auto space-y-4">
       <div>
         <h1 className="text-xl font-display font-semibold text-slate-900 flex items-center gap-2"><Truck size={20} /> Driver</h1>
-        <p className="text-sm text-slate-500">Tap the microphone and say what happened. Say the decedent&rsquo;s name and it picks the file.</p>
+        <p className="text-sm text-slate-500">Tap the microphone, say what happened, then tap Stop. Say the decedent&rsquo;s name and where they are now, and it saves the note and moves them for you (with an Undo).</p>
       </div>
 
       <Card className="p-4 space-y-3">
-        <DictateButton size="lg" onText={onSpoken} />
+        <DictateButton size="lg" onText={onSpoken} onStop={onStopped} />
         <textarea
           value={text}
           onChange={(e) => { setText(e.target.value); setSaved(null) }}
@@ -106,13 +128,19 @@ export default function DriverView() {
           </label>
         )}
         <button
-          onClick={() => saveNote.mutate()}
+          onClick={() => saveNote.mutate({ text, caseId, stage })}
           disabled={!canSave}
           className="w-full h-12 rounded-lg bg-[#3b4a35] text-white font-medium text-base disabled:opacity-40"
         >
           {saveNote.isPending ? 'Saving…' : 'Save note to file'}
         </button>
-        {saved && <div className="flex items-center gap-1.5 text-sm text-emerald-700"><Check size={15} /> Saved to the file.</div>}
+        {moved
+          ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <Check size={15} /> <span className="flex-1">Saved, and moved <b>{moved.name}</b> to <b>{CUSTODY_STAGE_LABELS[moved.to]}</b>.</span>
+              <button onClick={() => undo.mutate(moved)} disabled={undo.isPending} className="font-medium underline">Undo</button>
+            </div>)
+          : saved && <div className="flex items-center gap-1.5 text-sm text-emerald-700"><Check size={15} /> Saved to the file.</div>}
         {saveNote.isError && <div className="text-sm text-red-600">Couldn&rsquo;t save — check your connection and try again.</div>}
       </Card>
 
