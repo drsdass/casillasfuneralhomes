@@ -1058,6 +1058,17 @@ export const api = {
     return (data ?? []).map(rowToEmail)
   },
 
+  /** Current state of a few emails, so pop-ups can update when someone else files or ignores them. */
+  async getEmailStatuses(ids: string[]): Promise<InboundEmail[]> {
+    if (ids.length === 0) return []
+    if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => ids.includes(e.id)))
+    const { data, error } = await supabase!.from('inbound_emails')
+      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction, confirmed_by, confirmed_at')
+      .in('id', ids)
+    if (error) throw error
+    return (data ?? []).map(rowToEmail)
+  },
+
   /** Sends an email from the shared mailbox. The server records who sent it. */
   async sendEmail(
     params: { to: string; subject: string; body: string; caseId?: string; replyToEmailId?: string },
