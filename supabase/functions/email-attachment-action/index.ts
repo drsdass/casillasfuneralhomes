@@ -8,7 +8,7 @@
 //   action: "save"    — just fetch the file and store it as a document on
 //           the case, no AI involved
 //
-// Attachment CONTENT is only ever fetched from Microsoft Graph at the
+// Attachment CONTENT is only ever fetched from Outlook at the
 // moment a staff member picks one of these two actions for one specific
 // attachment — never in bulk, never for a whole email at once, and never
 // during the sync-inbox poll (which only stores filename/type/size).
@@ -16,9 +16,8 @@
 // Deploy via the Supabase Dashboard's Edge Function editor, name it
 // exactly "email-attachment-action".
 //
-// Required secrets: MICROSOFT_TENANT_ID, MICROSOFT_CLIENT_ID,
-// MICROSOFT_CLIENT_SECRET, MICROSOFT_MAILBOX, ANTHROPIC_API_KEY,
-// SUPABASE_SERVICE_ROLE_KEY (set automatically)
+// Required secrets: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET,
+// ANTHROPIC_API_KEY, SUPABASE_SERVICE_ROLE_KEY (set automatically)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -34,7 +33,7 @@ const supabase = createClient(
 )
 
 interface RequestBody {
-  graphMessageId: string
+  graphMessageId: string // Outlook message id
   attachmentId: string
   filename: string
   contentType: string
@@ -44,29 +43,29 @@ interface RequestBody {
 }
 
 async function getGraphToken(): Promise<string> {
-  const tenantId = Deno.env.get('MICROSOFT_TENANT_ID')!
-  const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+  const { data: conn } = await supabase.from('mail_connection').select('*').eq('id', 1).maybeSingle()
+  if (!conn?.refresh_token) throw new Error('Email is not connected yet. An admin needs to press "Connect Outlook mailbox" in Email Inbox.')
+  const res = await fetch(`https://login.microsoftonline.com/${(Deno.env.get('MS_TENANT_ID') ?? '').trim()}/oauth2/v2.0/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: Deno.env.get('MICROSOFT_CLIENT_ID')!,
-      client_secret: Deno.env.get('MICROSOFT_CLIENT_SECRET')!,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials',
+      client_id: (Deno.env.get('MS_CLIENT_ID') ?? '').trim(), client_secret: (Deno.env.get('MS_CLIENT_SECRET') ?? '').trim(),
+      grant_type: 'refresh_token', refresh_token: conn.refresh_token, scope: 'offline_access Mail.Read Mail.Send User.Read',
     }),
   })
-  if (!res.ok) throw new Error(`Graph auth failed: ${await res.text()}`)
-  const data = await res.json()
-  return data.access_token
+  if (!res.ok) throw new Error(`Microsoft sign-in needs to be renewed: ${(await res.text()).slice(0, 200)}`)
+  const d = await res.json()
+  if (d.refresh_token && d.refresh_token !== conn.refresh_token) await supabase.from('mail_connection').update({ refresh_token: d.refresh_token }).eq('id', 1)
+  return d.access_token
 }
 
-/** Returns the attachment's raw bytes as base64, straight from Graph. */
-async function fetchAttachmentContent(token: string, mailbox: string, messageId: string, attachmentId: string): Promise<string> {
-  const url = `https://graph.microsoft.com/v1.0/users/${mailbox}/messages/${messageId}/attachments/${attachmentId}`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+/** Returns the attachment's raw bytes as base64, straight from Outlook. */
+async function fetchAttachmentContent(token: string, messageId: string, attachmentId: string): Promise<string> {
+  const url = `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Prefer: 'IdType="ImmutableId"' } })
   if (!res.ok) throw new Error(`Failed to fetch attachment: ${await res.text()}`)
   const data = await res.json()
-  return data.contentBytes // Graph already returns file attachments base64-encoded
+  return data.contentBytes // Outlook already returns file attachments base64-encoded
 }
 
 const EXTRACTION_SYSTEM_PROMPT = `You extract funeral home case information from an email attachment
@@ -93,9 +92,7 @@ Deno.serve(async (req) => {
   try {
     const body: RequestBody = await req.json()
     const token = await getGraphToken()
-    const contentBase64 = await fetchAttachmentContent(
-      token, (Deno.env.get('MICROSOFT_MAILBOX') ?? '').trim(), body.graphMessageId, body.attachmentId
-    )
+    const contentBase64 = await fetchAttachmentContent(token, body.graphMessageId, body.attachmentId)
 
     if (body.action === 'save') {
       const bytes = Uint8Array.from(atob(contentBase64), (c) => c.charCodeAt(0))

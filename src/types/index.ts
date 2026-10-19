@@ -574,7 +574,7 @@ export interface ObituaryDraft {
 // ---------------------------------------------------------------------------
 // Inbound email → case matching
 // ---------------------------------------------------------------------------
-// Casillas' shared inbox (info@casillasfuneralhome.com, Outlook/Microsoft 365)
+// Casillas' shared Outlook (Microsoft 365) mailbox
 // is watched via the Microsoft Graph API. Every inbound message is matched
 // to a case either automatically (sender is a known case contact) or held
 // for a staff member to confirm (unknown sender — matched by AI suggestion,
@@ -583,7 +583,7 @@ export interface ObituaryDraft {
 export type EmailMatchStatus = 'auto_matched' | 'suggested' | 'unmatched' | 'confirmed' | 'ignored'
 
 export interface EmailAttachment {
-  id: string // Microsoft Graph attachment ID, used to fetch content on demand
+  id: string // Outlook attachment ID, used to fetch content on demand
   filename: string
   contentType: string
   sizeBytes: number
@@ -591,11 +591,11 @@ export interface EmailAttachment {
 
 export interface InboundEmail {
   id: string
-  graphMessageId: string // Microsoft Graph message ID, for fetching full content/attachments on demand
+  graphMessageId: string // Outlook message ID, for fetching attachments on demand
   from: string
   fromName?: string
   subject: string
-  preview: string // short snippet, not the full body — full body fetched on demand from Graph
+  preview: string // short snippet, not the full body — full text in body
   receivedAt: string
   caseId?: string // set once matched (auto or confirmed)
   matchStatus: EmailMatchStatus
@@ -604,6 +604,13 @@ export interface InboundEmail {
   attachments: EmailAttachment[] // metadata only — content fetched on demand per-attachment, per staff choice
   confirmedBy?: string
   confirmedAt?: string
+  /** 'in' = received at the shared mailbox; 'out' = sent from the OS by a staff member. */
+  direction: 'in' | 'out'
+  to?: string
+  body?: string // plain-text message
+  threadId?: string
+  sentBy?: string // staff id, for outgoing mail
+  sentByName?: string // who pressed Send
 }
 
 // ---------------------------------------------------------------------------

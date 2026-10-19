@@ -592,6 +592,25 @@ export const mockStore = {
     return rows.slice().sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
   },
 
+  /** Mock version of sending from the shared inbox: records the email with who sent it. */
+  sendEmail(p: { to: string; subject: string; body: string; caseId?: string; replyToEmailId?: string }, sentBy: StaffMember): InboundEmail {
+    const orig = p.replyToEmailId ? emailStore.find((e) => e.id === p.replyToEmailId) : undefined
+    const caseId = p.caseId ?? orig?.caseId
+    const email: InboundEmail = {
+      id: newId('em'), graphMessageId: newId('mock-out'), direction: 'out',
+      from: 'info@casillasfuneralhome.com', fromName: 'Casillas Funeral Home', to: p.to,
+      subject: p.subject, preview: p.body.slice(0, 300), body: `${p.body}\n\n\u2014 ${sentBy.name}\nCasillas Funeral Home`,
+      receivedAt: new Date().toISOString(), caseId, matchStatus: 'confirmed', attachments: [],
+      sentBy: sentBy.id, sentByName: sentBy.name,
+    }
+    emailStore = [...emailStore, email]
+    logAudit({
+      entityType: 'email', entityId: email.id, caseId, action: 'create',
+      summary: `Emailed ${p.to} \u2014 "${p.subject}"`, changedBy: sentBy.id, changedByName: sentBy.name,
+    })
+    return email
+  },
+
   /** Confirms (or reassigns) which case an email belongs to — the human-in-the-loop step for anything not auto-matched by sender. */
   confirmEmailMatch(emailId: string, caseId: string, changedBy: StaffMember): InboundEmail[] {
     const now = new Date().toISOString()

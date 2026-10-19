@@ -334,6 +334,12 @@ export function rowToEmail(row: any): InboundEmail {
     attachments: row.attachments ?? [],
     confirmedBy: row.confirmed_by ?? undefined,
     confirmedAt: row.confirmed_at ?? undefined,
+    direction: row.direction === 'out' ? 'out' : 'in',
+    to: row.to_address ?? undefined,
+    body: row.body ?? undefined,
+    threadId: row.thread_id ?? undefined,
+    sentBy: row.sent_by ?? undefined,
+    sentByName: row.sent_by_name ?? undefined,
   }
 }
 

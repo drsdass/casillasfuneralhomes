@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
-import { canEditCases } from '@/lib/permissions'
+import { canEditCases, canViewAuditLog } from '@/lib/permissions'
+import { mail } from '@/lib/mail'
+import { MailConnectionPanel } from '@/components/inbox/MailConnectionPanel'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { format, parseISO } from 'date-fns'
-import { Mail, Paperclip, CheckCircle2, X, Sparkles, Check, FileSearch, Save, Loader2 } from 'lucide-react'
+import { Mail, Paperclip, CheckCircle2, X, Sparkles, Check, FileSearch, Save, Loader2, Reply, Send, PenSquare, ChevronDown, ChevronRight } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { Link } from 'react-router-dom'
-import type { EmailAttachment, ExtractedCaseData } from '@/types'
+import { ComposeEmail } from '@/components/ui/ComposeEmail'
+import type { EmailAttachment, ExtractedCaseData, InboundEmail } from '@/types'
 
 const statusStyles: Record<string, string> = {
   auto_matched: 'bg-emerald-100 text-emerald-800',
@@ -32,7 +35,10 @@ export default function EmailInbox() {
   const queryClient = useQueryClient()
   const [filter, setFilter] = useState<'needs_review' | 'all'>('needs_review')
   const [assigningId, setAssigningId] = useState<string | null>(null)
+  const [compose, setCompose] = useState<{ to?: string; subject?: string; caseId?: string; replyTo?: InboundEmail } | null>(null)
+  const [openBody, setOpenBody] = useState<Set<string>>(new Set())
   const canManage = currentUser ? canEditCases(currentUser.role) : false
+  const isAdmin = currentUser ? canViewAuditLog(currentUser.role) : false // admin and above
 
   const { data: emails = [] } = useQuery({
     queryKey: ['emails', filter],
@@ -87,8 +93,15 @@ export default function EmailInbox() {
     <div>
       <SectionHeading
         title="Email Inbox"
-        subtitle="Messages from info@casillasfuneralhome.com, matched to cases automatically or held for review"
+        subtitle="Messages from the funeral home's shared email (Outlook), matched to cases automatically or held for review"
+        action={canManage ? (
+          <button onClick={() => setCompose({})} className="inline-flex items-center gap-2 rounded-lg bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5f45]">
+            <PenSquare size={15} /> New email
+          </button>
+        ) : undefined}
       />
+      {isAdmin && mail.available && <MailConnectionPanel />}
+      {compose && <ComposeEmail {...compose} onClose={() => setCompose(null)} />}
 
       <div className="flex gap-1 border-b border-slate-200 mb-5">
         {(['needs_review', 'all'] as const).map((f) => (
@@ -115,16 +128,42 @@ export default function EmailInbox() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-slate-900 text-sm">{email.fromName ?? email.from}</span>
-                    <span className="text-xs text-slate-400">{email.from}</span>
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${statusStyles[email.matchStatus]}`}>
-                      {statusLabels[email.matchStatus]}
-                    </span>
+                    {email.direction === 'out' ? (
+                      <span className="inline-flex items-center gap-1.5 font-medium text-slate-900 text-sm">
+                        <Send size={13} className="text-[#3b4a35]" /> Sent to {email.to}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="font-medium text-slate-900 text-sm">{email.fromName ?? email.from}</span>
+                        <span className="text-xs text-slate-400">{email.from}</span>
+                      </>
+                    )}
+                    {email.direction === 'out' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#3b4a35]/10 text-[#3b4a35]">Sent by {email.sentByName ?? 'staff'}</span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${statusStyles[email.matchStatus]}`}>
+                        {statusLabels[email.matchStatus]}
+                      </span>
+                    )}
                     {email.attachments.length > 0 && <Paperclip size={12} className="text-slate-400" />}
                   </div>
                   <div className="text-sm text-slate-800 font-medium mt-1">{email.subject}</div>
-                  <div className="text-sm text-slate-500 truncate">{email.preview}</div>
-                  <div className="text-xs text-slate-400 mt-1">{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</div>
+                  {openBody.has(email.id) && email.body
+                    ? <div className="mt-1 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700 max-h-80 overflow-y-auto">{email.body}</div>
+                    : <div className="text-sm text-slate-500 truncate">{email.preview}</div>}
+                  <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
+                    <span>{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</span>
+                    {email.body && (
+                      <button onClick={() => setOpenBody((prev) => { const n = new Set(prev); n.has(email.id) ? n.delete(email.id) : n.add(email.id); return n })} className="inline-flex items-center gap-0.5 font-medium text-slate-600 hover:underline">
+                        {openBody.has(email.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {openBody.has(email.id) ? 'Hide message' : 'Read message'}
+                      </button>
+                    )}
+                    {canManage && email.direction === 'in' && (
+                      <button onClick={() => setCompose({ to: email.from, subject: /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`, caseId: email.caseId, replyTo: email })} className="inline-flex items-center gap-1 font-semibold text-[#3b4a35] hover:underline">
+                        <Reply size={12} /> Reply
+                      </button>
+                    )}
+                  </div>
 
                   {email.matchReason && (
                     <div className="mt-2 text-xs text-slate-500 flex items-center gap-1.5 bg-slate-50 rounded-md px-2.5 py-1.5 w-fit">

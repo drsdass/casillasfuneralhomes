@@ -19,6 +19,7 @@ import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskS
 
 import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
+import { ComposeEmail } from '@/components/ui/ComposeEmail'
 const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
@@ -71,6 +72,7 @@ export default function CaseDetail() {
   const formPreviewRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const { language } = useLanguage()
+  const [composeOpen, setComposeOpen] = useState<{ to?: string; subject?: string; replyTo?: import('@/types').InboundEmail } | null>(null)
   const setDispositionMutation = useMutation({
     mutationFn: (disposition: import('@/types').DispositionType) => api.updateCase(caseId!, { disposition }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
@@ -1060,6 +1062,17 @@ export default function CaseDetail() {
 
       {tab === 'Emails' && (
         <Card className="p-5">
+          {composeOpen && <ComposeEmail {...composeOpen} caseId={caseId} onClose={() => setComposeOpen(null)} />}
+          {canEdit && (
+            <div className="mb-3 flex justify-end">
+              <button
+                onClick={() => setComposeOpen({ to: c.contacts.find((ct) => ct.isPrimary)?.email ?? c.contacts[0]?.email ?? '', subject: `${c.decedent.firstName} ${c.decedent.lastName}` })}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5f45]"
+              >
+                <Mail size={15} /> {language === 'es' ? 'Escribir a la familia' : 'Email the family'}
+              </button>
+            </div>
+          )}
           {caseEmails.length === 0 ? (
             <div className="text-sm text-slate-400 text-center py-10 flex flex-col items-center gap-2">
               <Mail size={22} className="text-slate-300" />
@@ -1071,8 +1084,9 @@ export default function CaseDetail() {
                 <div key={email.id} className="flex items-start gap-3 px-2 py-2.5 rounded-md hover:bg-slate-50 text-sm">
                   <Mail size={16} className="text-slate-400 shrink-0 mt-0.5" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-900">{email.fromName ?? email.from}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-slate-900">{email.direction === 'out' ? `Sent to ${email.to}` : (email.fromName ?? email.from)}</span>
+                      {email.direction === 'out' && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#3b4a35]/10 text-[#3b4a35]">Sent by {email.sentByName ?? 'staff'}</span>}
                       {email.attachments.length > 0 && <Paperclip size={12} className="text-slate-400" />}
                     </div>
                     <div className="text-slate-800">{email.subject}</div>
@@ -1084,7 +1098,7 @@ export default function CaseDetail() {
             </div>
           )}
           <p className="text-[11px] text-slate-400 mt-4 pt-3 border-t border-slate-100">
-            Synced from info@casillasfuneralhome.com. Unmatched or uncertain emails are held for review in the Email Inbox screen rather than filed here automatically.
+            Synced from the funeral home's shared email (Outlook). Unmatched or uncertain emails are held for review in the Email Inbox screen rather than filed here automatically.
           </p>
         </Card>
       )}

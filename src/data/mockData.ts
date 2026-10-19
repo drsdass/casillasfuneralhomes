@@ -297,12 +297,12 @@ export const calendarEvents: CalendarEvent[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Inbound email → case matching (info@casillasfuneralhome.com, Outlook)
+// Inbound email → case matching (the shared Outlook mailbox)
 // ---------------------------------------------------------------------------
 
 export const inboundEmails: InboundEmail[] = [
   {
-    id: 'em-1', graphMessageId: 'AAMkAG-mock-1',
+    id: 'em-1', graphMessageId: 'AAMkAG-mock-1', direction: 'in',
     from: 'karen.b@email.com', fromName: 'Karen Bennett',
     subject: 'Photos for the memorial video', preview: 'Hi, attached are the photos we talked about for dad\u2019s memorial video...',
     receivedAt: '2026-07-12T15:40:00Z', caseId: 'case-1', matchStatus: 'auto_matched',
@@ -313,7 +313,7 @@ export const inboundEmails: InboundEmail[] = [
     ],
   },
   {
-    id: 'em-2', graphMessageId: 'AAMkAG-mock-2',
+    id: 'em-2', graphMessageId: 'AAMkAG-mock-2', direction: 'in',
     from: 'medicalrecords@desertregional.example', fromName: 'Desert Regional Medical Center Records',
     subject: 'RE: Bennett, Harold - records request', preview: 'Please find attached the requested medical records for the above-named patient...',
     receivedAt: '2026-07-11T09:15:00Z', matchStatus: 'suggested', caseId: 'case-1',
@@ -323,13 +323,13 @@ export const inboundEmails: InboundEmail[] = [
     ],
   },
   {
-    id: 'em-3', graphMessageId: 'AAMkAG-mock-3',
+    id: 'em-3', graphMessageId: 'AAMkAG-mock-3', direction: 'in',
     from: 'orders@valleyflorist.example', fromName: 'Valley Florist',
     subject: 'Order confirmation #48213', preview: 'Thank you for your order. Your delivery is scheduled for...',
     receivedAt: '2026-07-12T11:05:00Z', matchStatus: 'unmatched', attachments: [],
   },
   {
-    id: 'em-4', graphMessageId: 'AAMkAG-mock-4',
+    id: 'em-4', graphMessageId: 'AAMkAG-mock-4', direction: 'in',
     from: 'susan.tanaka@email.com', fromName: 'Susan Tanaka',
     subject: 'Question about tomorrow', preview: 'Hi, I wanted to ask what time we should arrive for the conference tomorrow...',
     receivedAt: '2026-07-12T18:22:00Z', caseId: 'case-3', matchStatus: 'confirmed',

@@ -48,7 +48,7 @@ shares an obvious placeholder on purpose.
   contact) or held for a one-click staff confirmation (AI-suggested match
   from an unknown sender, or fully unmatched)
 - Each case gets an "Emails" tab showing everything matched to it
-- Full Microsoft Graph integration code written and ready
+- Outlook (Microsoft 365) email integration code written and ready (see docs/outlook-setup.md)
   (`supabase/functions/sync-inbox/`) — inactive until Supabase + Azure AD
   app registration are set up (see setup section below)
 
@@ -277,50 +277,22 @@ Cost is genuinely small — this uses Claude Sonnet for better accuracy on
 messy/handwritten documents than the Haiku model used for email matching,
 but it's still a single request per upload, not a recurring cost.
 
-## Email inbox setup (info@casillasfuneralhome.com → cases)
+## Email inbox setup (shared Outlook / Microsoft 365 → cases, with replies)
 
-Code is fully written and ready — `src/pages/inbox/EmailInbox.tsx` for the
-review UI, `supabase/functions/sync-inbox/` for the Microsoft Graph
-polling + matching logic, `supabase/functions/email-attachment-action/`
-for the per-attachment "Extract Info" / "Save to Case" choice. It runs on
-mock data until you connect it. Setup:
+Fully written: `src/pages/inbox/EmailInbox.tsx` (review screen, Reply, New email, and the admin
+"Connect Outlook mailbox" panel), `src/components/ui/ComposeEmail.tsx`,
+`supabase/functions/mail-connect/` (one-time mailbox sign-in, kept server-side),
+`supabase/functions/sync-inbox/` (checks the mailbox every 5 minutes and matches mail to cases),
+`supabase/functions/email-send/` (sends from the shared address and records who sent it),
+`supabase/functions/email-attachment-action/` (per-attachment "Extract Info" / "Save to Case"),
+and `src/db/mail.sql`. Step-by-step: **docs/outlook-setup.md**.
 
-1. **Register an Azure AD app** (Microsoft 365 admin center → Azure Active
-   Directory → App registrations → New registration). Grant it the
-   **application permission** `Mail.Read` (not delegated — this needs to
-   run unattended, not as a logged-in user) and have an admin consent to it.
-2. **Scope it to only the info@ mailbox**, not the whole tenant — use an
-   Exchange application access policy
-   (`New-ApplicationAccessPolicy` in Exchange PowerShell) restricting this
-   app to `info@casillasfuneralhome.com` specifically. Skipping this step
-   means the app can technically read *any* mailbox in the organization,
-   which is far more access than this feature needs.
-3. Set the Edge Function secrets: `MICROSOFT_TENANT_ID`,
-   `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_MAILBOX`,
-   `ANTHROPIC_API_KEY` (for AI-assisted matching of emails from unknown
-   senders — cheap, uses Haiku).
-4. Deploy `sync-inbox` via the Dashboard's Edge Function editor (same
-   no-CLI method as the other functions).
-5. Schedule it to run every few minutes (that function's page → add a Cron
-   trigger).
-6. Deploy a second function, **`email-attachment-action`**, the same way —
-   this is what runs when a staff member picks "Extract Info" or "Save to
-   Case" on one specific attachment (`supabase/functions/email-attachment-action/index.ts`).
-   Uses the same secrets as `sync-inbox`, nothing new to set.
-7. **If your database already has the older `inbound_emails` table** (i.e.
-   you ran `schema.sql` before this update), run this migration in the SQL
-   Editor — the `has_attachments` boolean was replaced with a real
-   `attachments` list:
-   ```sql
-   alter table inbound_emails drop column if exists has_attachments;
-   alter table inbound_emails add column if not exists attachments jsonb not null default '[]';
-   ```
+Matching: a message in a conversation already filed to a case, or from a known case contact,
+is matched automatically; anything else gets an AI-suggested match that a staff member
+confirms. Nothing is filed to the wrong family without a person's check.
 
-Matching logic: known case contacts auto-match by sender email; unknown
-senders get an AI-suggested match that a staff member confirms in the
-Email Inbox screen. Nothing is ever auto-filed without a human check —
-misfiling something sensitive into the wrong family's case is exactly the
-kind of mistake worth a few extra seconds of review to avoid.
+Replies: Supervisor and above. Each sent email is signed with the sender's name and is
+recorded (who, when, which case) in the case's Emails tab, the Email Inbox and the audit log.
 
 ## E-signature setup (SignRequest)
 

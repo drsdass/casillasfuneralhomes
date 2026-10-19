@@ -1,187 +1,159 @@
 // supabase/functions/sync-inbox/index.ts
 //
-// Polls info@casillasfuneralhome.com via the Microsoft Graph API for new
-// messages, then matches each one to a case:
-//   1. Sender email matches a known case_contacts row → auto-matched
-//   2. No match → ask Claude (Haiku, cheap) to suggest a case from the
-//      subject/preview text → inserted as "suggested" for staff to confirm
-//   3. Neither → inserted as "unmatched"
+// Checks the funeral home's shared Outlook (Microsoft 365) mailbox for new messages and matches each to a case:
+//   1. Same conversation as an email already filed to a case  -> auto-matched
+//   2. Sender is a known case contact                         -> auto-matched
+//   3. Otherwise ask Claude (Haiku, cheap) to suggest a case  -> "suggested" for staff to confirm
+//   4. Nothing fits                                           -> "unmatched"
+// Nothing is filed to a family's case without a known sender/thread or a person confirming.
 //
-// Deploy: supabase functions deploy sync-inbox
-// Schedule: supabase/functions/sync-inbox/cron — run every 5 minutes via
-// Supabase's Scheduled Functions (Dashboard → Edge Functions → sync-inbox →
-// Cron), or an external scheduler hitting this URL with the service role key.
+// Looks in every folder except Sent, Drafts, Deleted and Junk, so mail staff file into Outlook folders is still seen.
+// Uses the sign-in saved by the "Connect Outlook mailbox" button (table mail_connection).
 //
-// Required secrets (supabase secrets set):
-//   MICROSOFT_TENANT_ID       — Azure AD tenant ID
-//   MICROSOFT_CLIENT_ID       — App registration client ID
-//   MICROSOFT_CLIENT_SECRET   — App registration client secret
-//   MICROSOFT_MAILBOX         — info@casillasfuneralhome.com
-//   ANTHROPIC_API_KEY         — for AI-assisted suggestion matching
-//   SUPABASE_SERVICE_ROLE_KEY — set automatically by Supabase, do not override
-//
-// Azure AD app registration needs the *application* permission
-// `Mail.Read` (not delegated), admin-consented, and — critically — should
-// be scoped to ONLY the info@ mailbox via an Exchange application access
-// policy, not tenant-wide mail access. See README "Email inbox setup".
+// Deploy via the Dashboard's Edge Function editor, name it exactly "sync-inbox", and turn OFF "Verify JWT"
+// (it is protected by SYNC_SECRET instead). Run it every 5 minutes with the cron block in src/db/mail.sql.
+// Secrets: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, SYNC_SECRET, ANTHROPIC_API_KEY. See docs/outlook-setup.md.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
+const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } })
+const env = (k: string) => (Deno.env.get(k) ?? '').trim()
+const GRAPH = 'https://graph.microsoft.com/v1.0'
+// Immutable ids stay the same when staff move a message between Outlook folders; text bodies are easier to store.
+const PREFER = 'IdType="ImmutableId", outlook.body-content-type="text"'
 
-interface GraphMessage {
-  id: string
-  subject: string
-  bodyPreview: string
-  from: { emailAddress: { address: string; name?: string } }
-  receivedDateTime: string
-  hasAttachments: boolean
-}
-
-async function fetchAttachmentMetadata(token: string, mailbox: string, messageId: string): Promise<Array<{ id: string; filename: string; contentType: string; sizeBytes: number }>> {
-  const url = `https://graph.microsoft.com/v1.0/users/${mailbox}/messages/${messageId}/attachments?$select=id,name,contentType,size`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) return [] // don't fail the whole sync over one message's attachment list
-  const data = await res.json()
-  return (data.value ?? []).map((a: { id: string; name: string; contentType: string; size: number }) => ({
-    id: a.id, filename: a.name, contentType: a.contentType, sizeBytes: a.size,
-  }))
-}
-
-
-  const tenantId = Deno.env.get('MICROSOFT_TENANT_ID')!
-  const res = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+async function accessToken(): Promise<{ token: string; address: string }> {
+  const { data: conn } = await supabase.from('mail_connection').select('*').eq('id', 1).maybeSingle()
+  if (!conn?.refresh_token) throw new Error('Email is not connected yet. An admin needs to press "Connect Outlook mailbox" in Email Inbox.')
+  const res = await fetch(`https://login.microsoftonline.com/${env('MS_TENANT_ID')}/oauth2/v2.0/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: Deno.env.get('MICROSOFT_CLIENT_ID')!,
-      client_secret: Deno.env.get('MICROSOFT_CLIENT_SECRET')!,
-      scope: 'https://graph.microsoft.com/.default',
-      grant_type: 'client_credentials',
+      client_id: env('MS_CLIENT_ID'), client_secret: env('MS_CLIENT_SECRET'), grant_type: 'refresh_token',
+      refresh_token: conn.refresh_token, scope: 'offline_access Mail.Read Mail.Send User.Read',
     }),
   })
-  if (!res.ok) throw new Error(`Graph auth failed: ${await res.text()}`)
-  const data = await res.json()
-  return data.access_token
+  if (!res.ok) {
+    const text = await res.text()
+    await supabase.from('mail_connection').update({ status: 'needs_reconnect', last_error: text.slice(0, 300) }).eq('id', 1)
+    throw new Error(`Microsoft sign-in needs to be renewed: ${text.slice(0, 200)}`)
+  }
+  const d = await res.json()
+  const patch: Record<string, unknown> = {}
+  if (d.refresh_token && d.refresh_token !== conn.refresh_token) patch.refresh_token = d.refresh_token
+  if (conn.status !== 'ok') { patch.status = 'ok'; patch.last_error = null }
+  if (Object.keys(patch).length) await supabase.from('mail_connection').update(patch).eq('id', 1)
+  return { token: d.access_token, address: String(conn.address ?? '').toLowerCase() }
 }
 
-async function fetchNewMessages(token: string, sinceIso: string): Promise<GraphMessage[]> {
-  const mailbox = Deno.env.get('MICROSOFT_MAILBOX')!
-  const filter = encodeURIComponent(`receivedDateTime gt ${sinceIso}`)
-  const url = `https://graph.microsoft.com/v1.0/users/${mailbox}/mailFolders/inbox/messages?$filter=${filter}&$orderby=receivedDateTime asc&$top=50`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) throw new Error(`Graph fetch failed: ${await res.text()}`)
-  const data = await res.json()
-  return data.value ?? []
-}
-
-/** Cheap, fast classification — Haiku is plenty for "does this email relate to case X" matching. */
-async function suggestCaseMatch(
-  subject: string,
-  preview: string,
-  openCases: { id: string; label: string }[]
-): Promise<{ caseId: string; confidence: number; reason: string } | null> {
+/** Cheap, fast classification — Haiku is plenty for "does this email relate to case X". */
+async function suggestCaseMatch(subject: string, text: string, openCases: { id: string; label: string }[]) {
   if (openCases.length === 0) return null
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
+    headers: { 'x-api-key': env('ANTHROPIC_API_KEY'), 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 300,
-      system:
-        'You match an inbound email to a funeral home case by decedent name or context. ' +
-        'Respond ONLY with JSON: {"caseId": "<id or null>", "confidence": 0-1, "reason": "short explanation"}. ' +
-        'If no case plausibly matches, return {"caseId": null, "confidence": 0, "reason": "no match"}.',
-      messages: [{
-        role: 'user',
-        content:
-          `Open cases:\n${openCases.map((c) => `- ${c.id}: ${c.label}`).join('\n')}\n\n` +
-          `Email subject: ${subject}\nEmail preview: ${preview}`,
-      }],
+      model: 'claude-haiku-4-5-20251001', max_tokens: 300,
+      system: 'You match an inbound email to a funeral home case by decedent name or context. Respond ONLY with JSON: {"caseId": "<id or null>", "confidence": 0-1, "reason": "short explanation"}. If no case plausibly matches, return {"caseId": null, "confidence": 0, "reason": "no match"}.',
+      messages: [{ role: 'user', content: `Open cases:\n${openCases.map((c) => `- ${c.id}: ${c.label}`).join('\n')}\n\nEmail subject: ${subject}\nEmail text: ${text.slice(0, 600)}` }],
     }),
   })
   if (!res.ok) return null
   const data = await res.json()
   try {
-    const parsed = JSON.parse(data.content[0].text)
-    if (!parsed.caseId) return null
-    return { caseId: parsed.caseId, confidence: parsed.confidence, reason: parsed.reason }
-  } catch {
-    return null
-  }
+    const p = JSON.parse((data.content[0].text as string).replace(/```json\s*|```\s*/g, '').trim())
+    return p.caseId ? { caseId: p.caseId as string, confidence: Number(p.confidence), reason: String(p.reason) } : null
+  } catch { return null }
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   try {
-    const token = await getGraphToken()
+    const secret = env('SYNC_SECRET')
+    if (!secret || req.headers.get('x-sync-secret') !== secret) return json({ error: 'Not allowed' }, 401)
 
-    // Track sync progress in a small key-value row rather than a full table.
-    const { data: syncState } = await supabase.from('sync_state').select('value').eq('key', 'inbox_last_synced').single()
-    const since = syncState?.value ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { token, address: myAddress } = await accessToken()
+    const headers = { Authorization: `Bearer ${token}`, Prefer: PREFER }
 
-    const messages = await fetchNewMessages(token, since)
-    if (messages.length === 0) {
-      return new Response(JSON.stringify({ synced: 0 }), { headers: { 'content-type': 'application/json' } })
+    const { data: st } = await supabase.from('sync_state').select('value').eq('key', 'inbox_last_synced').maybeSingle()
+    const lastMs = st?.value ? new Date(st.value).getTime() : Date.now() - 3 * 24 * 3600 * 1000
+    const since = new Date(lastMs - 10 * 60 * 1000).toISOString() // 10 minutes of overlap; duplicates are skipped below
+
+    // Folders we ignore.
+    const skipFolders = new Set<string>()
+    for (const name of ['sentitems', 'drafts', 'deleteditems', 'junkemail']) {
+      const r = await fetch(`${GRAPH}/me/mailFolders/${name}?$select=id`, { headers })
+      if (r.ok) skipFolders.add((await r.json()).id)
     }
 
-    // Known contacts: email -> case (for auto-matching)
+    // deno-lint-ignore no-explicit-any
+    const msgs: any[] = []
+    let url: string | null = `${GRAPH}/me/messages?$filter=${encodeURIComponent(`receivedDateTime ge ${since} and isDraft eq false`)}&$orderby=receivedDateTime desc&$top=50&$select=id,conversationId,internetMessageId,subject,bodyPreview,body,from,receivedDateTime,hasAttachments,parentFolderId`
+    for (let i = 0; i < 4 && url; i++) {
+      const r: Response = await fetch(url, { headers })
+      if (!r.ok) throw new Error(`Outlook list failed: ${await r.text()}`)
+      const d = await r.json()
+      msgs.push(...(d.value ?? []))
+      url = d['@odata.nextLink'] ?? null
+    }
+    const candidates = msgs.filter((m) => !skipFolders.has(m.parentFolderId))
+    if (candidates.length === 0) return json({ synced: 0 })
+
+    const { data: have } = await supabase.from('inbound_emails').select('graph_message_id').in('graph_message_id', candidates.map((m) => m.id))
+    const known = new Set((have ?? []).map((r) => r.graph_message_id))
+    const fresh = candidates.filter((m) => !known.has(m.id)).reverse() // oldest first
+
     const { data: contacts } = await supabase.from('case_contacts').select('email, case_id, name')
     const contactByEmail = new Map((contacts ?? []).filter((c) => c.email).map((c) => [c.email.toLowerCase(), c]))
+    const { data: openCases } = await supabase.from('cases').select('id, case_number, decedent_first_name, decedent_last_name').neq('status', 'completed')
+    const caseOptions = (openCases ?? []).map((c) => ({ id: c.id, label: `${c.decedent_first_name} ${c.decedent_last_name} (${c.case_number})` }))
 
-    // Open cases for AI-assisted suggestion matching
-    const { data: openCases } = await supabase
-      .from('cases')
-      .select('id, case_number, decedent_first_name, decedent_last_name')
-      .neq('status', 'completed')
-    const caseOptions = (openCases ?? []).map((c) => ({
-      id: c.id,
-      label: `${c.decedent_first_name} ${c.decedent_last_name} (${c.case_number})`,
-    }))
+    let latest = lastMs
+    let saved = 0
+    for (const m of fresh) {
+      latest = Math.max(latest, new Date(m.receivedDateTime).getTime())
+      const fromAddr = String(m.from?.emailAddress?.address ?? '').toLowerCase()
+      if (!fromAddr || fromAddr === myAddress) continue // our own mail
 
-    for (const msg of messages) {
-      const senderEmail = msg.from?.emailAddress?.address?.toLowerCase() ?? ''
-      const contact = contactByEmail.get(senderEmail)
-      const attachments = msg.hasAttachments
-        ? await fetchAttachmentMetadata(token, Deno.env.get('MICROSOFT_MAILBOX')!, msg.id)
-        : []
-
-      let row: Record<string, unknown> = {
-        graph_message_id: msg.id,
-        from_address: senderEmail,
-        from_name: msg.from?.emailAddress?.name ?? null,
-        subject: msg.subject,
-        preview: msg.bodyPreview?.slice(0, 300) ?? '',
-        received_at: msg.receivedDateTime,
-        attachments,
-      }
-
-      if (contact) {
-        row = { ...row, case_id: contact.case_id, match_status: 'auto_matched', match_reason: `Sender matches contact ${contact.name}` }
-      } else {
-        const suggestion = await suggestCaseMatch(msg.subject, msg.bodyPreview ?? '', caseOptions)
-        if (suggestion && suggestion.confidence >= 0.6) {
-          row = { ...row, case_id: suggestion.caseId, match_status: 'suggested', match_confidence: suggestion.confidence, match_reason: suggestion.reason }
-        } else {
-          row = { ...row, match_status: 'unmatched' }
+      let attachments: { id: string; filename: string; contentType: string; sizeBytes: number }[] = []
+      if (m.hasAttachments) {
+        const ar = await fetch(`${GRAPH}/me/messages/${m.id}/attachments?$select=id,name,contentType,size,isInline`, { headers })
+        if (ar.ok) {
+          // deno-lint-ignore no-explicit-any
+          attachments = ((await ar.json()).value ?? []).filter((a: any) => !a.isInline && String(a['@odata.type'] ?? '').includes('fileAttachment'))
+            // deno-lint-ignore no-explicit-any
+            .map((a: any) => ({ id: a.id, filename: a.name, contentType: a.contentType, sizeBytes: a.size }))
         }
       }
+      const text = String(m.body?.content ?? '').trim()
+      const subject = m.subject || '(no subject)'
+      let row: Record<string, unknown> = {
+        graph_message_id: m.id, thread_id: m.conversationId, rfc_message_id: m.internetMessageId ?? null,
+        direction: 'in', from_address: fromAddr, from_name: m.from?.emailAddress?.name ?? null, to_address: myAddress || null,
+        subject, preview: String(m.bodyPreview ?? '').slice(0, 300), body: text.slice(0, 20000),
+        received_at: m.receivedDateTime, attachments,
+      }
 
-      await supabase.from('inbound_emails').upsert(row, { onConflict: 'graph_message_id' })
+      const { data: sameThread } = await supabase.from('inbound_emails').select('case_id')
+        .eq('thread_id', m.conversationId).not('case_id', 'is', null).neq('match_status', 'ignored').limit(1)
+      const contact = contactByEmail.get(fromAddr)
+      if (sameThread && sameThread.length) {
+        row = { ...row, case_id: sameThread[0].case_id, match_status: 'auto_matched', match_reason: 'Part of a conversation already filed to this case' }
+      } else if (contact) {
+        row = { ...row, case_id: contact.case_id, match_status: 'auto_matched', match_reason: `Sender matches contact ${contact.name}` }
+      } else {
+        const s = await suggestCaseMatch(subject, text || String(m.bodyPreview ?? ''), caseOptions)
+        row = s && s.confidence >= 0.6
+          ? { ...row, case_id: s.caseId, match_status: 'suggested', match_confidence: s.confidence, match_reason: s.reason }
+          : { ...row, match_status: 'unmatched' }
+      }
+      const { error } = await supabase.from('inbound_emails').upsert(row, { onConflict: 'graph_message_id' })
+      if (!error) saved++
     }
-
-    const latest = messages[messages.length - 1].receivedDateTime
-    await supabase.from('sync_state').upsert({ key: 'inbox_last_synced', value: latest })
-
-    return new Response(JSON.stringify({ synced: messages.length }), { headers: { 'content-type': 'application/json' } })
+    if (latest > lastMs) await supabase.from('sync_state').upsert({ key: 'inbox_last_synced', value: new Date(latest).toISOString() })
+    return json({ synced: saved })
   } catch (err) {
     console.error(err)
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { 'content-type': 'application/json' } })
+    return json({ error: String(err instanceof Error ? err.message : err) }, 500)
   }
 })

@@ -1029,22 +1029,50 @@ export const api = {
   // -------------------------------------------------------------------
   // Inbound email → case matching
   //
-  // The actual inbox polling (Microsoft Graph API against
+  // The actual inbox polling (Microsoft Graph against
   // info@casillasfuneralhome.com) runs server-side in a Supabase Edge
   // Function — see supabase/functions/sync-inbox/. It writes matched rows
   // into an `inbound_emails` table; these functions just read/update that
   // table. Nothing here talks to Microsoft directly, and nothing here
-  // should ever hold a Graph API token client-side.
+  // should ever hold a Graph token client-side.
   // -------------------------------------------------------------------
 
   async getEmails(filter?: { caseId?: string; needsReview?: boolean }): Promise<InboundEmail[]> {
     if (USE_MOCK) return delay(mockStore.getEmails(filter))
     let query = supabase!.from('inbound_emails').select('*').order('received_at', { ascending: false })
     if (filter?.caseId) query = query.eq('case_id', filter.caseId)
-    if (filter?.needsReview) query = query.in('match_status', ['suggested', 'unmatched'])
+    if (filter?.needsReview) query = query.in('match_status', ['suggested', 'unmatched']).eq('direction', 'in')
     const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(rowToEmail)
+  },
+
+  /** Sends an email from the shared mailbox. The server records who sent it. */
+  async sendEmail(
+    params: { to: string; subject: string; body: string; caseId?: string; replyToEmailId?: string },
+    sentBy: StaffMember
+  ): Promise<InboundEmail> {
+    if (USE_MOCK) return delay(mockStore.sendEmail(params, sentBy))
+    const { data, error } = await supabase!.functions.invoke('email-send', { body: params })
+    if (error) {
+      const context = (error as { context?: Response }).context
+      if (context) {
+        try {
+          const errBody = await context.clone().json()
+          throw new Error(errBody?.error ?? error.message)
+        } catch (e) {
+          if (e instanceof Error && e.message !== error.message && !(e instanceof SyntaxError)) throw e
+        }
+      }
+      throw error
+    }
+    if (data?.error) throw new Error(data.error)
+    const email = rowToEmail(data.email)
+    logAuditReal({
+      entityType: 'email', entityId: email.id, caseId: params.caseId ?? email.caseId, action: 'create',
+      summary: `Emailed ${params.to} \u2014 "${params.subject}"`, changedBy: sentBy.id,
+    })
+    return email
   },
 
   async confirmEmailMatch(emailId: string, caseId: string, changedBy: StaffMember): Promise<InboundEmail[]> {
