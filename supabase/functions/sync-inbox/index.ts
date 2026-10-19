@@ -21,12 +21,14 @@ const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { sta
 const env = (k: string) => (Deno.env.get(k) ?? '').trim()
 const GRAPH = 'https://graph.microsoft.com/v1.0'
 // Immutable ids stay the same when staff move a message between Outlook folders; text bodies are easier to store.
+const _fetch = globalThis.fetch.bind(globalThis)
+const fetchT = (u: string | URL | Request, o: RequestInit = {}) => _fetch(u, { ...o, signal: AbortSignal.timeout(20000) })
 const PREFER = 'IdType="ImmutableId", outlook.body-content-type="text"'
 
 async function accessToken(): Promise<{ token: string; address: string }> {
   const { data: conn } = await supabase.from('mail_connection').select('*').eq('id', 1).maybeSingle()
   if (!conn?.refresh_token) throw new Error('Email is not connected yet. An admin needs to press "Connect Outlook mailbox" in Email Inbox.')
-  const res = await fetch(`https://login.microsoftonline.com/${env('MS_TENANT_ID')}/oauth2/v2.0/token`, {
+  const res = await fetchT(`https://login.microsoftonline.com/${env('MS_TENANT_ID')}/oauth2/v2.0/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -50,7 +52,7 @@ async function accessToken(): Promise<{ token: string; address: string }> {
 /** Cheap, fast classification — Haiku is plenty for "does this email relate to case X". */
 async function suggestCaseMatch(subject: string, text: string, openCases: { id: string; label: string }[]) {
   if (openCases.length === 0) return null
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetchT('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': env('ANTHROPIC_API_KEY'), 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -72,25 +74,32 @@ Deno.serve(async (req) => {
     const secret = env('SYNC_SECRET')
     if (!secret || req.headers.get('x-sync-secret') !== secret) return json({ error: 'Not allowed' }, 401)
 
+    // Optional one-time catch-up: POST {"days":60} to also pull older mail. Safe to repeat; known messages are skipped.
+    let backfillDays = 0
+    try { backfillDays = Math.min(120, Math.max(0, Number((await req.json())?.days) || 0)) } catch { /* normal scheduled run has no body */ }
+
     const { token, address: myAddress } = await accessToken()
     const headers = { Authorization: `Bearer ${token}`, Prefer: PREFER }
 
     const { data: st } = await supabase.from('sync_state').select('value').eq('key', 'inbox_last_synced').maybeSingle()
     const lastMs = st?.value ? new Date(st.value).getTime() : Date.now() - 3 * 24 * 3600 * 1000
-    const since = new Date(lastMs - 10 * 60 * 1000).toISOString() // 10 minutes of overlap; duplicates are skipped below
+    const since = backfillDays
+      ? new Date(Date.now() - backfillDays * 24 * 3600 * 1000).toISOString()
+      : new Date(lastMs - 10 * 60 * 1000).toISOString() // 10 minutes of overlap; duplicates are skipped below
 
     // Folders we ignore.
     const skipFolders = new Set<string>()
     for (const name of ['sentitems', 'drafts', 'deleteditems', 'junkemail']) {
-      const r = await fetch(`${GRAPH}/me/mailFolders/${name}?$select=id`, { headers })
+      const r = await fetchT(`${GRAPH}/me/mailFolders/${name}?$select=id`, { headers })
       if (r.ok) skipFolders.add((await r.json()).id)
     }
 
     // deno-lint-ignore no-explicit-any
     const msgs: any[] = []
     let url: string | null = `${GRAPH}/me/messages?$filter=${encodeURIComponent(`receivedDateTime ge ${since} and isDraft eq false`)}&$orderby=receivedDateTime desc&$top=50&$select=id,conversationId,internetMessageId,subject,bodyPreview,body,from,receivedDateTime,hasAttachments,parentFolderId`
-    for (let i = 0; i < 4 && url; i++) {
-      const r: Response = await fetch(url, { headers })
+    for (let i = 0; i < (backfillDays ? 20 : 4) && url; i++) {
+      console.log('listing page', i)
+      const r: Response = await fetchT(url, { headers })
       if (!r.ok) throw new Error(`Outlook list failed: ${await r.text()}`)
       const d = await r.json()
       msgs.push(...(d.value ?? []))
@@ -101,7 +110,9 @@ Deno.serve(async (req) => {
 
     const { data: have } = await supabase.from('inbound_emails').select('graph_message_id').in('graph_message_id', candidates.map((m) => m.id))
     const known = new Set((have ?? []).map((r) => r.graph_message_id))
-    const fresh = candidates.filter((m) => !known.has(m.id)).reverse() // oldest first
+    let fresh = candidates.filter((m) => !known.has(m.id)).reverse() // oldest first
+    const more = backfillDays && fresh.length > 15
+    if (backfillDays) fresh = fresh.slice(0, 15) // small batches so the run never times out
 
     const { data: contacts } = await supabase.from('case_contacts').select('email, case_id, name')
     const contactByEmail = new Map((contacts ?? []).filter((c) => c.email).map((c) => [c.email.toLowerCase(), c]))
@@ -110,14 +121,20 @@ Deno.serve(async (req) => {
 
     let latest = lastMs
     let saved = 0
+    let skippedOwn = 0
+    const problems: string[] = []
+    let stuck = false
     for (const m of fresh) {
-      latest = Math.max(latest, new Date(m.receivedDateTime).getTime())
       const fromAddr = String(m.from?.emailAddress?.address ?? '').toLowerCase()
-      if (!fromAddr || fromAddr === myAddress) continue // our own mail
+      if (!fromAddr || fromAddr === myAddress) { // our own mail
+        skippedOwn++
+        if (!stuck) latest = Math.max(latest, new Date(m.receivedDateTime).getTime())
+        continue
+      }
 
       let attachments: { id: string; filename: string; contentType: string; sizeBytes: number }[] = []
       if (m.hasAttachments) {
-        const ar = await fetch(`${GRAPH}/me/messages/${m.id}/attachments?$select=id,name,contentType,size,isInline`, { headers })
+        const ar = await fetchT(`${GRAPH}/me/messages/${m.id}/attachments?$select=id,name,contentType,size,isInline`, { headers })
         if (ar.ok) {
           // deno-lint-ignore no-explicit-any
           attachments = ((await ar.json()).value ?? []).filter((a: any) => !a.isInline && String(a['@odata.type'] ?? '').includes('fileAttachment'))
@@ -148,10 +165,13 @@ Deno.serve(async (req) => {
           : { ...row, match_status: 'unmatched' }
       }
       const { error } = await supabase.from('inbound_emails').upsert(row, { onConflict: 'graph_message_id' })
-      if (!error) saved++
+      if (error) { stuck = true; problems.push(error.message) } else {
+        saved++
+        if (!stuck) latest = Math.max(latest, new Date(m.receivedDateTime).getTime()) // never move past a mail that failed to save
+      }
     }
-    if (latest > lastMs) await supabase.from('sync_state').upsert({ key: 'inbox_last_synced', value: new Date(latest).toISOString() })
-    return json({ synced: saved })
+    if (!backfillDays && latest > lastMs) await supabase.from('sync_state').upsert({ key: 'inbox_last_synced', value: new Date(latest).toISOString() })
+    return json({ synced: saved, skippedOwn, problems: problems.slice(0, 3), more: !!more })
   } catch (err) {
     console.error(err)
     return json({ error: String(err instanceof Error ? err.message : err) }, 500)

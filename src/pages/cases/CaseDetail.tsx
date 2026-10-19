@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -64,7 +64,9 @@ const docCategoryLabels: Record<CaseDocument['category'], string> = {
 export default function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>()
   const { currentUser } = useSession()
-  const [tab, setTab] = useState<Tab>('Overview')
+  const [searchParams] = useSearchParams()
+  const wantedTab = searchParams.get('tab')
+  const [tab, setTab] = useState<Tab>((tabs as readonly string[]).includes(wantedTab ?? '') ? (wantedTab as Tab) : 'Overview')
   const [noteText, setNoteText] = useState('')
   const [uploadCategory, setUploadCategory] = useState<CaseDocument['category']>('other')
   const [previewTemplate, setPreviewTemplate] = useState<DocTemplate | null>(null)

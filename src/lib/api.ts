@@ -1047,6 +1047,17 @@ export const api = {
     return (data ?? []).map(rowToEmail)
   },
 
+  /** Light check used by the new-email pop-up: received mail newer than a timestamp (no bodies). */
+  async getNewInbound(since: string): Promise<InboundEmail[]> {
+    if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => e.direction === 'in' && e.receivedAt > since))
+    const { data, error } = await supabase!.from('inbound_emails')
+      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction')
+      .eq('direction', 'in').neq('match_status', 'ignored').gt('received_at', since)
+      .order('received_at', { ascending: true }).limit(10)
+    if (error) throw error
+    return (data ?? []).map(rowToEmail)
+  },
+
   /** Sends an email from the shared mailbox. The server records who sent it. */
   async sendEmail(
     params: { to: string; subject: string; body: string; caseId?: string; replyToEmailId?: string },

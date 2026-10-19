@@ -16,6 +16,7 @@ import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import { VoiceNoteButton } from '@/components/ui/VoiceNote'
+import { NewEmailAlerts } from '@/components/layout/NewEmailAlerts'
 
 const allNavItems = [
   { key: 'dashboard', to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
@@ -274,6 +275,8 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {visibleNavKeys(currentUser).includes('inbox') && <NewEmailAlerts userId={currentUser.id} />}
 
       {toast && (
         <button
