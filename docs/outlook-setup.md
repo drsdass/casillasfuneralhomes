@@ -44,7 +44,7 @@ Supabase dashboard, **Edge Functions**, **Secrets**, add these (names exactly):
 | `email-attachment-action` | as before | `supabase/functions/email-attachment-action/index.ts` (replace) |
 
 ## 6. Run the SQL
-Open `src/db/mail.sql`, change `PASTE_THE_SAME_SYNC_SECRET` to your `SYNC_SECRET`, paste it all in the Supabase SQL editor, **Run**. This adds the sent-by columns, the place the sign-in is kept, and makes the mail check run every 5 minutes.
+Open `src/db/mail.sql`, change `PASTE_THE_SAME_SYNC_SECRET` to your `SYNC_SECRET`, paste it all in the Supabase SQL editor, **Run**. This adds the sent-by columns, the place the sign-in is kept, and makes the mail check run every 3 minutes.
 
 ## 7. Connect the mailbox
 1. Push the new version of Casillas OS, then open **Email Inbox** as an admin.
@@ -53,7 +53,7 @@ Open `src/db/mail.sql`, change `PASTE_THE_SAME_SYNC_SECRET` to your `SYNC_SECRET
 4. You come back to Email Inbox and it says **Connected to info@casillasfuneralhome.com**.
 
 ## 8. Try it
-Email the funeral home address from another address. Within 5 minutes it appears under **All Messages**. Press **Reply**, send, and check that the reply arrives signed with the staff member's name and is in Outlook's Sent Items.
+Email the funeral home address from another address. Within 3 minutes it appears under **All Messages**. Press **Reply**, send, and check that the reply arrives signed with the staff member's name and is in Outlook's Sent Items.
 
 ## Good to know
 - Staff keep using Outlook as always. The OS looks at every folder except Sent, Drafts, Deleted and Junk, so mail filed into folders is still found. The first check looks back 3 days.

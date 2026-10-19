@@ -23,7 +23,7 @@ create table if not exists mail_connection (
 alter table mail_connection enable row level security;
 revoke all on mail_connection from anon, authenticated;
 
--- Run the mail check every 5 minutes, from Supabase's own servers (no computer needs to be on).
+-- Run the mail check every 3 minutes, from Supabase's own servers (no computer needs to be on).
 -- Before running this part:
 --   1. Edge Functions > Secrets: add SYNC_SECRET = any long random text.
 --   2. Replace PASTE_THE_SAME_SYNC_SECRET below with that same text.
@@ -31,7 +31,7 @@ create extension if not exists pg_cron;
 create extension if not exists pg_net;
 select cron.unschedule('casillas-sync-inbox') where exists (select 1 from cron.job where jobname = 'casillas-sync-inbox');
 select cron.schedule(
-  'casillas-sync-inbox', '*/5 * * * *',
+  'casillas-sync-inbox', '*/3 * * * *',
   $$ select net.http_post(
        url := 'https://kduvajnzussalxihgyfv.supabase.co/functions/v1/sync-inbox',
        headers := '{"Content-Type":"application/json","x-sync-secret":"PASTE_THE_SAME_SYNC_SECRET"}'::jsonb,

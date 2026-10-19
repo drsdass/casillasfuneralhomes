@@ -57,7 +57,7 @@ export function MailConnectionPanel() {
         {statusError ? <span className="text-slate-700">Could not check the email connection: {(statusError as Error).message}</span>
           : !status ? <span className="text-slate-500">Checking the email connection…</span>
           : needsReconnect ? <span className="text-slate-800"><b>The email connection needs to be renewed.</b> New mail has stopped arriving. Press Reconnect and sign in with the funeral home email.</span>
-          : status.connected ? <span className="text-slate-800">Connected to <b>{status.address}</b>{status.connectedAt && <> since {format(parseISO(status.connectedAt), 'MMM d, yyyy')}</>}. New mail is checked every 5 minutes.</span>
+          : status.connected ? <span className="text-slate-800">Connected to <b>{status.address}</b>{status.connectedAt && <> since {format(parseISO(status.connectedAt), 'MMM d, yyyy')}</>}. New mail is checked every 3 minutes.</span>
           : !status.configured ? <span className="text-slate-800">Email is not set up yet. The Microsoft keys still need to be added in Supabase (see docs/outlook-setup.md, steps 1 to 6).</span>
           : <span className="text-slate-800"><b>Email is not connected.</b> Press Connect and sign in once with the funeral home email (info@casillasfuneralhome.com).</span>}
         {msg && <div className="mt-1 text-slate-700">{msg}</div>}

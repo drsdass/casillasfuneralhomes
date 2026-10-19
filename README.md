@@ -282,7 +282,7 @@ but it's still a single request per upload, not a recurring cost.
 Fully written: `src/pages/inbox/EmailInbox.tsx` (review screen, Reply, New email, and the admin
 "Connect Outlook mailbox" panel), `src/components/ui/ComposeEmail.tsx`,
 `supabase/functions/mail-connect/` (one-time mailbox sign-in, kept server-side),
-`supabase/functions/sync-inbox/` (checks the mailbox every 5 minutes and matches mail to cases),
+`supabase/functions/sync-inbox/` (checks the mailbox every 3 minutes and matches mail to cases),
 `supabase/functions/email-send/` (sends from the shared address and records who sent it),
 `supabase/functions/email-attachment-action/` (per-attachment "Extract Info" / "Save to Case"),
 and `src/db/mail.sql`. Step-by-step: **docs/outlook-setup.md**.

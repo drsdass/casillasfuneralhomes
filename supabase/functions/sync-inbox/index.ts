@@ -11,7 +11,7 @@
 // Uses the sign-in saved by the "Connect Outlook mailbox" button (table mail_connection).
 //
 // Deploy via the Dashboard's Edge Function editor, name it exactly "sync-inbox", and turn OFF "Verify JWT"
-// (it is protected by SYNC_SECRET instead). Run it every 5 minutes with the cron block in src/db/mail.sql.
+// (it is protected by SYNC_SECRET instead). Run it every 3 minutes with the cron block in src/db/mail.sql.
 // Secrets: MS_TENANT_ID, MS_CLIENT_ID, MS_CLIENT_SECRET, SYNC_SECRET, ANTHROPIC_API_KEY. See docs/outlook-setup.md.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
