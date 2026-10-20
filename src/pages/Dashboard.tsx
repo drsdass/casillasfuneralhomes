@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
-import { Card, SectionHeading, CaseStatusBadge } from '@/components/ui/Primitives'
+import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { Link } from 'react-router-dom'
 import { AlertCircle, CalendarClock, CheckCircle2, Clock, HeartHandshake } from 'lucide-react'
 import { format, isToday, parseISO } from 'date-fns'
@@ -117,7 +117,7 @@ function FullDashboard() {
                     {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}
                   </div>
                 </div>
-                <CaseStatusBadge status={c.status} />
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
               </Link>
             ))}
             {activeCases.length === 0 && (
@@ -158,7 +158,7 @@ function FullDashboard() {
             {needsAttention.map((c) => (
               <Link to={`/cases/${c.id}`} key={c.id} className="flex items-center justify-between text-sm px-3 py-2 rounded-md hover:bg-slate-50">
                 <span>{c.decedent.firstName} {c.decedent.lastName} — {c.caseNumber}</span>
-                <CaseStatusBadge status={c.status} />
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
               </Link>
             ))}
           </div>

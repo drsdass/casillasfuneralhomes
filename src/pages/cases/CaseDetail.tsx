@@ -7,7 +7,7 @@ import { TASK_STATUS_LABELS } from '@/types'
 import { getErrorMessage } from '@/lib/errors'
 import { VITAL_FIELDS, VITAL_SECTION_LABELS, VITAL_SECTION_ORDER } from '@/lib/vitalFields'
 import { useSession } from '@/context/SessionContext'
-import { Card, CaseStatusBadge, formatCurrency } from '@/components/ui/Primitives'
+import { Card, CaseStatusBadge, CustodyChip, formatCurrency } from '@/components/ui/Primitives'
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useState, useRef } from 'react'
@@ -322,7 +322,7 @@ export default function CaseDetail() {
           <div className="text-sm text-slate-500 mt-1">
             {c.caseNumber} · {c.type.replace('_', '-')} · {c.disposition}
           </div>
-          <div className="mt-2"><CaseStatusBadge status={c.status} /></div>
+          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">
               <Users2 size={11} /> {linkedFamily.name}

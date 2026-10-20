@@ -7,7 +7,7 @@ import { useSession } from '@/context/SessionContext'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
-import { Card, CaseStatusBadge } from '@/components/ui/Primitives'
+import { Card, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { FirstDayTour } from '@/components/ui/FirstDayTour'
 import { isCaseDone } from '@/lib/caseDone'
 
@@ -99,7 +99,7 @@ export default function TodayHome() {
                 </div>
                 <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}</div>
               </div>
-              <CaseStatusBadge status={c.status} />
+              <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
             </Link>))}
           {list.length === 0 && <p className="text-slate-500 py-2">{tx('No open cases.', 'No hay casos abiertos.')}</p>}
           {open.length > list.length && <Link to="/cases" className="block text-center text-[#3b4a35] font-medium pt-2 hover:underline">{tx(`See all ${open.length} cases`, `Ver los ${open.length} casos`)}</Link>}

@@ -1,3 +1,4 @@
+import { CUSTODY_STAGE_LABELS, type CustodyStage } from '@/types'
 import type { ReactNode } from 'react'
 import type { CaseStatus, ContractStatus } from '@/types'
 import { useLanguage } from '@/i18n/LanguageContext'
@@ -61,4 +62,14 @@ export function ContractStatusBadge({ status }: { status: ContractStatus }) {
 
 export function formatCurrency(n: number): string {
   return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+}
+
+/** Where the decedent is right now (Chain of Custody) - shown beside the status so both always agree. */
+export function CustodyChip({ stage }: { stage?: CustodyStage }) {
+  if (!stage || stage === 'completed') return null
+  return (
+    <span className="inline-flex items-center rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 whitespace-nowrap">
+      {CUSTODY_STAGE_LABELS[stage] ?? stage}
+    </span>
+  )
 }

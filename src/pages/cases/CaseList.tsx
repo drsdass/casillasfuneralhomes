@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
-import { Card, SectionHeading, CaseStatusBadge } from '@/components/ui/Primitives'
+import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { Search, Upload, Phone } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
@@ -144,7 +144,7 @@ export default function CaseList() {
                 <td className="px-4 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}
                 </td>
-                <td className="px-4 py-3"><CaseStatusBadge status={c.status} /></td>
+                <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span></td>
               </tr>
             ))}
             {!isLoading && filtered.length === 0 && (
