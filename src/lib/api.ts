@@ -701,6 +701,14 @@ export const api = {
     return path
   },
 
+  /** Gives a saved document a clear, recognisable name (and type) so everyone can find it. */
+  async labelCaseDocument(docId: string, caseId: string, name: string, category: CaseDocument['category'], changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.labelDocument(docId, name, category); return }
+    const { error } = await supabase!.from('case_documents').update({ name, category }).eq('id', docId)
+    if (error) throw error
+    logAuditReal({ entityType: 'document', entityId: docId, caseId, action: 'update', summary: `Labelled a saved document "${name}"`, changedBy: changedBy.id })
+  },
+
   async addDocument(doc: Omit<CaseDocument, 'id' | 'uploadedAt'>, changedBy: StaffMember): Promise<CaseDocument> {
     if (USE_MOCK) return delay(mockStore.addDocument(doc, changedBy))
     const { data, error } = await supabase!.from('case_documents').insert(documentToRow(doc)).select().single()

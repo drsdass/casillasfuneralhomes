@@ -349,6 +349,10 @@ export const mockStore = {
   // -----------------------------------------------------------------
   getCaseDocuments: (caseId: string): CaseDocument[] => documentStore.filter((d) => d.caseId === caseId),
 
+  labelDocument(id: string, name: string, category: CaseDocument['category']): void {
+    documentStore = documentStore.map((d) => (d.id === id ? { ...d, name, category } : d))
+  },
+
   addDocument(doc: Omit<CaseDocument, 'id' | 'uploadedAt'>, changedBy: StaffMember): CaseDocument {
     const full: CaseDocument = { ...doc, id: newId('doc'), uploadedAt: new Date().toISOString() }
     documentStore = [...documentStore, full]

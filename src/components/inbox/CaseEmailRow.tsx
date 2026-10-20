@@ -4,7 +4,34 @@ import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { Mail, Paperclip, ChevronDown, ChevronRight, Save, Check, FileSearch, Loader2, Send } from 'lucide-react'
 import { api } from '@/lib/api'
-import type { ExtractedCaseData, InboundEmail, StaffMember } from '@/types'
+import type { CaseDocument, ExtractedCaseData, InboundEmail, StaffMember } from '@/types'
+
+// Quick labels for the paperwork a funeral home sees most. Tap one, or type your own.
+const QUICK_LABELS: { label: string; category: CaseDocument['category'] }[] = [
+  { label: 'Death Certificate', category: 'permit' },
+  { label: 'Medical Certificate / Cause of Death', category: 'permit' },
+  { label: 'Burial Permit', category: 'permit' },
+  { label: 'Cremation Permit', category: 'permit' },
+  { label: 'Cremation Authorization', category: 'authorization' },
+  { label: 'Embalming Authorization', category: 'authorization' },
+  { label: 'Release of Remains', category: 'authorization' },
+  { label: 'Vital Statistics Worksheet', category: 'other' },
+  { label: 'Statement of Goods & Services', category: 'contract' },
+  { label: 'Pre-Need Contract', category: 'contract' },
+  { label: 'Cemetery / Plot Paperwork', category: 'contract' },
+  { label: 'Insurance Policy', category: 'contract' },
+  { label: 'Veteran DD-214', category: 'other' },
+  { label: 'Photo ID / Driver License', category: 'other' },
+  { label: 'Social Security Info', category: 'other' },
+  { label: 'Obituary', category: 'obituary' },
+  { label: 'Service Program', category: 'other' },
+  { label: 'Family Photo', category: 'photo' },
+  { label: 'Music', category: 'music' },
+  { label: 'Video', category: 'video' },
+  { label: 'Payment / Receipt', category: 'other' },
+  { label: 'Medical Records', category: 'other' },
+]
+const extOf = (f: string) => (f.includes('.') ? f.slice(f.lastIndexOf('.')) : '')
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -19,19 +46,28 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
   const [extracted, setExtracted] = useState<Record<string, ExtractedCaseData>>({})
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
+  // Which attachment is being labelled right now, and what the person has chosen/typed.
+  const [labelling, setLabelling] = useState<string | null>(null)
+  const [labelText, setLabelText] = useState('')
+  const [labelCat, setLabelCat] = useState<CaseDocument['category']>('other')
 
   const attachmentMutation = useMutation({
-    mutationFn: (p: { att: InboundEmail['attachments'][number]; action: 'extract' | 'save' }) => {
+    mutationFn: async (p: { att: InboundEmail['attachments'][number]; action: 'extract' | 'save'; label?: string; category?: CaseDocument['category'] }) => {
       setPending(p.att.id); setError('')
-      return api.actOnEmailAttachment({
+      const res = await api.actOnEmailAttachment({
         graphMessageId: email.graphMessageId, attachmentId: p.att.id, filename: p.att.filename,
         contentType: p.att.contentType, action: p.action, caseId, changedBy: currentUser,
       })
+      if (res.action === 'save' && p.label?.trim()) {
+        const name = p.label.trim() + (extOf(p.att.filename) && !p.label.trim().toLowerCase().endsWith(extOf(p.att.filename).toLowerCase()) ? extOf(p.att.filename) : '')
+        await api.labelCaseDocument(res.document.id, caseId, name, p.category ?? 'other', currentUser)
+      }
+      return res
     },
     onSuccess: (result, v) => {
       setPending(null)
       if (result.action === 'extract') setExtracted((prev) => ({ ...prev, [v.att.id]: result.extracted }))
-      else { setSaved((prev) => new Set(prev).add(v.att.id)); qc.invalidateQueries({ queryKey: ['case-documents', caseId] }) }
+      else { setLabelling(null); setSaved((prev) => new Set(prev).add(v.att.id)); qc.invalidateQueries({ queryKey: ['case-documents', caseId] }) }
     },
     onError: (e) => { setPending(null); setError(e instanceof Error ? e.message : 'Could not do that. Please try again.') },
   })
@@ -82,7 +118,7 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
                         <span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><Loader2 size={12} className="animate-spin" /> Working…</span>
                       ) : (
                         <>
-                          <button onClick={() => attachmentMutation.mutate({ att, action: 'save' })} disabled={isSaved}
+                          <button onClick={() => { setLabelling(att.id); setLabelText(att.filename.replace(/\.[^.]+$/, '')); setLabelCat('other') }} disabled={isSaved}
                             className="inline-flex items-center gap-1 text-xs font-medium text-white bg-[#3b4a35] rounded-md px-2.5 py-1.5 hover:bg-[#4d5f45] disabled:opacity-60">
                             {isSaved ? <Check size={12} /> : <Save size={12} />} {isSaved ? 'Saved to Documents' : 'Save to Case'}
                           </button>
@@ -95,6 +131,24 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
                     </div>
                   )}
                 </div>
+                {labelling === att.id && !isSaved && (
+                  <div className="mt-2 rounded-md border border-[#3b4a35]/30 bg-[#3b4a35]/5 p-3 space-y-2">
+                    <div className="text-xs font-semibold text-slate-700">What is this document? Tap one, or type your own name:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {QUICK_LABELS.map((q) => (
+                        <button key={q.label} onClick={() => { setLabelText(q.label); setLabelCat(q.category) }}
+                          className={`text-xs rounded-full border px-2.5 py-1 ${labelText === q.label ? 'bg-[#3b4a35] text-white border-[#3b4a35]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>{q.label}</button>
+                      ))}
+                    </div>
+                    <input value={labelText} onChange={(e) => setLabelText(e.target.value)} placeholder="Or type a name, e.g. Mom's insurance policy"
+                      className="w-full border border-slate-200 rounded-md px-3 py-2 text-sm bg-white" />
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => setLabelling(null)} className="text-xs px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 bg-white">Cancel</button>
+                      <button onClick={() => attachmentMutation.mutate({ att, action: 'save', label: labelText, category: labelCat })} disabled={!labelText.trim()}
+                        className="text-xs font-medium px-3 py-1.5 rounded-md bg-[#3b4a35] text-white disabled:opacity-50">Save as “{labelText.trim() || '…'}”</button>
+                    </div>
+                  </div>
+                )}
                 {ex && (
                   <div className="mt-2 text-xs bg-[#b3925a]/5 border border-[#b3925a]/20 rounded-md px-2.5 py-2 text-slate-600">
                     <div className="font-medium text-slate-700 mb-1">What I found ({ex.confidence} confidence) — please check before using:</div>
