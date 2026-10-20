@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, Fragment } from 'react'
+import { PresenceDot, usePresence } from '@/components/presence/Presence'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
@@ -33,6 +34,7 @@ export default function AdminPage() {
 
   const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.getLocations })
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
+  const presence = usePresence()
   const { data: vendors = [] } = useQuery({ queryKey: ['vendors'], queryFn: api.getVendors })
   const { data: taskTemplates = [] } = useQuery({ queryKey: ['task-templates'], queryFn: api.getTaskTemplates })
   const { data: auditLog = [] } = useQuery({
@@ -202,7 +204,7 @@ export default function AdminPage() {
                             {s.name.split(' ').map((n) => n[0]).join('')}
                           </div>
                           <div>
-                            <div className="font-medium text-slate-900">{s.name}</div>
+                            <div className="font-medium text-slate-900 flex items-center gap-2">{s.name} <PresenceDot info={presence.get(s.id)} showText /></div>
                             <div className="text-xs text-slate-500">{s.title}{s.department && ` · ${s.department}`}</div>
                           </div>
                         </div>

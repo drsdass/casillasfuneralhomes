@@ -10,6 +10,7 @@ import type {
 } from '@/types'
 import { locations as mockLocations } from '@/data/mockData'
 import { getCompanyName } from '@/lib/company'
+import type { PresenceDevice, PresenceRow } from '@/lib/presence'
 import {
   caseToRow, rowToCase, contactToRow, rowToStaff, documentToRow, rowToDocument,
   eventToRow, rowToEvent, rowToGplItem, rowToContract, rowToVehicle,
@@ -241,6 +242,22 @@ export const api = {
     const { data, error } = await supabase!.from('staff_members').select('*, staff_locations(location_id)')
     if (error) throw error
     return (data ?? []).map(rowToStaff)
+  },
+
+  // "Who is online" — see src/db/presence.sql.
+  async touchPresence(userId: string, device: PresenceDevice): Promise<void> {
+    if (USE_MOCK) { mockStore.presenceTouch(userId, device); return }
+    await supabase!.rpc('touch_presence', { p_device: device })
+  },
+  async clearPresence(userId: string): Promise<void> {
+    if (USE_MOCK) { mockStore.presenceClear(userId); return }
+    await supabase!.rpc('clear_presence')
+  },
+  async getPresence(): Promise<PresenceRow[]> {
+    if (USE_MOCK) return delay(mockStore.getPresence())
+    const { data, error } = await supabase!.rpc('presence_list')
+    if (error) throw error
+    return (data ?? []).map((r: { staff_id: string; device: PresenceDevice; online: boolean; last_seen: string }) => ({ staffId: r.staff_id, device: r.device, online: r.online, lastSeen: r.last_seen }))
   },
 
   /** Only callable by super_admin in the UI — enforced there and by a DB trigger (see schema.sql). */

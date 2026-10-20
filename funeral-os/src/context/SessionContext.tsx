@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react'
 import { staff as mockStaff, locations as mockLocations, organizations as mockOrganizations } from '@/data/mockData'
+import { mockStore } from '@/data/mockStore'
 import { supabase, USE_MOCK, getStoredOrgId, storeOrgId } from '@/lib/supabase'
 import type { StaffMember, Location, UserRole, Organization } from '@/types'
 import { canViewAllLocations } from '@/lib/permissions'
@@ -203,8 +204,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     if (!USE_MOCK) {
-      supabase!.auth.signOut()
+      // Turn this person red ("offline") right away, then sign out.
+      Promise.resolve(supabase!.rpc('clear_presence')).catch(() => undefined).finally(() => { supabase!.auth.signOut() })
     } else {
+      if (currentUser) mockStore.presenceClear(currentUser.id)
       localStorage.removeItem(STORAGE_KEY)
     }
     storeOrgId(null)

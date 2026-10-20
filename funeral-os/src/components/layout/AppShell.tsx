@@ -17,6 +17,7 @@ import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import { VoiceNoteButton } from '@/components/ui/VoiceNote'
+import { PresenceHeartbeat, WhoIsOnline } from '@/components/presence/Presence'
 import { NewEmailAlerts } from '@/components/layout/NewEmailAlerts'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
@@ -254,13 +255,14 @@ export default function AppShell() {
               <Menu size={22} />
             </button>
             {organizations.length > 1 && activeOrg && (
-              <span className="shrink-0 rounded-full bg-[#3b4a35] px-3 py-1 text-xs font-semibold text-white" title="The company you are working in">{activeOrg.name}</span>
+              <span className="shrink-0 rounded-full bg-[#3b4a35] px-3 py-1 text-xs font-semibold text-white" title="The company you are working in"><span className="sm:hidden">{activeOrg.name.replace(/\s*Funeral Home$/i, '')}</span><span className="hidden sm:inline">{activeOrg.name}</span></span>
             )}
             <div className="hidden md:block text-sm text-slate-500 truncate">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <WhoIsOnline />
             {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}
@@ -308,6 +310,7 @@ export default function AppShell() {
         </main>
       </div>
 
+      <PresenceHeartbeat />
       {visibleNavKeys(currentUser).includes('inbox') && <NewEmailAlerts userId={currentUser.id} orgs={organizations.map((o) => ({ id: o.id, name: o.name }))} activeOrgId={activeOrg?.id} onSwitchOrg={switchOrg} />}
 
       {toast && (
