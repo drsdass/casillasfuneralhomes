@@ -3,7 +3,7 @@ import { mockStore } from '@/data/mockStore'
 import { TASK_STATUS_LABELS, CUSTODY_STAGE_LABELS } from '@/types'
 import type {
   FuneralCase, Location, StaffMember, CaseTask, CaseNote, CaseDocument,
-  GplItem, Contract, CalendarEvent, CustodyLogEntry, CustodyStage, UserRole,
+  GplItem, GplCategory, Contract, CalendarEvent, CustodyLogEntry, CustodyStage, UserRole,
   Vehicle, SchedulingConflict, Payment, PaymentMethod, AuditLogEntry, ServiceOrder, OrderStatus, TaskStatus,
   InboundEmail, SignatureRequest, ExtractedCaseData, StaffTimeOff, ChatMessage, ChatConversation,
   Family, FamilyInteraction, FamilyInteractionType, Vendor, VitalSheetInfo, TaskTemplate,
@@ -77,6 +77,8 @@ async function ssnEncryptionReady(): Promise<boolean> {
   ssnEncryptionKnownReady = !missing
   return ssnEncryptionKnownReady
 }
+
+function formatMoneyPlain(n: number) { return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 
 async function logAuditReal(entry: {
   entityType: AuditLogEntry['entityType']
@@ -737,6 +739,37 @@ export const api = {
     const { data, error } = await query
     if (error) throw error
     return (data ?? []).map(rowToGplItem)
+  },
+
+  /** Price-list editing (super admin). New items get the location's company automatically. */
+  async createGplItem(input: { locationId: string; sku?: string; name: string; category: GplCategory; price: number; taxable: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.createGplItem(input, changedBy); return }
+    const { data: loc, error: locErr } = await supabase!.from('locations').select('org_id').eq('id', input.locationId).single()
+    if (locErr) throw locErr
+    const { data, error } = await supabase!.from('gpl_items').insert({
+      org_id: loc.org_id, location_id: input.locationId, sku: input.sku || null, name: input.name,
+      category: input.category, price: input.price, taxable: input.taxable, active: true,
+    }).select('id').single()
+    if (error) throw error
+    logAuditReal({ entityType: 'contract', entityId: data.id, action: 'create', summary: `Added "${input.name}" to the price list at ${formatMoneyPlain(input.price)}`, changedBy: changedBy.id })
+  },
+
+  async updateGplItem(id: string, before: GplItem, patch: { sku?: string; name?: string; category?: GplCategory; price?: number; taxable?: boolean; active?: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateGplItem(id, patch, changedBy); return }
+    const row: Record<string, unknown> = {}
+    if (patch.sku !== undefined) row.sku = patch.sku || null
+    if (patch.name !== undefined) row.name = patch.name
+    if (patch.category !== undefined) row.category = patch.category
+    if (patch.price !== undefined) row.price = patch.price
+    if (patch.taxable !== undefined) row.taxable = patch.taxable
+    if (patch.active !== undefined) row.active = patch.active
+    const { error } = await supabase!.from('gpl_items').update(row).eq('id', id)
+    if (error) throw error
+    const bits: string[] = []
+    if (patch.price !== undefined && patch.price !== before.price) bits.push(`price ${formatMoneyPlain(before.price)} \u2192 ${formatMoneyPlain(patch.price)}`)
+    if (patch.name !== undefined && patch.name !== before.name) bits.push(`name "${before.name}" \u2192 "${patch.name}"`)
+    if (patch.active !== undefined && patch.active !== before.active) bits.push(patch.active ? 'shown again' : 'hidden')
+    logAuditReal({ entityType: 'contract', entityId: id, action: 'update', summary: `Price list "${before.name}": ${bits.join(', ') || 'details updated'}`, changedBy: changedBy.id })
   },
 
   async getContracts(): Promise<Contract[]> {
@@ -1830,6 +1863,14 @@ export const api = {
   },
 
   /** Fire-and-forget, same reasoning as notifySlack — a failed text should never block or fail the case action that triggered it. */
+  async sendFamilyPortalText(toPhone: string, message: string): Promise<void> {
+    if (USE_MOCK) return
+    const { data, error } = await supabase!.functions.invoke('notify-family-sms', { body: { toPhone, message } })
+    if (error) throw new Error(error.message || 'The text could not be sent.')
+    if (data?.skipped) throw new Error('Texting is not set up yet (Twilio details are missing in Supabase).')
+    if (data?.sent === false) throw new Error(String(data.error ?? 'The text could not be sent.').slice(0, 200))
+  },
+
   async notifyFamilySms(toPhone: string, message: string): Promise<void> {
     if (USE_MOCK) return // no-op in demo mode
     try {

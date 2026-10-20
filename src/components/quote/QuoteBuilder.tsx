@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Card, formatCurrency } from '@/components/ui/Primitives'
-import { Plus, Printer, Mail, X, Trash2, Tag, DollarSign, PenTool } from 'lucide-react'
+import { Plus, Printer, Mail, X, Trash2, Tag, DollarSign, PenTool, Check } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import type { FuneralCase, Contract, GplItem, GplCategory, PaymentMethod, StaffMember } from '@/types'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -57,7 +57,10 @@ export function QuoteBuilder({ caseObj, contract, gplItems, canEdit, currentUser
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
   const balanceDue = grandTotal - totalPaid
 
-  const grouped = gplItems.reduce<Record<GplCategory, GplItem[]>>((acc, item) => {
+  const activeItems = gplItems.filter((g) => g.active !== false)
+  const addedLine = (gplId: string) => lineItems.find((li) => li.gplItemId === gplId && !li.serviceOrderId)
+  const addedCount = lineItems.filter((li) => li.gplItemId && !li.serviceOrderId).length
+  const grouped = activeItems.reduce<Record<GplCategory, GplItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ? [...acc[item.category], item] : [item]
     return acc
   }, {} as Record<GplCategory, GplItem[]>)
@@ -101,22 +104,35 @@ export function QuoteBuilder({ caseObj, contract, gplItems, canEdit, currentUser
       </p>
 
       {showPriceList && (
-        <div className="border border-slate-100 rounded-md p-3 mb-4 max-h-64 overflow-y-auto space-y-3">
+        <div className="border border-slate-100 rounded-md p-3 mb-4 max-h-80 overflow-y-auto space-y-3 bg-white">
+          <div className="sticky top-0 -mt-1 pb-1 bg-white flex items-center justify-between text-xs">
+            <span className="text-slate-500">Tap an item to add it. Tap again to take it off.</span>
+            <span className="flex items-center gap-2"><span className="font-semibold text-emerald-700">{addedCount} added</span><button onClick={() => setShowPriceList(false)} className="font-medium text-white bg-[#3b4a35] rounded px-2 py-1">Done</button></span>
+          </div>
           {(Object.keys(categoryLabels) as GplCategory[]).map((cat) => (
             grouped[cat]?.length ? (
               <div key={cat}>
                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{categoryLabels[cat]}</div>
                 <div className="space-y-0.5">
-                  {grouped[cat].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => onAddGplItem({ id: item.id, name: item.name, price: item.price })}
-                      className="w-full flex items-center justify-between text-left text-sm px-2 py-1.5 rounded hover:bg-slate-50"
-                    >
-                      <span className="flex items-center gap-1.5 text-slate-700"><Plus size={11} className="text-slate-400" /> {item.name}</span>
-                      <span className="text-slate-500">{formatCurrency(item.price)}</span>
-                    </button>
-                  ))}
+                  {grouped[cat].map((item) => {
+                    const line = addedLine(item.id)
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => (line ? onRemoveLine(line.id) : onAddGplItem({ id: item.id, name: item.name, price: item.price }))}
+                        className={`w-full flex items-center justify-between gap-3 text-left text-sm px-2.5 py-2 rounded-md border transition ${line ? 'bg-emerald-50 border-emerald-300' : 'border-transparent hover:bg-slate-50 hover:border-slate-200'}`}
+                      >
+                        <span className="flex items-center gap-2.5 text-slate-800 min-w-0">
+                          <span className={`h-5 w-5 shrink-0 rounded border flex items-center justify-center ${line ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check size={13} strokeWidth={3} /></span>
+                          <span className="truncate">{item.name}</span>
+                        </span>
+                        <span className="shrink-0 flex items-center gap-2">
+                          {line && <span className="text-xs font-semibold text-emerald-700">Added · tap to remove</span>}
+                          <span className="text-slate-600">{formatCurrency(item.price)}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ) : null

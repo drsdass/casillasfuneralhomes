@@ -213,6 +213,17 @@ export default function CaseDetail() {
     },
   })
 
+  const [textMsg, setTextMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const textLinkMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const link = generatedLink ?? (await api.createFamilyPortalLink(caseId!, c?.contacts[0]?.id, 90, currentUser!)).url
+      setGeneratedLink(link)
+      await api.sendFamilyPortalText(phone, `${getCompanyName()}: here is your private link to review and share information about your loved one: ${link}`)
+    },
+    onSuccess: () => setTextMsg({ ok: true, text: 'Text sent.' }),
+    onError: (e) => setTextMsg({ ok: false, text: `Text not sent: ${getErrorMessage(e)}` }),
+  })
+
   const reopenIntakeMutation = useMutation({
     mutationFn: () => api.reopenFamilyIntake(caseId!, currentUser!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case', caseId] }),
@@ -513,6 +524,20 @@ export default function CaseDetail() {
                 </button>
               </div>
             )}
+            {(() => {
+              const phone = c.contacts.find((x) => x.phone)?.phone
+              const who = c.contacts.find((x) => x.phone)?.name
+              return phone ? (
+                <button
+                  onClick={() => { setTextMsg(null); textLinkMutation.mutate(phone) }}
+                  disabled={textLinkMutation.isPending}
+                  className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-white bg-[#3b4a35] rounded-md py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
+                >
+                  {textLinkMutation.isPending ? 'Sending…' : `Text link to ${who ?? 'family'} (${phone})`}
+                </button>
+              ) : <div className="mt-2 text-xs text-slate-400">Add a phone number to a family contact to text them the link.</div>
+            })()}
+            {textMsg && <div className={`mt-2 text-xs ${textMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>{textMsg.text}</div>}
             {generateLinkMutation.isError && (
               <div className="mt-2 text-xs text-red-600">
                 Couldn't generate a link: {getErrorMessage(generateLinkMutation.error)}

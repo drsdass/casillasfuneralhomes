@@ -92,3 +92,8 @@ export const TOGGLEABLE_FEATURES: { key: string; label: string }[] = [
   { key: 'board', label: 'TV Board' },
   { key: 'admin', label: 'Admin' },
 ]
+
+/** Editing the price list (names, prices, adding/hiding items): super admin only. */
+export function canEditPriceList(role: UserRole): boolean {
+  return role === 'super_admin'
+}

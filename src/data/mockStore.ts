@@ -405,6 +405,15 @@ export const mockStore = {
   // GPL
   // -----------------------------------------------------------------
   getGplItems: (): GplItem[] => gplStore,
+  createGplItem(input: { locationId: string; sku?: string; name: string; category: GplItem['category']; price: number; taxable: boolean }, changedBy: StaffMember): void {
+    const org = gplStore[0]?.orgId ?? ''
+    gplStore = [...gplStore, { id: newId('gpl'), orgId: org, active: true, ...input, sku: input.sku ?? '' }]
+    logAudit({ entityType: 'contract', entityId: 'gpl', action: 'create', summary: `Added "${input.name}" to the price list`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+  updateGplItem(id: string, patch: Partial<GplItem>, changedBy: StaffMember): void {
+    gplStore = gplStore.map((g) => (g.id === id ? { ...g, ...patch } : g))
+    logAudit({ entityType: 'contract', entityId: id, action: 'update', summary: 'Updated a price list item', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
 
   // -----------------------------------------------------------------
   // Contracts / invoices / payments
