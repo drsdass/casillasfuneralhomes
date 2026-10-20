@@ -3,6 +3,7 @@
 --   * Setting a case's status to Completed                      ->  it moves to the Completed column.
 --   * Moving a finished case back to an earlier stage            ->  status goes back to In Progress.
 --   * Arriving at the Funeral Home (or any later stage) while still "First Call"  ->  status becomes Arrangement Pending.
+--   * Moving back to Scene or In Transit while "Arrangement Pending"  ->  status goes back to First Call.
 --   * Changing a finished case's status back to anything else    ->  it moves back to Funeral Home.
 -- Run once in the Supabase SQL editor. Also tidies existing cases (see the last statement).
 
@@ -18,6 +19,9 @@ begin
     elsif new.status = 'first_call' and new.custody_stage not in ('scene_first_call', 'in_transit') then
       -- the decedent has arrived at the funeral home (or beyond): the First Call stage is over
       new.status := 'arrangement_pending';
+    elsif new.status = 'arrangement_pending' and new.custody_stage in ('scene_first_call', 'in_transit') then
+      -- moved back to the scene / in transit: it is a First Call again
+      new.status := 'first_call';
     elsif old_done and not new_done and new.status = 'completed' and new.status = old.status then
       new.status := 'in_progress';
     end if;
