@@ -15,6 +15,7 @@ import { canEditCases } from '@/lib/permissions'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
+import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
@@ -428,6 +429,8 @@ export default function CaseDetail() {
           </div>
         )
       })()}
+
+      <div className="mt-4"><FamilyActivityCard c={c} currentUser={currentUser!} /></div>
 
       {/* Tabs */}
       <div className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5">

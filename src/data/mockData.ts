@@ -95,7 +95,7 @@ export const staff: StaffMember[] = [
 
 export const cases: FuneralCase[] = [
   {
-    id: 'case-1', orgId: 'org-1', locationId: 'loc-1', familyId: 'fam-1', caseNumber: 'CC-2026-041',
+    id: 'case-1', orgId: 'org-1', locationId: 'loc-1', familyId: 'fam-1', caseNumber: 'CC-2026-041', familyUnseen: true, familyActivityAt: '2026-10-19T20:15:00.000Z', familyActivityNote: 'Family uploaded a photo for the slideshow: "dad_photo_1.jpg"',
     type: 'at_need', status: 'arrangement_scheduled', disposition: 'burial',
     decedent: { firstName: 'Harold', lastName: 'Bennett', dateOfBirth: '1944-03-12', dateOfDeath: '2026-07-08', placeOfDeath: 'Desert Regional Medical Center', sex: 'male', maritalStatus: 'widowed', veteran: true },
     contacts: [{ id: 'c-1', name: 'Karen Bennett', relationship: 'Daughter', phone: '(760) 555-2201', email: 'karen.b@email.com', isPrimary: true, isAuthorizingAgent: true }],

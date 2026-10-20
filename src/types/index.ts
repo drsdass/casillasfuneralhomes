@@ -339,6 +339,10 @@ export interface FuneralCase {
   serviceLocation?: string
   color?: string // whiteboard color coding
   custodyStage: CustodyStage
+  /** Set when the family changes something in their portal; cleared when staff tap "Got it". */
+  familyUnseen?: boolean
+  familyActivityAt?: string
+  familyActivityNote?: string
   createdAt: string
   updatedAt: string
 }

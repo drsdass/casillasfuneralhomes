@@ -1702,7 +1702,7 @@ export const api = {
 
   /** Public — no auth. This is what the family's browser actually calls. */
   async getFamilyPortalData(token: string): Promise<{
-    case: FuneralCase; location: Location; gplItems: GplItem[]; contracts: Contract[]; mediaFiles: CaseDocument[]; statusMessage: string | null
+    case: FuneralCase; location: Location; gplItems: GplItem[]; contracts: Contract[]; mediaFiles: CaseDocument[]; statusMessage: string | null; obituaryBody?: string
   }> {
     if (USE_MOCK) {
       // Mock mode: treat the "token" as a case ID directly, so the demo
@@ -1738,6 +1738,7 @@ export const api = {
       contracts: (data.contracts ?? []).map(rowToContract),
       mediaFiles: (data.mediaFiles ?? []).map(rowToDocument),
       statusMessage: data.statusMessage,
+      obituaryBody: data.obituary?.body ?? undefined,
     }
   },
 
@@ -1783,6 +1784,37 @@ export const api = {
       }
       throw error
     }
+  },
+
+  /** Staff: what the family has written in their portal (obituary draft, messages). */
+  async getFamilyActivity(caseId: string): Promise<{ obituary?: { body: string; updatedAt: string }; messages: { id: string; body: string; createdAt: string }[] }> {
+    if (USE_MOCK) return { messages: [] }
+    const [{ data: ob }, { data: msgs }] = await Promise.all([
+      supabase!.from('obituary_drafts').select('body, updated_at').eq('case_id', caseId).maybeSingle(),
+      supabase!.from('family_messages').select('id, body, created_at').eq('case_id', caseId).order('created_at', { ascending: false }),
+    ])
+    return {
+      obituary: ob?.body ? { body: ob.body, updatedAt: ob.updated_at } : undefined,
+      messages: (msgs ?? []).map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at })),
+    }
+  },
+
+  async markFamilySeen(caseId: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateCase(caseId, { familyUnseen: false }, changedBy); return }
+    const { error } = await supabase!.from('cases').update({ family_unseen: false }).eq('id', caseId)
+    if (error) throw error
+  },
+
+  /** Public — no auth. The family saves their obituary draft or sends a message to the funeral home. */
+  async sendFamilyPortalNote(token: string, action: 'obituary' | 'message', text: string): Promise<void> {
+    if (USE_MOCK) return
+    const { data, error } = await supabase!.functions.invoke('family-portal-note', { body: { token, action, text } })
+    if (error) {
+      const context = (error as { context?: Response }).context
+      if (context) { try { const b = await context.clone().json(); if (b?.error) throw new Error(b.error) } catch (e) { if (e instanceof Error && e.message !== error.message) throw e } }
+      throw error
+    }
+    if (data?.error) throw new Error(data.error)
   },
 
   /** Public — no auth. Lets a family member upload a photo or song for the memorial slideshow through their portal link. Uses a direct fetch() rather than supabase.functions.invoke() — checks the real HTTP status/body itself instead of trusting the SDK wrapper to detect failures, since that wasn't reliably surfacing errors for this specific request. */

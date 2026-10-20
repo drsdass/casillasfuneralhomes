@@ -106,6 +106,22 @@ Deno.serve(async (req) => {
       return json(await deliver(ids, orgId, { kind: 'email', title: count > 1 ? 'New emails' : 'New email', body: text, path: '/inbox', tag: 'email' }))
     }
 
+    // ---- The family filled something in on their portal (server only; the database sends this) ----
+    if (type === 'family') {
+      if (!trusted) return json({ error: 'Not allowed' }, 403)
+      const caseId = String(body.caseId ?? '')
+      const { data: c } = await supabase.from('cases').select('*').eq('id', caseId).maybeSingle()
+      if (!c) return json({ error: 'Case not found' }, 404)
+      const name = `${c.decedent_first_name ?? ''} ${c.decedent_last_name ?? ''}`.trim() || 'a case'
+      const { data: locRows } = await supabase.from('staff_locations').select('staff_id').eq('location_id', c.location_id)
+      const atLocation = new Set((locRows ?? []).map((r) => r.staff_id as string))
+      const { data: people } = await supabase.from('staff_members').select('id, org_id, role, all_companies, active')
+        .eq('active', true).or(`org_id.eq.${c.org_id},all_companies.eq.true`)
+      const ids = (people ?? []).filter((s) => (s.org_id === c.org_id && (atLocation.has(s.id) || RANK[s.role] >= RANK.admin)) || (s.all_companies && RANK[s.role] >= RANK.admin)).map((s) => s.id as string)
+      const note = String(body.note ?? 'The family updated their portal').replace(/^Family\s+/i, 'Family ')
+      return json(await deliver(ids, c.org_id, { kind: 'case', title: `Family update \u2014 ${name}`, body: trim(note, 120), path: `/cases/${caseId}`, tag: `family-${caseId}` }))
+    }
+
     if (!caller) return json({ error: 'Not allowed' }, 403)
 
     // ---- "Send me a test" button: only to the caller's own devices ----

@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { resolveName } from '@/lib/vitalFields'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Image as ImageIcon, MessageSquare, PenLine, Check,
   Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music, Video, Play, Pause,
@@ -43,6 +43,15 @@ export default function FamilyPortal() {
   const { t } = useLanguage()
   const [active, setActive] = useState<typeof sectionKeys[number]>('intake')
   const [obituaryText, setObituaryText] = useState('')
+  const [noteError, setNoteError] = useState('')
+  const [msgText, setMsgText] = useState('')
+  const [msgSent, setMsgSent] = useState(false)
+  const noteMutation = useMutation({
+    mutationFn: ({ action, text }: { action: 'obituary' | 'message'; text: string }) => api.sendFamilyPortalNote(token!, action, text),
+    onMutate: () => setNoteError(''),
+    onSuccess: (_d, v) => { if (v.action === 'obituary') setSaved(true); else { setMsgSent(true); setMsgText('') } },
+    onError: (e) => setNoteError(e instanceof Error ? e.message : 'Something went wrong — please try again.'),
+  })
   const [saved, setSaved] = useState(false)
   const [cardNumber, setCardNumber] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
@@ -111,6 +120,11 @@ export default function FamilyPortal() {
     retry: false,
   })
   const c = data?.case
+  // Coming back later: show what the family already saved instead of an empty box.
+  const obitLoaded = useRef(false)
+  useEffect(() => {
+    if (data?.obituaryBody && !obitLoaded.current) { obitLoaded.current = true; setObituaryText(data.obituaryBody) }
+  }, [data])
 
   useEffect(() => {
     if (c && c.intakeOpenForFamily === false && active === 'intake') setActive('vitalSheet')
@@ -499,12 +513,14 @@ export default function FamilyPortal() {
               <div className="flex items-center justify-between mt-3">
                 <button className="text-sm text-slate-500 hover:text-slate-700">{t('familyPortal.obituary.aiHelp')}</button>
                 <button
-                  onClick={() => setSaved(true)}
-                  className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition"
+                  onClick={() => noteMutation.mutate({ action: 'obituary', text: obituaryText })}
+                  disabled={noteMutation.isPending || !obituaryText.trim()}
+                  className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition disabled:opacity-60"
                 >
                   {saved ? <Check size={15} /> : null} {saved ? t('familyPortal.obituary.saved') : t('familyPortal.obituary.save')}
                 </button>
               </div>
+              {active === 'obituary' && noteError && <div className="text-sm text-red-600 mt-2">{noteError}</div>}
             </div>
           )}
 
@@ -724,14 +740,18 @@ export default function FamilyPortal() {
             <div>
               <h2 className="font-display text-lg font-semibold text-[#3b4a35] mb-1">{t('familyPortal.messages.title')}</h2>
               <p className="text-sm text-slate-500 mb-4">{t('familyPortal.messages.subtitle')}</p>
-              <div className="text-sm text-slate-400 text-center py-10">{t('familyPortal.messages.noMessages')}</div>
+              {msgSent ? <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-3 mb-3">Thank you — your message was sent to the funeral home. We will reply as soon as we can.</div>
+                : <div className="text-sm text-slate-400 text-center py-10">{t('familyPortal.messages.noMessages')}</div>}
               <div className="flex gap-2">
                 <input
+                  value={msgText}
+                  onChange={(e) => { setMsgText(e.target.value); setMsgSent(false) }}
                   placeholder={t('familyPortal.messages.placeholder')}
                   className="flex-1 border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]"
                 />
-                <button className="bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition">{t('familyPortal.messages.send')}</button>
+                <button onClick={() => noteMutation.mutate({ action: 'message', text: msgText })} disabled={noteMutation.isPending || !msgText.trim()} className="bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition disabled:opacity-60">{t('familyPortal.messages.send')}</button>
               </div>
+              {noteError && <div className="text-sm text-red-600 mt-2">{noteError}</div>}
             </div>
           )}
         </div>
