@@ -114,6 +114,12 @@ export default function CaseDetail() {
     },
   })
 
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNoteText, setEditingNoteText] = useState('')
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { body?: string; isSpecialRequest?: boolean } }) => api.updateNote(id, patch, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-notes', caseId] }); setEditingNoteId(null) },
+  })
   const [noteIsSpecialRequest, setNoteIsSpecialRequest] = useState(false)
   const addNoteMutation = useMutation({
     mutationFn: (body: string) => api.addNote(caseId!, currentUser!, body, noteIsSpecialRequest),
@@ -869,7 +875,31 @@ export default function CaseDetail() {
                   <span className="font-medium text-slate-700">{n.authorName}</span>
                   <span>· {format(parseISO(n.createdAt), 'MMM d, h:mm a')}</span>
                 </div>
-                <p className="text-sm text-slate-800">{n.body}</p>
+                {editingNoteId === n.id ? (
+                  <div className="space-y-2">
+                    <textarea value={editingNoteText} onChange={(e) => setEditingNoteText(e.target.value)} rows={3}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+                    <div className="flex gap-2">
+                      <button type="button" disabled={!editingNoteText.trim() || updateNoteMutation.isPending}
+                        onClick={() => updateNoteMutation.mutate({ id: n.id, patch: { body: editingNoteText.trim() } })}
+                        className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">Save</button>
+                      <button type="button" onClick={() => setEditingNoteId(null)} className="text-sm rounded-md border border-slate-300 px-3 py-1.5 text-slate-600">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-800">{n.body}</p>
+                )}
+                {canEdit && editingNoteId !== n.id && (
+                  <div className="flex items-center gap-4 mt-1.5 text-xs">
+                    <button type="button" onClick={() => { setEditingNoteId(n.id); setEditingNoteText(n.body) }}
+                      className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"><Pencil size={12} /> Edit</button>
+                    <button type="button" disabled={updateNoteMutation.isPending}
+                      onClick={() => updateNoteMutation.mutate({ id: n.id, patch: { isSpecialRequest: !n.isSpecialRequest } })}
+                      className={`inline-flex items-center gap-1 ${n.isSpecialRequest ? 'text-slate-500 hover:text-slate-800' : 'text-amber-700 hover:text-amber-900 font-medium'}`}>
+                      <AlertTriangle size={12} /> {n.isSpecialRequest ? 'Remove Special Request' : 'Make this a Special Request (show on TV Board)'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {notes.length === 0 && <div className="text-sm text-slate-400 text-center py-6">No notes yet.</div>}

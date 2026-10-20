@@ -245,6 +245,12 @@ export const mockStore = {
       }
       return updated
     })
+    // Moving a case to another location carries its invoice and calendar events with it.
+    if (updated && patch.locationId) {
+      const loc = patch.locationId
+      contractStore = contractStore.map((k) => (k.caseId === id ? { ...k, locationId: loc } : k))
+      eventStore = eventStore.map((e) => (e.caseId === id ? { ...e, locationId: loc } : e))
+    }
     if (updated) {
       logAudit({
         entityType: 'case', entityId: id, caseId: id, action: 'update',
@@ -335,6 +341,12 @@ export const mockStore = {
   // Notes
   // -----------------------------------------------------------------
   getCaseNotes: (caseId: string): CaseNote[] => noteStore.filter((n) => n.caseId === caseId),
+
+  updateNote(id: string, patch: { body?: string; isSpecialRequest?: boolean }, changedBy: StaffMember): void {
+    let caseId = ''
+    noteStore = noteStore.map((n) => { if (n.id !== id) return n; caseId = n.caseId; return { ...n, ...patch } })
+    logAudit({ entityType: 'note', entityId: id, caseId, action: 'update', summary: 'Edited a note', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
 
   addNote(caseId: string, author: StaffMember, body: string, isSpecialRequest = false): CaseNote {
     const note: CaseNote = {

@@ -679,6 +679,21 @@ export const api = {
     return rowToNote(data)
   },
 
+  /** Edit a note's words, and/or flip whether it is a Special Request (shows on the TV Board). */
+  async updateNote(id: string, patch: { body?: string; isSpecialRequest?: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateNote(id, patch, changedBy); return }
+    const row: Record<string, unknown> = {}
+    if (patch.body !== undefined) row.body = patch.body
+    if (patch.isSpecialRequest !== undefined) row.is_special_request = patch.isSpecialRequest
+    const { data, error } = await supabase!.from('case_notes').update(row).eq('id', id).select('case_id').single()
+    if (error) throw error
+    logAuditReal({
+      entityType: 'note', entityId: id, caseId: data?.case_id, action: 'update',
+      summary: patch.body !== undefined ? 'Edited a note' : patch.isSpecialRequest ? 'Marked a note as a special request (TV Board)' : 'Removed special request from a note',
+      changedBy: changedBy.id,
+    })
+  },
+
   // -------------------------------------------------------------------
   // Documents
   // -------------------------------------------------------------------
