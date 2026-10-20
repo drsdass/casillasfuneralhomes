@@ -3,7 +3,7 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid,
+  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { brandFor } from '@/lib/company'
@@ -17,6 +17,9 @@ import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import { VoiceNoteButton } from '@/components/ui/VoiceNote'
+import { PresenceHeartbeat, WhoIsOnline } from '@/components/presence/Presence'
+import { NotificationSettingsModal, useNotificationPrefs } from '@/components/presence/NotificationSettings'
+import { isPushOn } from '@/lib/push'
 import { NewEmailAlerts } from '@/components/layout/NewEmailAlerts'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 
@@ -57,6 +60,9 @@ export default function AppShell() {
   useEffect(() => { setMenuOpen(false) }, [pathname])
   const [soundOn, setSoundOn] = useState(isMessageSoundEnabled())
   const [toast, setToast] = useState<{ senderName: string; body: string } | null>(null)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const { prefs: notifPrefs } = useNotificationPrefs()
+  const messagesQuiet = !notifPrefs.onDuty || !notifPrefs.notifyMessage // off duty: no pop-ups or sounds
 
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations', currentUser?.id],
@@ -95,6 +101,7 @@ export default function AppShell() {
       const sender = allStaff.find((s) => s.id === newMessage.senderId)
       const senderName = sender?.name ?? t('common.someone')
 
+      if (messagesQuiet) return
       playMessageChime() // no-ops internally if the user has muted it
 
       // Always show the in-app toast — this is the "pop up should always
@@ -104,12 +111,12 @@ export default function AppShell() {
 
       // Layer an OS-level notification on top when we can — reaches
       // someone even if this tab isn't the one they're looking at.
-      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+      if (!isPushOn() && 'Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
         new Notification(t('common.newMessageFrom', { name: senderName }), { body: newMessage.body, icon: '/casillas-logo.png' })
       }
     })
     return unsubscribe
-  }, [currentUser, queryClient, allStaff, conversations])
+  }, [currentUser, queryClient, allStaff, conversations, messagesQuiet])
 
   if (!currentUser) return null // RequireAuth guarantees this won't render, but keeps TS happy
 
@@ -238,6 +245,13 @@ export default function AppShell() {
             </div>
           </div>
           <button
+            onClick={() => { setNotifOpen(true); setMenuOpen(false) }}
+            className="w-full flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1.5 transition mb-0.5"
+          >
+            <Bell size={13} /> My notifications
+            <span className={`ml-auto h-2 w-2 rounded-full ${notifPrefs.onDuty ? 'bg-blue-400' : 'border border-slate-400'}`} />
+          </button>
+          <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2 text-xs text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1.5 transition"
           >
@@ -254,13 +268,14 @@ export default function AppShell() {
               <Menu size={22} />
             </button>
             {organizations.length > 1 && activeOrg && (
-              <span className="shrink-0 rounded-full bg-[#3b4a35] px-3 py-1 text-xs font-semibold text-white" title="The company you are working in">{activeOrg.name}</span>
+              <span className="shrink-0 rounded-full bg-[#3b4a35] px-3 py-1 text-xs font-semibold text-white" title="The company you are working in"><span className="sm:hidden">{activeOrg.name.replace(/\s*Funeral Home$/i, '')}</span><span className="hidden sm:inline">{activeOrg.name}</span></span>
             )}
             <div className="hidden md:block text-sm text-slate-500 truncate">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <WhoIsOnline />
             {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}
@@ -308,7 +323,9 @@ export default function AppShell() {
         </main>
       </div>
 
-      {visibleNavKeys(currentUser).includes('inbox') && <NewEmailAlerts userId={currentUser.id} />}
+      <PresenceHeartbeat />
+      {notifOpen && <NotificationSettingsModal onClose={() => setNotifOpen(false)} />}
+      {visibleNavKeys(currentUser).includes('inbox') && <NewEmailAlerts userId={currentUser.id} orgs={organizations.map((o) => ({ id: o.id, name: o.name }))} activeOrgId={activeOrg?.id} onSwitchOrg={switchOrg} />}
 
       {toast && (
         <button

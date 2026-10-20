@@ -18,6 +18,17 @@ export const USE_MOCK = !url || !anonKey
 // Which company (Casillas, Sanders...) this browser tab is working in. Kept per tab so two tabs can't
 // disturb each other. The database only honours it if this person is allowed to see that company.
 const ORG_KEY = 'casillas_os_active_org'
+// A notification can open the app straight into the right company: /inbox?org=<company id>.
+try {
+  const u = new URL(window.location.href)
+  const o = u.searchParams.get('org')
+  if (o) {
+    sessionStorage.setItem(ORG_KEY, o)
+    u.searchParams.delete('org')
+    window.history.replaceState(null, '', u.pathname + u.search + u.hash)
+  }
+} catch { /* ignore */ }
+
 export function getStoredOrgId(): string | null {
   try { return sessionStorage.getItem(ORG_KEY) } catch { return null }
 }
@@ -29,9 +40,10 @@ export function storeOrgId(id: string | null) {
 const fetchWithCompany: typeof fetch = (input, init) => {
   const href = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
   const org = getStoredOrgId()
-  if (org && href.includes('/rest/v1/')) {
+  if (href.includes('/rest/v1/')) {
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
-    headers.set('x-org-id', org)
+    // A request may name its own company (the new-email pop-up checks every company you can see); otherwise use this tab's.
+    if (!headers.has('x-org-id') && org) headers.set('x-org-id', org)
     return fetch(input, { ...init, headers })
   }
   return fetch(input, init)

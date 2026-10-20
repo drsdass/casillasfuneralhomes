@@ -58,6 +58,7 @@ let vendorStore: Vendor[] = [
   { id: 'ven-2', orgId: 'org-1', name: 'Desert Cremation Services', category: 'crematory', phone: '(760) 555-0101', createdAt: '2026-01-01T00:00:00Z' },
   { id: 'ven-3', orgId: 'org-1', name: "Damara's Flowers", category: 'florist', phone: '(760) 555-0102', createdAt: '2026-01-01T00:00:00Z' },
 ]
+const presenceSeen: Record<string, number> = {}
 let emailStore: InboundEmail[] = inboundEmails.map((e) => ({ ...e }))
 let signatureRequestStore: SignatureRequest[] = signatureRequests.map((s) => ({ ...s }))
 
@@ -99,6 +100,36 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Staff / roles / access
   // -----------------------------------------------------------------
+  // "Who is online" in the demo: this browser's own heartbeat, plus a few pretend colleagues so the dots are visible.
+  presenceTouch: (staffId: string, device: 'phone' | 'computer') => { presenceSeen[staffId + '|' + device] = Date.now() },
+  presenceClear: (staffId: string) => { for (const k of Object.keys(presenceSeen)) if (k.startsWith(staffId + '|')) delete presenceSeen[k] },
+  getPresence: (): { staffId: string; device: 'phone' | 'computer'; online: boolean; lastSeen: string }[] => {
+    const org = demoOrgId()
+    const rows = Object.entries(presenceSeen).map(([k, t]) => {
+      const [staffId, device] = k.split('|')
+      return { staffId, device: device as 'phone' | 'computer', online: Date.now() - t < 180000, lastSeen: new Date(t).toISOString() }
+    })
+    const fake: [string, 'phone' | 'computer', boolean, number][] = [
+      ['David Escoto', 'phone', true, 0], ['Hector Salas', 'phone', true, 0], ['Noemi Mejia', 'computer', true, 0], ['Noemi Mejia', 'phone', true, 0],
+      ['Joe Galvan', 'computer', false, 95 * 60000], ['Kelly Little', 'phone', true, 0],
+    ]
+    for (const [name, device, online, ago] of fake) {
+      const st = staffStore.find((x) => x.name === name && x.orgId === org)
+      if (st && !rows.some((r) => r.staffId === st.id && r.device === device)) rows.push({ staffId: st.id, device, online, lastSeen: new Date(Date.now() - ago).toISOString() })
+    }
+    return rows.filter((r) => staffStore.some((x) => x.id === r.staffId && x.orgId === org))
+  },
+
+  /** Demo: a couple of pretend colleagues are off duty, plus anyone who switched themselves off in this browser. */
+  getOffDuty: (): string[] => {
+    const org = demoOrgId()
+    const ids = staffStore.filter((x) => x.orgId === org && ['Joe Galvan'].includes(x.name)).map((x) => x.id)
+    try {
+      for (const x of staffStore) { if (x.orgId === org && JSON.parse(localStorage.getItem(`casillas_notif_prefs_${x.id}`) ?? '{}').onDuty === false) ids.push(x.id) }
+    } catch { /* ignore */ }
+    return ids
+  },
+
   getStaff: (): StaffMember[] => {
     const org = demoOrgId()
     return staffStore.filter((s) => s.orgId === org)
@@ -619,6 +650,9 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Inbound email → case matching
   // -----------------------------------------------------------------
+  /** Which company a mock email belongs to: its case's company, else the first company (the shared mailbox). */
+  emailOrgId: (e: InboundEmail): string => (e.caseId ? caseStore.find((c) => c.id === e.caseId)?.orgId : undefined) ?? 'org-1',
+
   getEmails: (filter?: { caseId?: string; needsReview?: boolean }): InboundEmail[] => {
     let rows = emailStore
     if (filter?.caseId) rows = rows.filter((e) => e.caseId === filter.caseId)

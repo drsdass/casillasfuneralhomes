@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
+import { PresenceDot, usePresence } from '@/components/presence/Presence'
 import { api } from '@/lib/api'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Send, Plus, X, Users2, Check, Search } from 'lucide-react'
@@ -227,6 +228,7 @@ function NewConversationModal({
   onCreate: (participantIds: string[], name?: string) => void
   isPending: boolean
 }) {
+  const presence = usePresence()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [groupName, setGroupName] = useState('')
   const [search, setSearch] = useState('')
@@ -290,7 +292,7 @@ function NewConversationModal({
               <div className={`h-5 w-5 rounded border flex items-center justify-center shrink-0 ${selected.has(s.id) ? 'bg-[#3b4a35] border-[#3b4a35]' : 'border-slate-300'}`}>
                 {selected.has(s.id) && <Check size={13} className="text-white" />}
               </div>
-              <span className="text-sm text-slate-700">{s.name}</span>
+              <span className="text-sm text-slate-700 flex items-center gap-2">{s.name} <PresenceDot info={presence.get(s.id)} /></span>
             </button>
           ))}
           {filtered.length === 0 && <div className="px-3 py-4 text-sm text-slate-400 text-center">No matches.</div>}

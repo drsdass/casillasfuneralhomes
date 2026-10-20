@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react'
 import { staff as mockStaff, locations as mockLocations, organizations as mockOrganizations } from '@/data/mockData'
+import { mockStore } from '@/data/mockStore'
 import { supabase, USE_MOCK, getStoredOrgId, storeOrgId } from '@/lib/supabase'
 import type { StaffMember, Location, UserRole, Organization } from '@/types'
 import { canViewAllLocations } from '@/lib/permissions'
@@ -15,7 +16,7 @@ interface SessionContextValue {
   /** Companies this person may work in (usually one; admins who can see everything get a switcher). */
   organizations: Organization[]
   activeOrg: Organization | null
-  switchOrg: (orgId: string) => void
+  switchOrg: (orgId: string, path?: string) => void
   login: (email: string, password: string) => Promise<{ ok: true; role: UserRole } | { ok: false; error: string }>
   logout: () => void
   loading: boolean
@@ -154,14 +155,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // The look (colours, logo) follows the company being worked in.
   useEffect(() => {
-    document.documentElement.dataset.company = brandFor(activeOrg?.name).key
+    const key = brandFor(activeOrg?.name).key
+    document.documentElement.dataset.company = key
+    // "Add to Home Screen" picks up the right name and icon for the company.
+    document.getElementById('app-manifest')?.setAttribute('href', `/manifest-${key}.webmanifest`)
+    document.getElementById('app-touch-icon')?.setAttribute('href', `/icon-${key}-180.png`)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', key === 'sanders' ? '#2c4a5a' : '#3b4a35')
   }, [activeOrg])
   setCompany(activeOrg?.name) // so messages and forms outside React hooks use the right company name
 
   /** Switch company. A full reload keeps every screen and cache from mixing two companies' data. */
-  function switchOrg(orgId: string) {
+  function switchOrg(orgId: string, path = '/') {
     storeOrgId(orgId)
-    window.location.assign('/')
+    window.location.assign(path)
   }
 
   async function login(email: string, password: string): Promise<{ ok: true; role: UserRole } | { ok: false; error: string }> {
@@ -203,8 +209,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     if (!USE_MOCK) {
-      supabase!.auth.signOut()
+      // Turn this person red ("offline") right away, then sign out.
+      Promise.resolve(supabase!.rpc('clear_presence')).catch(() => undefined).finally(() => { supabase!.auth.signOut() })
     } else {
+      if (currentUser) mockStore.presenceClear(currentUser.id)
       localStorage.removeItem(STORAGE_KEY)
     }
     storeOrgId(null)

@@ -4,35 +4,60 @@ import { useNavigate } from 'react-router-dom'
 import { Mail, FolderCheck, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { playMessageChime } from '@/lib/notificationSound'
+import { useNotificationPrefs } from '@/components/presence/NotificationSettings'
+import { isPushOn } from '@/lib/push'
 import type { InboundEmail } from '@/types'
 
-type Alert = { id: string; email: InboundEmail; caseName?: string; handledBy?: string }
+type Alert = { id: string; orgId: string; email: InboundEmail; caseName?: string; handledBy?: string }
+type Org = { id: string; name: string }
+
+// Outline colour per company (only shown to people who can work in more than one company).
+const COMPANY_LOOK = {
+  casillas: { border: 'border-[#b8862f]', bg: 'bg-[#f8efdc]', text: 'text-[#8a5f12]', chip: 'bg-[#b8862f] text-white' },
+  sanders: { border: 'border-[#3f87a6]', bg: 'bg-[#e3f0f5]', text: 'text-[#2a6580]', chip: 'bg-[#3f87a6] text-white' },
+} as const
+const lookFor = (name: string) => (/^sanders/i.test(name) ? COMPANY_LOOK.sanders : COMPANY_LOOK.casillas)
 
 /**
  * Pop-up for the shared mailbox: whenever a new email lands it says who it was from and where it went —
  * "filed to John Doe's case" or "not filed yet". Filed ones fade after a while; ones that need a person
  * stay until someone clicks or closes them. Checks every 30 seconds while the app is open.
  */
-export function NewEmailAlerts({ userId }: { userId: string }) {
+export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { userId: string; orgs: Org[]; activeOrgId?: string; onSwitchOrg: (orgId: string, path?: string) => void }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const key = `casillas_email_alert_since_${userId}`
+  const multi = orgs.length > 1
+  const { prefs } = useNotificationPrefs()
+  const quiet = !prefs.onDuty || !prefs.notifyEmail // off duty (or email un-ticked): no pop-ups, no sounds
+  const quietRef = useRef(quiet)
+  quietRef.current = quiet
+  const key = `casillas_email_alert_since_v2_${userId}`
   const [alerts, setAlerts] = useState<Alert[]>([])
-  const since = useRef<string | null>(null)
+  // "Newest mail already seen", kept separately per company so one company's hiccup never hides the other's mail.
+  const since = useRef<Record<string, string> | null>(null)
   if (since.current === null) {
-    try { since.current = localStorage.getItem(key) } catch { /* private window */ }
+    try { since.current = JSON.parse(localStorage.getItem(key) ?? '{}') } catch { since.current = {} }
   }
+  const saveSince = () => { try { localStorage.setItem(key, JSON.stringify(since.current)) } catch { /* private window */ } }
+  const orgName = (id: string) => orgs.find((o) => o.id === id)?.name ?? ''
 
   const { data } = useQuery({
-    queryKey: ['new-email-alerts', userId],
+    queryKey: ['new-email-alerts', userId, orgs.map((o) => o.id).join(',')],
     queryFn: async () => {
-      // First time on this computer: start from "now" so old mail doesn't pop up.
-      if (!since.current) {
-        since.current = new Date().toISOString()
-        try { localStorage.setItem(key, since.current) } catch { /* ignore */ }
-        return []
+      const out: { orgId: string; emails: InboundEmail[] }[] = []
+      for (const o of orgs) {
+        // First time on this computer: start from "now" so old mail doesn't pop up.
+        if (!since.current![o.id]) {
+          since.current![o.id] = new Date().toISOString()
+          saveSince()
+          continue
+        }
+        try {
+          const emails = await api.getNewInbound(since.current![o.id], multi ? o.id : undefined)
+          if (emails.length) out.push({ orgId: o.id, emails })
+        } catch { /* try again next round */ }
       }
-      return api.getNewInbound(since.current)
+      return out
     },
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
@@ -43,24 +68,26 @@ export function NewEmailAlerts({ userId }: { userId: string }) {
     let cancelled = false
     ;(async () => {
       const fresh: Alert[] = []
-      for (const e of data) {
-        let caseName: string | undefined
-        if (e.caseId) {
-          const c = await api.getCase(e.caseId).catch(() => undefined)
-          if (c) caseName = `${c.decedent.firstName} ${c.decedent.lastName}`
+      for (const { orgId, emails } of data) {
+        for (const e of emails) {
+          const caseName = e.caseId ? await api.getCaseName(e.caseId, multi ? orgId : undefined).catch(() => undefined) : undefined
+          fresh.push({ id: e.id, orgId, email: e, caseName })
         }
-        fresh.push({ id: e.id, email: e, caseName })
       }
       if (cancelled) return
-      const newest = data.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current ?? '')
-      since.current = newest
-      try { localStorage.setItem(key, newest) } catch { /* ignore */ }
+      for (const { orgId, emails } of data) {
+        since.current![orgId] = emails.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
+      }
+      saveSince()
+      qc.invalidateQueries({ queryKey: ['emails'] })
+      if (quietRef.current) return
       setAlerts((old) => [...old, ...fresh.filter((f) => !old.some((o) => o.id === f.id))].slice(-4))
       qc.invalidateQueries({ queryKey: ['emails'] })
       playMessageChime()
-      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+      if (!isPushOn() && 'Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
         const f = fresh[fresh.length - 1]
-        new Notification(`New email${fresh.length > 1 ? 's' : ''} for the funeral home`, { body: `${f.email.fromName || f.email.from}: ${f.email.subject}`, icon: '/casillas-logo.png' })
+        const co = multi ? ` (${orgName(f.orgId).replace(/\s*Funeral Home$/i, '')})` : ''
+        new Notification(`New email${fresh.length > 1 ? 's' : ''} for the funeral home${co}`, { body: `${f.email.fromName || f.email.from}: ${f.email.subject}`, icon: '/casillas-logo.png' })
       }
       // Filed mail fades on its own; mail that needs a person stays.
       for (const f of fresh) {
@@ -75,7 +102,14 @@ export function NewEmailAlerts({ userId }: { userId: string }) {
   const ids = alerts.map((a) => a.id)
   const { data: statuses } = useQuery({
     queryKey: ['email-alert-status', ids.join(',')],
-    queryFn: () => api.getEmailStatuses(ids),
+    queryFn: async () => {
+      const out: InboundEmail[] = []
+      for (const orgId of [...new Set(alerts.map((a) => a.orgId))]) {
+        const rows = await api.getEmailStatuses(alerts.filter((a) => a.orgId === orgId).map((a) => a.id), multi ? orgId : undefined).catch(() => [])
+        out.push(...rows)
+      }
+      return out
+    },
     enabled: ids.length > 0,
     refetchInterval: 10_000,
   })
@@ -92,8 +126,7 @@ export function NewEmailAlerts({ userId }: { userId: string }) {
         const handledBy = st.matchStatus === 'confirmed' ? (allStaff.find((x) => x.id === st.confirmedBy)?.name ?? 'a staff member') : undefined
         let caseName = a.caseName
         if (st.caseId !== a.email.caseId) {
-          const c = st.caseId ? await api.getCase(st.caseId).catch(() => undefined) : undefined
-          caseName = c ? `${c.decedent.firstName} ${c.decedent.lastName}` : undefined
+          caseName = st.caseId ? await api.getCaseName(st.caseId, multi ? a.orgId : undefined).catch(() => undefined) : undefined
         }
         if (st.matchStatus !== a.email.matchStatus || st.caseId !== a.email.caseId || handledBy !== a.handledBy) {
           changed = true
@@ -112,24 +145,30 @@ export function NewEmailAlerts({ userId }: { userId: string }) {
 
   return (
     <div className="fixed bottom-24 right-3 z-50 w-[22rem] max-w-[calc(100vw-1.5rem)] space-y-2">
-      {alerts.map(({ id, email, caseName, handledBy }) => {
+      {alerts.map(({ id, orgId, email, caseName, handledBy }) => {
         const filed = !!caseName
         const handled = !!handledBy
         const needs = !handled && (email.matchStatus === 'suggested' || email.matchStatus === 'unmatched' || !filed)
+        const co = multi ? lookFor(orgName(orgId)) : null
+        const open = () => {
+          const path = filed && !needs ? `/cases/${email.caseId}?tab=Emails` : '/inbox'
+          if (orgId !== activeOrgId) { onSwitchOrg(orgId, path); return } // jump into that company first (the page reloads there)
+          navigate(path); close(id)
+        }
         return (
           <div
             key={id}
             role="button"
             tabIndex={0}
-            onClick={() => { navigate(filed && !needs ? `/cases/${email.caseId}?tab=Emails` : '/inbox'); close(id) }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { navigate(filed && !needs ? `/cases/${email.caseId}?tab=Emails` : '/inbox'); close(id) } }}
-            className={`cursor-pointer rounded-lg border bg-white shadow-lg px-4 py-3 flex items-start gap-3 hover:shadow-xl transition ${needs ? 'border-amber-300' : handled ? 'border-sky-300' : 'border-emerald-300'}`}
+            onClick={open}
+            onKeyDown={(e) => { if (e.key === 'Enter') open() }}
+            className={`cursor-pointer rounded-lg bg-white shadow-lg px-4 py-3 flex items-start gap-3 hover:shadow-xl transition ${co ? `border-2 ${co.border}` : `border ${needs ? 'border-amber-300' : handled ? 'border-sky-300' : 'border-emerald-300'}`}`}
           >
-            <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${needs ? 'bg-amber-100 text-amber-700' : handled ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${co ? `${co.bg} ${co.text}` : needs ? 'bg-amber-100 text-amber-700' : handled ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
               {needs ? <AlertCircle size={17} /> : handled ? <CheckCircle2 size={17} /> : <FolderCheck size={17} />}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Mail size={12} /> New email</div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Mail size={12} /> New email{co && <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] tracking-wide normal-case ${co.chip}`}>{orgName(orgId).replace(/\s*Funeral Home$/i, '')}</span>}</div>
               <div className="text-sm font-medium text-slate-800 truncate">{email.fromName || email.from}</div>
               <div className="text-sm text-slate-600 truncate">{email.subject}</div>
               <div className={`mt-1 text-sm font-medium ${needs ? 'text-amber-700' : handled ? 'text-sky-700' : 'text-emerald-700'}`}>

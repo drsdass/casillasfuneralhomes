@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
+import { PresenceDot, usePresence } from '@/components/presence/Presence'
 import { api } from '@/lib/api'
 import { canAssignStaff } from '@/lib/permissions'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
@@ -37,6 +38,7 @@ export default function StaffSchedule() {
   const [pendingRange, setPendingRange] = useState<{ staffId: string; startDate: string; endDate: string } | null>(null)
 
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
+  const presence = usePresence()
   const { data: timeOff = [] } = useQuery({ queryKey: ['time-off'], queryFn: api.getTimeOff })
 
   const addMutation = useMutation({
@@ -157,7 +159,7 @@ export default function StaffSchedule() {
           <tbody>
             {allStaff.filter((s) => s.active).map((s) => (
               <tr key={s.id} className="border-b border-slate-50 last:border-0">
-                <td className="sticky left-0 bg-white px-3 py-2 text-sm text-slate-800 whitespace-nowrap">{s.name}</td>
+                <td className="sticky left-0 bg-white px-3 py-2 text-sm text-slate-800 whitespace-nowrap"><span className="mr-1.5"><PresenceDot info={presence.get(s.id)} /></span>{s.name}</td>
                 {days.map((d) => {
                   const dateKey = toDateKey(d)
                   const entry = entryFor(s.id, dateKey)

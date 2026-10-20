@@ -10,6 +10,7 @@ import type {
 } from '@/types'
 import { locations as mockLocations } from '@/data/mockData'
 import { getCompanyName } from '@/lib/company'
+import { DEFAULT_PREFS, type NotificationPrefs, type PresenceDevice, type PresenceRow } from '@/lib/presence'
 import {
   caseToRow, rowToCase, contactToRow, rowToStaff, documentToRow, rowToDocument,
   eventToRow, rowToEvent, rowToGplItem, rowToContract, rowToVehicle,
@@ -243,6 +244,68 @@ export const api = {
     return (data ?? []).map(rowToStaff)
   },
 
+  // "Who is online" — see src/db/presence.sql.
+  async touchPresence(userId: string, device: PresenceDevice): Promise<void> {
+    if (USE_MOCK) { mockStore.presenceTouch(userId, device); return }
+    await supabase!.rpc('touch_presence', { p_device: device })
+  },
+  async clearPresence(userId: string): Promise<void> {
+    if (USE_MOCK) { mockStore.presenceClear(userId); return }
+    await supabase!.rpc('clear_presence')
+  },
+  async getPresence(): Promise<PresenceRow[]> {
+    if (USE_MOCK) return delay(mockStore.getPresence())
+    const { data, error } = await supabase!.rpc('presence_list')
+    if (error) throw error
+    return (data ?? []).map((r: { staff_id: string; device: PresenceDevice; online: boolean; last_seen: string }) => ({ staffId: r.staff_id, device: r.device, online: r.online, lastSeen: r.last_seen }))
+  },
+
+  // Notifications: On duty switch, what each person wants to hear about, and which phones/computers are signed up (src/db/push.sql).
+  async getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+    if (USE_MOCK) {
+      try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(`casillas_notif_prefs_${userId}`) ?? '{}') } } catch { return DEFAULT_PREFS }
+    }
+    const { data } = await supabase!.from('staff_notification_prefs').select('*').eq('staff_id', userId).maybeSingle()
+    return data ? { onDuty: data.on_duty, notifyEmail: data.notify_email, notifyMessage: data.notify_message, notifyCase: data.notify_case, notifyDriver: data.notify_driver } : DEFAULT_PREFS
+  },
+  async saveNotificationPrefs(userId: string, p: NotificationPrefs): Promise<void> {
+    if (USE_MOCK) { try { localStorage.setItem(`casillas_notif_prefs_${userId}`, JSON.stringify(p)) } catch { /* ignore */ } return }
+    const { error } = await supabase!.from('staff_notification_prefs').upsert({
+      staff_id: userId, on_duty: p.onDuty, notify_email: p.notifyEmail, notify_message: p.notifyMessage,
+      notify_case: p.notifyCase, notify_driver: p.notifyDriver, updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  },
+  /** Staff ids who are off duty (their light shows as off). */
+  async getOffDuty(): Promise<string[]> {
+    if (USE_MOCK) return delay(mockStore.getOffDuty())
+    const { data, error } = await supabase!.rpc('off_duty_list')
+    if (error) throw error
+    return (data ?? []).map((r: { staff_id: string }) => r.staff_id)
+  },
+  async savePushSubscription(userId: string, sub: PushSubscriptionJSON, device: PresenceDevice): Promise<void> {
+    if (USE_MOCK) return
+    const { error } = await supabase!.from('push_subscriptions').upsert(
+      { staff_id: userId, endpoint: sub.endpoint, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth, device }, { onConflict: 'endpoint' })
+    if (error) throw error
+  },
+  async removePushSubscription(endpoint: string): Promise<void> {
+    if (USE_MOCK) return
+    await supabase!.from('push_subscriptions').delete().eq('endpoint', endpoint)
+  },
+  /** Sends a test notification to my own phones/computers. */
+  async sendTestPush(): Promise<{ sent: number; offDuty?: boolean; noDevice?: boolean }> {
+    if (USE_MOCK) return { sent: 0, noDevice: true }
+    const { data, error } = await supabase!.functions.invoke('send-push', { body: { type: 'test' } })
+    if (error) throw error
+    return data
+  },
+  /** Tells the server something happened that staff's phones should hear about. The server decides who. Never blocks the action. */
+  firePush(payload: { type: 'message'; conversationId: string } | { type: 'case'; caseId: string; event: 'created' | 'pickup' }): void {
+    if (USE_MOCK) return
+    supabase!.functions.invoke('send-push', { body: payload }).catch(() => undefined)
+  },
+
   /** Only callable by super_admin in the UI — enforced there and by a DB trigger (see schema.sql). */
   async updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): Promise<StaffMember[]> {
     if (USE_MOCK) return delay(mockStore.updateStaffRole(staffId, role, changedBy))
@@ -395,6 +458,7 @@ export const api = {
     if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName)
     if ('serviceDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'service', input.serviceDate, input.serviceLocation, decedentName)
     await this.seedTasksFromTemplates(caseRow.id, input.orgId)
+    this.firePush({ type: 'case', caseId: caseRow.id, event: 'created' })
     this.notifySlack(`🆕 New case created: *${decedentName}* (${input.caseNumber}) — by ${changedBy.name}`)
     logAuditReal({
       entityType: 'case', entityId: caseRow.id, caseId: caseRow.id, action: 'create',
@@ -826,6 +890,7 @@ export const api = {
       moved_by: movedBy.id, note,
     })
     if (logErr) throw logErr
+    if (toStage === 'scene_first_call') this.firePush({ type: 'case', caseId, event: 'pickup' })
     const decedentName = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
     this.notifySlack(`📦 ${decedentName} moved to *${toStage.replace(/_/g, ' ')}* — by ${movedBy.name}`)
     logAuditReal({
@@ -1062,26 +1127,42 @@ export const api = {
     return (data ?? []).map(rowToEmail)
   },
 
-  /** Light check used by the new-email pop-up: received mail newer than a timestamp (no bodies). */
-  async getNewInbound(since: string): Promise<InboundEmail[]> {
-    if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => e.direction === 'in' && e.receivedAt > since))
-    const { data, error } = await supabase!.from('inbound_emails')
+  /** Light check used by the new-email pop-up: received mail newer than a timestamp (no bodies), for one company. */
+  async getNewInbound(since: string, orgId?: string): Promise<InboundEmail[]> {
+    if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => e.direction === 'in' && e.receivedAt > since && mockStore.emailOrgId(e) === (orgId ?? mockStore.emailOrgId(e))))
+    let q = supabase!.from('inbound_emails')
       .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction')
       .eq('direction', 'in').neq('match_status', 'ignored').gt('received_at', since)
       .order('received_at', { ascending: true }).limit(10)
+    if (orgId) q = q.setHeader('x-org-id', orgId)
+    const { data, error } = await q
     if (error) throw error
     return (data ?? []).map(rowToEmail)
   },
 
   /** Current state of a few emails, so pop-ups can update when someone else files or ignores them. */
-  async getEmailStatuses(ids: string[]): Promise<InboundEmail[]> {
+  async getEmailStatuses(ids: string[], orgId?: string): Promise<InboundEmail[]> {
     if (ids.length === 0) return []
     if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => ids.includes(e.id)))
-    const { data, error } = await supabase!.from('inbound_emails')
+    let q = supabase!.from('inbound_emails')
       .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction, confirmed_by, confirmed_at')
       .in('id', ids)
+    if (orgId) q = q.setHeader('x-org-id', orgId)
+    const { data, error } = await q
     if (error) throw error
     return (data ?? []).map(rowToEmail)
+  },
+
+  /** Just the decedent's name for a case, looked up inside a given company (pop-ups). */
+  async getCaseName(caseId: string, orgId?: string): Promise<string | undefined> {
+    if (USE_MOCK) {
+      const c = mockStore.getCase(caseId)
+      return c ? `${c.decedent.firstName} ${c.decedent.lastName}` : undefined
+    }
+    let q = supabase!.from('cases').select('decedent_first_name, decedent_last_name').eq('id', caseId)
+    if (orgId) q = q.setHeader('x-org-id', orgId)
+    const { data } = await q.maybeSingle()
+    return data ? `${data.decedent_first_name} ${data.decedent_last_name}` : undefined
   },
 
   /** Sends an email from the shared mailbox. The server records who sent it. */
@@ -1480,6 +1561,7 @@ export const api = {
       .select()
       .single()
     if (error) throw error
+    this.firePush({ type: 'message', conversationId })
     return rowToChatMessage(data)
   },
 
