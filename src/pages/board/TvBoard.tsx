@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
@@ -9,6 +9,48 @@ import { ArrowLeft, Check, Clock } from 'lucide-react'
 import type { FuneralCase, CalendarEvent, Contract, StaffMember } from '@/types'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+
+/**
+ * Keeps everything on one screen: no scrolling down or sideways, however many cases or notes there are.
+ * It shrinks the whole board just enough to fit (and lets text re-wrap wider as it shrinks), and re-checks
+ * whenever something on the board changes, the TV is resized, or the list loads.
+ */
+function FitToScreen({ children }: { children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+
+  useLayoutEffect(() => {
+    const b = box.current, el = inner.current
+    if (!b || !el) return
+    let raf = 0
+    const fit = () => {
+      const W = b.clientWidth, H = b.clientHeight
+      if (!W || !H) return
+      let best = 0.2
+      // From full size downwards, find the largest size where the board (re-wrapped to the wider space) fits.
+      for (let sc = 1; sc >= 0.2; sc = Math.round((sc - 0.025) * 1000) / 1000) {
+        el.style.width = `${W / sc}px`
+        if (el.scrollHeight * sc <= H && el.scrollWidth * sc <= W + 1) { best = sc; break }
+      }
+      el.style.width = `${W / best}px`
+      setScale((old) => (Math.abs(old - best) > 0.001 ? best : old))
+    }
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit) }
+    fit()
+    const mo = new MutationObserver(schedule) // rows appear, notes load, statuses change
+    mo.observe(el, { childList: true, subtree: true, characterData: true })
+    window.addEventListener('resize', schedule)
+    const tick = setInterval(schedule, 5000) // safety net
+    return () => { mo.disconnect(); window.removeEventListener('resize', schedule); clearInterval(tick); cancelAnimationFrame(raf) }
+  }, [])
+
+  return (
+    <div ref={box} className="flex-1 min-h-0 overflow-hidden p-4">
+      <div ref={inner} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
+    </div>
+  )
+}
 
 export default function TvBoard() {
   const { activeLocationId, currentUser } = useSession()
@@ -45,7 +87,7 @@ export default function TvBoard() {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   return (
-    <div className="min-h-screen bg-[#1f2a1c] text-white flex flex-col">
+    <div className="h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
       <div className="no-print flex items-center justify-between px-6 py-3 bg-black/20">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white">
           <ArrowLeft size={15} /> Back
@@ -59,7 +101,7 @@ export default function TvBoard() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
+      <FitToScreen>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-sm uppercase tracking-wide text-[#d9c78f] border-b-2 border-[#4d5f45]">
@@ -83,7 +125,7 @@ export default function TvBoard() {
         {activeCases.length === 0 && (
           <div className="text-center text-slate-400 py-20">No active cases right now.</div>
         )}
-      </div>
+      </FitToScreen>
     </div>
   )
 }
@@ -122,7 +164,7 @@ function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: 
   const visitationStaff = (visitation?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
   const serviceStaff = (service?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
 
-  const latestNote = notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+  const specialNotes = notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   return (
     <tr className="border-b border-white/10 hover:bg-white/5">
@@ -151,8 +193,10 @@ function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: 
       <td className="py-3 px-3"><OrderCell status={birds as 'confirmed' | 'ordered' | 'pending' | null} /></td>
       <td className="py-3 px-3"><OrderCell status={escort as 'confirmed' | 'ordered' | 'pending' | null} /></td>
       <td className="py-3 px-3 text-slate-200">{casketLine?.name.replace(/^Adult Casket\s*—\s*/i, '') ?? '—'}</td>
-      <td className="py-3 px-3 text-slate-300 text-sm max-w-[220px] truncate" title={latestNote?.body}>
-        {latestNote ? latestNote.body : <span className="text-slate-500">—</span>}
+      <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
+        {specialNotes.length > 0
+          ? <ul className="space-y-1">{specialNotes.map((n) => <li key={n.id} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n.body}</li>)}</ul>
+          : <span className="text-slate-500">—</span>}
       </td>
     </tr>
   )
