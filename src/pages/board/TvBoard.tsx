@@ -83,7 +83,8 @@ export default function TvBoard() {
   if (!currentUser) return null
 
   const activeCases = cases
-    .filter((c) => c.status !== 'completed')
+    // Done is done: either marked completed, or moved to the Completed column on Chain of Custody.
+    .filter((c) => c.status !== 'completed' && c.custodyStage !== 'completed')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   return (
@@ -167,7 +168,7 @@ function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: 
   const specialNotes = notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   return (
-    <tr className="border-b border-white/10 hover:bg-white/5">
+    <tr className="border-b border-white/10 hover:bg-white/5 [&>td]:!py-1.5">
       <td className="py-3 px-3 font-semibold whitespace-nowrap">
         <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: c.color }} />
         {c.decedent.lastName}, {c.decedent.firstName}
