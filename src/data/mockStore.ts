@@ -411,6 +411,7 @@ export const mockStore = {
       const done = (st: string) => st === 'completed' || st === 'shipped_released'
       let status = c.status
       if (done(toStage) && status !== 'completed') status = 'completed'
+      else if (status === 'first_call' && toStage !== 'scene_first_call' && toStage !== 'in_transit') status = 'arrangement_pending'
       else if (done(c.custodyStage) && !done(toStage) && status === 'completed') status = 'in_progress'
       return { ...c, custodyStage: toStage, status, updatedAt: now }
     })

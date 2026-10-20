@@ -2,6 +2,7 @@
 --   * Moving a case to "Completed" or "Shipped Out / Released"  ->  status becomes Completed.
 --   * Setting a case's status to Completed                      ->  it moves to the Completed column.
 --   * Moving a finished case back to an earlier stage            ->  status goes back to In Progress.
+--   * Arriving at the Funeral Home (or any later stage) while still "First Call"  ->  status becomes Arrangement Pending.
 --   * Changing a finished case's status back to anything else    ->  it moves back to Funeral Home.
 -- Run once in the Supabase SQL editor. Also tidies existing cases (see the last statement).
 
@@ -14,6 +15,9 @@ begin
     -- the case was moved on Chain of Custody
     if new_done and new.status <> 'completed' then
       new.status := 'completed';
+    elsif new.status = 'first_call' and new.custody_stage not in ('scene_first_call', 'in_transit') then
+      -- the decedent has arrived at the funeral home (or beyond): the First Call stage is over
+      new.status := 'arrangement_pending';
     elsif old_done and not new_done and new.status = 'completed' and new.status = old.status then
       new.status := 'in_progress';
     end if;
@@ -40,3 +44,6 @@ create trigger sync_case_status_custody_t before update of status, custody_stage
 update cases set status = 'completed' where custody_stage in ('completed', 'shipped_released') and status <> 'completed';
 -- And the other way round: cases marked Completed but not in a finished column.
 update cases set custody_stage = 'completed' where status = 'completed' and custody_stage not in ('completed', 'shipped_released');
+
+-- And tidy cases already at the funeral home or beyond but still showing First Call.
+update cases set status = 'arrangement_pending' where status = 'first_call' and custody_stage not in ('scene_first_call', 'in_transit');
