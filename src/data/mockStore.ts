@@ -120,6 +120,15 @@ export const mockStore = {
     return rows.filter((r) => staffStore.some((x) => x.id === r.staffId && x.orgId === org))
   },
 
+  setStaffDuty: (staffId: string, onDuty: boolean, changedBy: StaffMember) => {
+    try {
+      const k = `casillas_notif_prefs_${staffId}`
+      localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) ?? '{}'), onDuty }))
+    } catch { /* ignore */ }
+    const name = staffStore.find((x) => x.id === staffId)?.name ?? staffId
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Switched ${name} ${onDuty ? 'On' : 'Off'} duty`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
   /** Demo: a couple of pretend colleagues are off duty, plus anyone who switched themselves off in this browser. */
   getOffDuty: (): string[] => {
     const org = demoOrgId()

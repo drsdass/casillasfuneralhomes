@@ -276,6 +276,12 @@ export const api = {
     })
     if (error) throw error
   },
+  /** Super admin only: switch someone else On or Off duty. The person can still change it themselves. */
+  async setStaffDuty(staffId: string, onDuty: boolean, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.setStaffDuty(staffId, onDuty, changedBy); return }
+    const { error } = await supabase!.rpc('set_staff_duty', { p_staff: staffId, p_on: onDuty })
+    if (error) throw error
+  },
   /** Staff ids who are off duty (their light shows as off). */
   async getOffDuty(): Promise<string[]> {
     if (USE_MOCK) return delay(mockStore.getOffDuty())
@@ -292,6 +298,17 @@ export const api = {
   async removePushSubscription(endpoint: string): Promise<void> {
     if (USE_MOCK) return
     await supabase!.from('push_subscriptions').delete().eq('endpoint', endpoint)
+  },
+  /** "Forgot password?": asks the server to email a reset link. Always looks successful so nobody can probe for staff addresses. */
+  async requestPasswordReset(email: string): Promise<void> {
+    if (USE_MOCK) { await delay(null, 400); return }
+    await supabase!.functions.invoke('password-reset', { body: { email } }).catch(() => undefined)
+  },
+  /** Sets a new password for the person who opened the emailed link. */
+  async setNewPassword(password: string): Promise<void> {
+    if (USE_MOCK) { await delay(null, 300); return }
+    const { error } = await supabase!.auth.updateUser({ password })
+    if (error) throw error
   },
   /** Sends a test notification to my own phones/computers. */
   async sendTestPush(): Promise<{ sent: number; offDuty?: boolean; noDevice?: boolean }> {

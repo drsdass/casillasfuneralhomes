@@ -63,6 +63,11 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
   })
 
+  const dutyMutation = useMutation({
+    mutationFn: ({ staffId, onDuty }: { staffId: string; onDuty: boolean }) => api.setStaffDuty(staffId, onDuty, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['off-duty'] }); queryClient.invalidateQueries({ queryKey: ['audit-log'] }) },
+  })
+
   const companiesMutation = useMutation({
     mutationFn: ({ staffId, allCompanies }: { staffId: string; allCompanies: boolean }) =>
       api.updateStaffAllCompanies(staffId, allCompanies, currentUser!),
@@ -204,8 +209,21 @@ export default function AdminPage() {
                             {s.name.split(' ').map((n) => n[0]).join('')}
                           </div>
                           <div>
-                            <div className="font-medium text-slate-900 flex items-center gap-2">{s.name} <PresenceDot info={presence.get(s.id)} showText /></div>
+                            <div className="font-medium text-slate-900">{s.name}</div>
                             <div className="text-xs text-slate-500">{s.title}{s.department && ` · ${s.department}`}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <PresenceDot info={presence.get(s.id)} showText />
+                              {canAssign && s.id !== currentUser?.id && (
+                                <button
+                                  onClick={() => dutyMutation.mutate({ staffId: s.id, onDuty: !!presence.get(s.id)?.offDuty })}
+                                  disabled={dutyMutation.isPending}
+                                  title={presence.get(s.id)?.offDuty ? 'Switch this person back On duty' : 'Switch this person Off duty (no notifications, pop-ups or sounds)'}
+                                  className="ml-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100"
+                                >
+                                  {presence.get(s.id)?.offDuty ? 'Set On duty' : 'Set Off duty'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>

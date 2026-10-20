@@ -8,6 +8,7 @@ import { EasyViewProvider } from '@/context/EasyViewContext'
 import AppShell from '@/components/layout/AppShell'
 import RequireAuth from '@/components/layout/RequireAuth'
 import LoginPage from '@/pages/auth/LoginPage'
+import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
 import Dashboard from '@/pages/Dashboard'
 import CaseList from '@/pages/cases/CaseList'
 import CaseForm from '@/pages/cases/CaseForm'
@@ -49,6 +50,7 @@ export default function App() {
           <Routes>
             {/* Public routes — no staff auth */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route
               path="/portal/:token"
               element={
