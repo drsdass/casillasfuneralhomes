@@ -293,13 +293,6 @@ export const api = {
     if (USE_MOCK) return
     await supabase!.from('push_subscriptions').delete().eq('endpoint', endpoint)
   },
-  /** Sends a test notification to my own phones/computers. */
-  async sendTestPush(): Promise<{ sent: number; offDuty?: boolean; noDevice?: boolean }> {
-    if (USE_MOCK) return { sent: 0, noDevice: true }
-    const { data, error } = await supabase!.functions.invoke('send-push', { body: { type: 'test' } })
-    if (error) throw error
-    return data
-  },
   /** Tells the server something happened that staff's phones should hear about. The server decides who. Never blocks the action. */
   firePush(payload: { type: 'message'; conversationId: string } | { type: 'case'; caseId: string; event: 'created' | 'pickup' }): void {
     if (USE_MOCK) return

@@ -108,15 +108,6 @@ Deno.serve(async (req) => {
 
     if (!caller) return json({ error: 'Not allowed' }, 403)
 
-    // ---- "Send me a test" button: only to the caller's own devices ----
-    if (type === 'test') {
-      const { data: me } = await supabase.from('staff_notification_prefs').select('on_duty').eq('staff_id', caller.id).maybeSingle()
-      if (me && me.on_duty === false) return json({ sent: 0, people: 0, offDuty: true })
-      const { count } = await supabase.from('push_subscriptions').select('id', { count: 'exact', head: true }).eq('staff_id', caller.id)
-      if (!count) return json({ sent: 0, people: 0, noDevice: true })
-      return json(await deliver([caller.id], caller.org_id, { kind: 'message', title: 'Test message', body: 'If you can hear this, notifications are working.', path: '/messages', tag: `test-${Date.now()}` }))
-    }
-
     // ---- A chat message ----
     if (type === 'message') {
       const convId = String(body.conversationId ?? '')

@@ -33,7 +33,6 @@ export function NotificationSettingsModal({ onClose }: { onClose: () => void }) 
   const [subscribed, setSubscribed] = useState<boolean | null>(null)
   const [result, setResult] = useState<EnableResult | null>(null)
   const [busy, setBusy] = useState(false)
-  const [testMsg, setTestMsg] = useState<string | null>(null)
   const perm = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   useEffect(() => { currentSubscription().then((s) => setSubscribed(!!s && perm === 'granted')) }, [perm])
 
@@ -42,17 +41,6 @@ export function NotificationSettingsModal({ onClose }: { onClose: () => void }) 
     setBusy(true)
     const r = await enablePush(currentUser.id)
     setResult(r); setSubscribed(r.ok); setBusy(false)
-  }
-  async function sendTest() {
-    setBusy(true); setTestMsg(null)
-    try {
-      const r = await api.sendTestPush()
-      setTestMsg(r.offDuty ? 'You are Off duty, so nothing was sent. Switch to On duty and try again.'
-        : r.noDevice ? 'No device is signed up yet. Turn on notifications first.'
-        : r.sent > 0 ? 'Sent! Lock your phone now. You should hear and feel it within a few seconds.'
-        : 'Nothing could be delivered. Try turning notifications off and on again.')
-    } catch { setTestMsg('Could not send the test. Please try again.') }
-    setBusy(false)
   }
   async function turnOff() { setBusy(true); await disablePush(); setSubscribed(false); setResult(null); setBusy(false) }
 
@@ -101,14 +89,9 @@ export function NotificationSettingsModal({ onClose }: { onClose: () => void }) 
         ) : !pushSupported() ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">This browser can't show notifications when it's closed. Try Chrome, Edge, or Safari on a recent phone.</div>
         ) : subscribed ? (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-            <div className="text-sm text-blue-900 mb-2"><span className="font-semibold">Notifications are on</span> for this device.</div>
-            <div className="flex flex-wrap gap-2">
-              <button disabled={busy} onClick={sendTest} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#4d5f45]"><Bell size={14} /> Send me a test</button>
-              <button disabled={busy} onClick={turnOff} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"><BellOff size={14} /> Turn off</button>
-            </div>
-            {testMsg && <p className="mt-2 text-xs text-slate-700">{testMsg}</p>}
-            <p className="mt-2 text-[11px] text-slate-500">No sound? Your phone controls it: Settings → Apps → this app (or Chrome) → Notifications → make sure sound is on and it is not set to Silent.</p>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div className="text-sm text-blue-900"><span className="font-semibold">Notifications are on</span> for this device.</div>
+            <button disabled={busy} onClick={turnOff} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"><BellOff size={14} /> Turn off</button>
           </div>
         ) : (
           <div>
