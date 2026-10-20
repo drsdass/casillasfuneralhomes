@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react'
 import DriverView from '@/pages/driver/DriverView'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query'
+import LiveSync from '@/components/layout/LiveSync'
 import { SessionProvider } from '@/context/SessionContext'
 import { LanguageProvider } from '@/i18n/LanguageContext'
 import { EasyViewProvider } from '@/context/EasyViewContext'
@@ -39,11 +40,17 @@ import RemotePage from '@/pages/service/RemotePage'
 // viewing the Reports page, so it shouldn't bloat everyone else's initial load.
 const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'))
 
-const queryClient = new QueryClient()
+// Any successful save, anywhere, refreshes every screen that is open - so a change made on one
+// tab (status, dates, orders, notes...) shows up everywhere for that case without a manual reload.
+const queryClient: QueryClient = new QueryClient({
+  mutationCache: new MutationCache({ onSuccess: () => { void queryClient.invalidateQueries() } }),
+  defaultOptions: { queries: { refetchOnWindowFocus: true, refetchOnReconnect: true, staleTime: 5_000 } },
+})
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <LiveSync />
       <SessionProvider>
         <EasyViewProvider>
         <BrowserRouter>
