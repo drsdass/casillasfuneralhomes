@@ -14,6 +14,7 @@ import { useState, useRef } from 'react'
 import { canEditCases } from '@/lib/permissions'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
+import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
@@ -1109,19 +1110,7 @@ export default function CaseDetail() {
           ) : (
             <div className="space-y-1">
               {caseEmails.map((email) => (
-                <div key={email.id} className="flex items-start gap-3 px-2 py-2.5 rounded-md hover:bg-slate-50 text-sm">
-                  <Mail size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-slate-900">{email.direction === 'out' ? `Sent to ${email.to}` : (email.fromName ?? email.from)}</span>
-                      {email.direction === 'out' && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#3b4a35]/10 text-[#3b4a35]">Sent by {email.sentByName ?? 'staff'}</span>}
-                      {email.attachments.length > 0 && <Paperclip size={12} className="text-slate-400" />}
-                    </div>
-                    <div className="text-slate-800">{email.subject}</div>
-                    <div className="text-slate-500 text-xs truncate">{email.preview}</div>
-                  </div>
-                  <div className="text-xs text-slate-400 whitespace-nowrap">{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</div>
-                </div>
+                <CaseEmailRow key={email.id} email={email} caseId={caseId!} canEdit={canEdit} currentUser={currentUser!} />
               ))}
             </div>
           )}
