@@ -275,28 +275,15 @@ export default function FamilyPortal() {
         </div>
       </div>
 
-      {/* Olive textured nav bar with logo card overlapping, like the live site */}
-      <div className="relative bg-[#5f6f4f] border-b-4 border-[#4d5f45]">
-        <div className="max-w-5xl mx-auto px-6 relative">
-          {/* Logo card */}
-          <div className="absolute -top-2 left-0 bg-white rounded-sm shadow-md px-5 py-3 flex items-center gap-3 z-10">
-            <BrandLogo name={loc?.name} className="h-11 w-auto shrink-0" />
-            {brandFor(loc?.name).key === 'casillas' && (
-              <div className="leading-tight">
-                <div className="font-display font-bold text-slate-800 text-sm tracking-wide">CASILLAS<br />FUNERAL HOME</div>
-              </div>
-            )}
-            <div className="text-[11px] leading-tight text-red-700 font-medium pl-2 border-l border-slate-200">
-              {loc && <div>{loc.city}, {loc.state} <span className="text-slate-400">{loc.licenseNumber}</span></div>}
-            </div>
-          </div>
-          <div className="h-16" />
-        </div>
-      </div>
-
       {/* Hero */}
       <div className="bg-[#3b4a35] text-white">
-        <div className="max-w-3xl mx-auto px-6 py-10 text-center">
+        <div className="max-w-3xl mx-auto px-6 pt-8 pb-10 text-center">
+          {/* The logo sits directly on the dark band (no white box) so it blends in. */}
+          <BrandLogo on="dark" name={loc?.name} className="h-24 w-auto mx-auto" />
+          <div className="mt-3 text-[11px] uppercase tracking-[0.25em] text-[#d9c78f]/90">{loc ? `${loc.city}, ${loc.state}` : ''}</div>
+          <div className="mx-auto my-6 flex items-center justify-center gap-3 text-[#d9c78f]/70" aria-hidden>
+            <span className="h-px w-16 bg-[#d9c78f]/40" /><span className="text-xs">&#10086;</span><span className="h-px w-16 bg-[#d9c78f]/40" />
+          </div>
           <div className="text-xs uppercase tracking-[0.2em] text-[#d9c78f] mb-2">{t('familyPortal.hero.inLovingMemory')}</div>
           <h1 className="font-display italic text-3xl font-semibold" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
             {c.decedent.firstName} {c.decedent.lastName}
@@ -306,7 +293,7 @@ export default function FamilyPortal() {
               {new Date(c.decedent.dateOfBirth).getFullYear()} – {new Date(c.decedent.dateOfDeath).getFullYear()}
             </div>
           )}
-          {loc && <div className="text-xs text-slate-300 mt-1">{loc.name}</div>}
+          
         </div>
       </div>
 
