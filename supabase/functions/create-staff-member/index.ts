@@ -33,6 +33,7 @@ interface RequestBody {
   department?: string
   phone?: string
   locationIds: string[]
+  orgId?: string // the company the new person belongs to (defaults to the caller's own)
 }
 
 const DEFAULT_TEMP_PASSWORD = 'ChangeMe123!'
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...corsHeaders, 'content-type': 'application/json' },
       })
     }
-    const { data: callerStaff } = await supabaseAdmin.from('staff_members').select('role, org_id').eq('id', caller.id).single()
+    const { data: callerStaff } = await supabaseAdmin.from('staff_members').select('role, org_id, all_companies').eq('id', caller.id).single()
     if (!callerStaff || callerStaff.role !== 'super_admin') {
       return new Response(JSON.stringify({ error: 'Only a Super Admin can add staff.' }), { status: 403, headers: { ...corsHeaders, 'content-type': 'application/json' } })
     }
@@ -68,6 +69,15 @@ Deno.serve(async (req) => {
     const body: RequestBody = await req.json()
     if (!body.name || !body.email || !body.role || !body.locationIds?.length) {
       return new Response(JSON.stringify({ error: 'Name, email, role, and at least one location are required.' }), {
+        status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' },
+      })
+    }
+
+    // Which company? The caller's own, or the other one if they are allowed to work in it.
+    const orgId = body.orgId && (body.orgId === callerStaff.org_id || callerStaff.all_companies) ? body.orgId : callerStaff.org_id
+    const { data: locs } = await supabaseAdmin.from('locations').select('id').eq('org_id', orgId).in('id', body.locationIds)
+    if (!locs || locs.length !== body.locationIds.length) {
+      return new Response(JSON.stringify({ error: 'Those locations do not belong to this company.' }), {
         status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' },
       })
     }
@@ -85,7 +95,7 @@ Deno.serve(async (req) => {
 
     const { error: staffErr } = await supabaseAdmin.from('staff_members').insert({
       id: authUser.user.id,
-      org_id: callerStaff.org_id,
+      org_id: orgId,
       name: body.name,
       email: body.email,
       role: body.role,

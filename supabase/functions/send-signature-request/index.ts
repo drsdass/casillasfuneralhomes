@@ -71,6 +71,11 @@ Deno.serve(async (req) => {
       .createSignedUrl(body.documentStoragePath, 60 * 10) // 10 minutes
     if (urlErr) throw urlErr
 
+    // Sent under the name of the company the case belongs to (Casillas, Sanders...).
+    const { data: caseOrg } = await supabase.from('cases').select('organizations(name)').eq('id', body.caseId).maybeSingle()
+    // deno-lint-ignore no-explicit-any
+    const companyName = (caseOrg as any)?.organizations?.name ?? 'Casillas Funeral Home'
+
     const signRequestRes = await fetch('https://signrequest.com/api/v1/signrequests/', {
       method: 'POST',
       headers: {
@@ -80,7 +85,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         document: { url_w_auth: signedUrl.signedUrl, name: body.documentName },
         signers: [{ email: body.signerEmail, name: body.signerName }],
-        from_email_name: 'Casillas Funeral Home',
+        from_email_name: companyName,
         subject: `Please sign: ${body.documentName}`,
         message: 'Please review and sign the attached document at your earliest convenience.',
       }),

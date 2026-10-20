@@ -1,7 +1,8 @@
 import {
-  staff, cases, contracts, custodyLog, caseTasks, caseNotes,
+  staff, cases, locations as allLocationsList, contracts, custodyLog, caseTasks, caseNotes,
   vehicles, calendarEvents, gplItems, inboundEmails, signatureRequests,
 } from './mockData'
+import { getStoredOrgId } from '@/lib/supabase'
 import { TASK_STATUS_LABELS, CUSTODY_STAGE_LABELS } from '@/types'
 import type {
   StaffMember, FuneralCase, Contract, CustodyLogEntry, CustodyStage, UserRole,
@@ -80,11 +81,28 @@ function logAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>) {
   auditLogStore = [...auditLogStore, { ...entry, id: newId('audit'), timestamp: new Date().toISOString() }]
 }
 
+// Demo mode: which company this tab is working in (Casillas unless an admin switched to Sanders).
+function demoOrgId(): string {
+  const chosen = getStoredOrgId()
+  if (chosen) return chosen
+  try {
+    const me = staff.find((x) => x.id === localStorage.getItem('casillas_os_session_user_id'))
+    if (me) return me.orgId
+  } catch { /* ignore */ }
+  return 'org-1'
+}
+function locationsForOrg(orgId: string): string[] {
+  return allLocationsList.filter((l) => l.orgId === orgId).map((l) => l.id)
+}
+
 export const mockStore = {
   // -----------------------------------------------------------------
   // Staff / roles / access
   // -----------------------------------------------------------------
-  getStaff: (): StaffMember[] => staffStore,
+  getStaff: (): StaffMember[] => {
+    const org = demoOrgId()
+    return staffStore.filter((s) => s.orgId === org)
+  },
 
   updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): StaffMember[] {
     const target = staffStore.find((s) => s.id === staffId)
@@ -110,6 +128,17 @@ export const mockStore = {
   },
 
   /** Toggle whether a staff member has a given feature explicitly disabled (overriding their role default). */
+  updateStaffAllCompanies(staffId: string, allCompanies: boolean, changedBy: StaffMember): StaffMember[] {
+    const target = staffStore.find((s) => s.id === staffId)
+    staffStore = staffStore.map((s) => (s.id === staffId ? { ...s, allCompanies } : s))
+    logAudit({
+      entityType: 'staff', entityId: staffId, action: 'update',
+      summary: `${allCompanies ? 'Allowed' : 'Stopped'} ${target?.name ?? staffId} ${allCompanies ? 'to switch between companies' : 'from switching between companies'}`,
+      changedBy: changedBy.id, changedByName: changedBy.name,
+    })
+    return staffStore
+  },
+
   updateStaffFeatures(staffId: string, disabledFeatures: string[], changedBy: StaffMember): StaffMember[] {
     const target = staffStore.find((s) => s.id === staffId)
     staffStore = staffStore.map((s) => (s.id === staffId ? { ...s, disabledFeatures } : s))
@@ -143,7 +172,10 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Cases
   // -----------------------------------------------------------------
-  getCases: (): FuneralCase[] => caseStore,
+  getCases: (): FuneralCase[] => {
+    const locIds = new Set(locationsForOrg(demoOrgId()))
+    return caseStore.filter((c) => locIds.has(c.locationId))
+  },
 
   getCase: (id: string): FuneralCase | undefined => caseStore.find((c) => c.id === id),
 
@@ -184,7 +216,9 @@ export const mockStore = {
 
   getOverdueTasks(): Array<CaseTask & { decedentName: string; caseNumber: string }> {
     const today = new Date().toISOString().slice(0, 10)
+    const locIds = new Set(locationsForOrg(demoOrgId()))
     return taskStore
+      .filter((t) => locIds.has(caseStore.find((c) => c.id === t.caseId)?.locationId ?? ''))
       .filter((t) => t.status !== 'confirmed' && t.dueDate && t.dueDate < today)
       .map((t) => {
         const c = caseStore.find((c) => c.id === t.caseId)
@@ -752,7 +786,7 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Family CRM
   // -----------------------------------------------------------------
-  getFamilies: (): Family[] => familyStore,
+  getFamilies: (): Family[] => familyStore.filter((f) => f.orgId === demoOrgId()),
 
   getFamily: (id: string): Family | undefined => familyStore.find((f) => f.id === id),
 

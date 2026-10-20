@@ -7,6 +7,8 @@ import { canViewAllLocations } from '@/lib/permissions'
 import { format, parseISO } from 'date-fns'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import type { FuneralCase, CalendarEvent, Contract, StaffMember } from '@/types'
+import { getCompanyName } from '@/lib/company'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 export default function TvBoard() {
   const { activeLocationId, currentUser } = useSession()
@@ -49,8 +51,8 @@ export default function TvBoard() {
           <ArrowLeft size={15} /> Back
         </Link>
         <div className="flex items-center gap-3">
-          <img src="/casillas-logo.png" alt="" className="h-8 w-auto brightness-0 invert opacity-90" />
-          <span className="font-display text-lg font-semibold tracking-wide">Casillas Funeral Home</span>
+          <BrandLogo on="dark" className="h-8 w-auto" />
+          <span className="font-display text-lg font-semibold tracking-wide">{getCompanyName()}</span>
         </div>
         <div className="text-sm text-slate-300 tabular-nums">
           {format(now, 'EEEE, MMMM d')} · {format(now, 'h:mm a')}

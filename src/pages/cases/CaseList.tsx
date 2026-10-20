@@ -8,6 +8,7 @@ import { Card, SectionHeading, CaseStatusBadge } from '@/components/ui/Primitive
 import { Search, Upload, Phone } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
+import { shortLocationName } from '@/lib/company'
 
 const statusFilters: { value: CaseStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -137,7 +138,7 @@ export default function CaseList() {
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}</td>
-                {isAllLocations && <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{locationName(c.locationId).replace(/^Casillas Funeral Home\s*[—-]\s*/, '')}</td>}
+                {isAllLocations && <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{shortLocationName(locationName(c.locationId))}</td>}
                 <td className="px-4 py-3 text-slate-500 capitalize">{c.disposition}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}

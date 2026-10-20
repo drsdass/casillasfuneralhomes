@@ -1,7 +1,9 @@
 import { createContext, useContext, useState, useMemo, useEffect, type ReactNode } from 'react'
-import { staff as mockStaff, locations as mockLocations } from '@/data/mockData'
-import { supabase, USE_MOCK } from '@/lib/supabase'
-import type { StaffMember, Location, UserRole } from '@/types'
+import { staff as mockStaff, locations as mockLocations, organizations as mockOrganizations } from '@/data/mockData'
+import { supabase, USE_MOCK, getStoredOrgId, storeOrgId } from '@/lib/supabase'
+import type { StaffMember, Location, UserRole, Organization } from '@/types'
+import { canViewAllLocations } from '@/lib/permissions'
+import { setCompany, brandFor } from '@/lib/company'
 
 const STORAGE_KEY = 'casillas_os_session_user_id'
 
@@ -10,6 +12,10 @@ interface SessionContextValue {
   activeLocationId: string
   setActiveLocationId: (id: string) => void
   accessibleLocations: Location[]
+  /** Companies this person may work in (usually one; admins who can see everything get a switcher). */
+  organizations: Organization[]
+  activeOrg: Organization | null
+  switchOrg: (orgId: string) => void
   login: (email: string, password: string) => Promise<{ ok: true; role: UserRole } | { ok: false; error: string }>
   logout: () => void
   loading: boolean
@@ -32,6 +38,7 @@ function mapStaffRow(row: any): StaffMember {
     avatarColor: row.avatar_color ?? undefined,
     active: row.active,
     disabledFeatures: row.disabled_features ?? [],
+    allCompanies: row.all_companies ?? false,
   }
 }
 
@@ -55,9 +62,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // access — that's derived below), fetched once real auth resolves.
   const [allLocations, setAllLocations] = useState<Location[]>(USE_MOCK ? mockLocations : [])
 
+  const [orgList, setOrganizations] = useState<Organization[]>([])
+  const [activeOrgId, setActiveOrgId] = useState<string>('')
+
   const [activeLocationId, setActiveLocationId] = useState<string>(
     () => (USE_MOCK ? (currentUser?.locationIds[0] ?? mockLocations[0].id) : '')
   )
+
+  // Which companies this person may work in, which one this tab is in, and that company's locations.
+  async function loadCompanies(mapped: StaffMember) {
+    const { data: orgRows } = await supabase!.from('organizations').select('*')
+    const orgs: Organization[] = (orgRows ?? []).map((o: any) => ({ id: o.id, name: o.name, createdAt: o.created_at, logoUrl: o.logo_url ?? undefined }))
+    const stored = getStoredOrgId()
+    const chosen = orgs.find((o) => o.id === stored)?.id ?? mapped.orgId
+    if (stored && stored !== chosen) storeOrgId(null) // an old choice this person can no longer use
+    setOrganizations(orgs)
+    setActiveOrgId(chosen)
+    // RLS (together with the company header) already limits this to the active company.
+    const { data: locRows } = await supabase!.from('locations').select('*')
+    const locs = (locRows ?? []).map(mapLocationRow)
+    setAllLocations(locs)
+    return { locs }
+  }
 
   // Real-mode: restore/refresh the session from Supabase Auth on load, and
   // react to sign-in/sign-out from anywhere (e.g. token refresh, another tab).
@@ -75,15 +101,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return
       }
       const mapped = mapStaffRow(data)
+      const { locs } = await loadCompanies(mapped)
       setCurrentUser(mapped)
-      setActiveLocationId((prev) => (mapped.locationIds.includes(prev) ? prev : mapped.locationIds[0] ?? ''))
-
-      // Fetch the full location list too, so accessibleLocations (below)
-      // can resolve real names/addresses instead of nothing — RLS already
-      // scopes this to locations this org's staff can see.
-      const { data: locRows } = await supabase!.from('locations').select('*')
-      if (locRows) setAllLocations(locRows.map(mapLocationRow))
+      setActiveLocationId((prev) => (locs.some((l) => l.id === prev) ? prev : (locs.find((l) => mapped.locationIds.includes(l.id)) ?? locs[0])?.id ?? ''))
     }
+
 
     // Block on the full session+staff+location load before flipping
     // `loading` to false — otherwise RequireAuth can render a route with
@@ -105,10 +127,42 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe()
   }, [])
 
-  const accessibleLocations = useMemo(
-    () => (currentUser ? allLocations.filter((l) => currentUser.locationIds.includes(l.id)) : []),
-    [currentUser, allLocations]
-  )
+  // Mock mode keeps every company's locations in one list, so narrow to the active company here (real mode: the database does it).
+  const organizations = useMemo(() => {
+    if (!USE_MOCK) return orgList
+    if (!currentUser) return []
+    const mayAll = !!currentUser.allCompanies && canViewAllLocations(currentUser.role)
+    return mockOrganizations.filter((o) => o.id === currentUser.orgId || mayAll)
+  }, [orgList, currentUser])
+  useEffect(() => {
+    if (!USE_MOCK || !currentUser) return
+    const stored = getStoredOrgId()
+    setActiveOrgId(organizations.find((o) => o.id === stored)?.id ?? currentUser.orgId)
+  }, [currentUser, organizations])
+  const activeOrg = useMemo(() => organizations.find((o) => o.id === activeOrgId) ?? organizations[0] ?? null, [organizations, activeOrgId])
+  const accessibleLocations = useMemo(() => {
+    if (!currentUser) return []
+    const inCompany = allLocations.filter((l) => !activeOrg || l.orgId === activeOrg.id)
+    // Admins and super admins see every location of the company they are working in.
+    return canViewAllLocations(currentUser.role) ? inCompany : inCompany.filter((l) => currentUser.locationIds.includes(l.id))
+  }, [currentUser, allLocations, activeOrg])
+
+  // Real mode and mock mode both: if the chosen location isn't in this company, move to one that is.
+  useEffect(() => {
+    if (accessibleLocations.length && !accessibleLocations.some((l) => l.id === activeLocationId)) setActiveLocationId(accessibleLocations[0].id)
+  }, [accessibleLocations, activeLocationId])
+
+  // The look (colours, logo) follows the company being worked in.
+  useEffect(() => {
+    document.documentElement.dataset.company = brandFor(activeOrg?.name).key
+  }, [activeOrg])
+  setCompany(activeOrg?.name) // so messages and forms outside React hooks use the right company name
+
+  /** Switch company. A full reload keeps every screen and cache from mixing two companies' data. */
+  function switchOrg(orgId: string) {
+    storeOrgId(orgId)
+    window.location.assign('/')
+  }
 
   async function login(email: string, password: string): Promise<{ ok: true; role: UserRole } | { ok: false; error: string }> {
     if (!USE_MOCK) {
@@ -125,10 +179,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: 'Signed in, but no staff record was found for this account.' }
       }
       const mapped = mapStaffRow(staffRow)
-      const { data: locRows } = await supabase!.from('locations').select('*')
-      if (locRows) setAllLocations(locRows.map(mapLocationRow))
+      storeOrgId(null) // everyone starts in their own company after signing in
+      const { locs } = await loadCompanies(mapped)
       setCurrentUser(mapped)
-      setActiveLocationId(mapped.locationIds[0] ?? '')
+      setActiveLocationId((locs.find((l) => mapped.locationIds.includes(l.id)) ?? locs[0])?.id ?? '')
       return { ok: true, role: mapped.role }
     }
 
@@ -153,14 +207,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem(STORAGE_KEY)
     }
+    storeOrgId(null)
     setCurrentUser(null)
   }
 
+  // Anything this person creates (cases, vendors, families...) belongs to the company they are working in,
+  // so the user handed to the rest of the app carries the ACTIVE company as its orgId.
+  const workingUser = useMemo(
+    () => (currentUser && activeOrg && currentUser.orgId !== activeOrg.id ? { ...currentUser, orgId: activeOrg.id } : currentUser),
+    [currentUser, activeOrg]
+  )
+
   const value: SessionContextValue = {
-    currentUser,
+    currentUser: workingUser,
     activeLocationId,
     setActiveLocationId,
     accessibleLocations,
+    organizations,
+    activeOrg,
+    switchOrg,
     login,
     logout,
     loading,

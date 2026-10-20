@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./sanders-theme.css";
 
 @theme {
   --font-display: 'Playfair Display', Georgia, serif;

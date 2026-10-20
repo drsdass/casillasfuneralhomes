@@ -1,5 +1,8 @@
 import type { FuneralCase } from '@/types'
 import { resolveName } from '@/lib/vitalFields'
+import { getCompanyWebsite, shortLocationName } from '@/lib/company'
+import { useSession } from '@/context/SessionContext'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 // ---------------------------------------------------------------------------
 // These templates reproduce the exact text/layout of Casillas Funeral
@@ -26,14 +29,32 @@ function fmtDate(iso: string | undefined): string {
 }
 
 function Letterhead() {
+  const { activeOrg, accessibleLocations } = useSession()
+  // Another company (e.g. Sanders) gets its own letterhead built from its own locations, never Casillas's logo or addresses.
+  if (activeOrg && !/^casillas/i.test(activeOrg.name)) {
+    return (
+      <div className="flex items-start gap-4 pb-3 mb-6 border-b-2 border-slate-800">
+        <BrandLogo className="h-16 w-auto shrink-0" />
+        <div className="text-xs leading-tight pt-1">
+          {accessibleLocations.map((l) => (
+            <div key={l.id}>
+              <span className="font-bold text-[#a8323a]">{l.name === activeOrg.name ? l.city : shortLocationName(l.name)}</span> | {l.address}, {l.city}, {l.state} {l.zip}{l.phone && <>  t {l.phone}</>}
+              {l.licenseNumber && <span className="font-medium">  {l.licenseNumber}</span>}
+            </div>
+          ))}
+          {getCompanyWebsite() && <div className="mt-1 text-slate-500">{getCompanyWebsite()}</div>}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex items-start gap-4 pb-3 mb-6 border-b-2 border-slate-800">
-      <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-16 w-auto shrink-0" />
+      <BrandLogo className="h-16 w-auto shrink-0" />
       <div className="text-xs leading-tight pt-1">
         <div><span className="font-bold text-[#a8323a]">Cathedral City</span> | 68625 Perez Rd. #20  t (760) 202-7420  <span className="font-medium">FD-2117</span></div>
         <div><span className="font-bold text-[#a8323a]">Coachella</span> | 85891 Grapefruit Blvd  t (760) 398-1536  <span className="font-medium">FD-1498</span></div>
         <div><span className="font-bold text-[#a8323a]">Desert Hot Springs</span> | 66272 Pierson Blvd  (760) 671-6671  <span className="font-medium">FD-2432</span></div>
-        <div className="mt-1 text-slate-500">www.CasillasFuneralHome.com</div>
+        {getCompanyWebsite() && <div className="mt-1 text-slate-500">{getCompanyWebsite()}</div>}
       </div>
     </div>
   )
@@ -329,7 +350,7 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
   return (
     <div className="text-sm text-slate-900">
       <div className="flex items-center gap-3 pb-3 mb-6 border-b-2 border-slate-800">
-        <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-14 w-auto shrink-0" />
+        <BrandLogo className="h-14 w-auto shrink-0" />
         <h2 className="font-bold text-2xl">FIRST CALL</h2>
       </div>
 

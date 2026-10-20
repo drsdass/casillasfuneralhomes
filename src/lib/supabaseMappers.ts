@@ -140,6 +140,7 @@ export function rowToStaff(row: any): StaffMember {
     avatarColor: row.avatar_color ?? undefined,
     active: row.active,
     disabledFeatures: row.disabled_features ?? [],
+    allCompanies: row.all_companies ?? false,
   }
 }
 

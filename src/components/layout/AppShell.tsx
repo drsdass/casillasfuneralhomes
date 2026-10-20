@@ -6,6 +6,7 @@ import {
   Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
+import { brandFor } from '@/lib/company'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -17,6 +18,7 @@ import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import { VoiceNoteButton } from '@/components/ui/VoiceNote'
 import { NewEmailAlerts } from '@/components/layout/NewEmailAlerts'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 const allNavItems = [
   { key: 'dashboard', to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
@@ -44,7 +46,7 @@ const EASY_NAV = ['dashboard', 'cases', 'families', 'custody', 'driver', 'calend
 
 export default function AppShell() {
   const { easy, toggle: toggleEasy } = useEasyView()
-  const { currentUser, activeLocationId, setActiveLocationId, accessibleLocations, logout } = useSession()
+  const { currentUser, activeLocationId, setActiveLocationId, accessibleLocations, logout, organizations, activeOrg, switchOrg } = useSession()
   const { t, language } = useLanguage()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -128,13 +130,40 @@ export default function AppShell() {
       {/* Sidebar — always visible on a computer; a slide-over drawer on a phone */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
-          <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-10 w-auto shrink-0 brightness-0 invert opacity-90" />
-          <div className="flex-1">
-            <div className="text-lg font-display font-semibold tracking-tight">Casillas OS</div>
-            <div className="text-xs text-slate-300">Casillas Funeral Home</div>
-          </div>
+          {!activeOrg || brandFor(activeOrg.name).key === 'casillas' ? (
+            <>
+              <BrandLogo on="dark" name={activeOrg?.name} className="h-10 w-auto shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-display font-semibold tracking-tight">Casillas OS</div>
+                <div className="text-xs text-slate-300">{activeOrg?.name ?? 'Casillas Funeral Home'}</div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 min-w-0">
+              <BrandLogo on="dark" name={activeOrg.name} className="h-14 w-auto max-w-full" />
+            </div>
+          )}
           <button onClick={() => setMenuOpen(false)} className="lg:hidden text-slate-300 hover:text-white" aria-label="Close menu"><X size={20} /></button>
         </div>
+
+        {/* Company switcher — only for admins who may work in more than one company */}
+        {organizations.length > 1 && (
+          <div className="px-3 pt-3">
+            <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300/70">Company</div>
+            <div className="flex rounded-md bg-white/5 p-0.5">
+              {organizations.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => { if (o.id !== activeOrg?.id) switchOrg(o.id) }}
+                  className={`flex-1 truncate rounded px-2 py-1.5 text-sm transition ${o.id === activeOrg?.id ? 'bg-[#b3925a] text-[#2b3327] font-semibold' : 'text-slate-200 hover:bg-white/10'}`}
+                  title={o.name}
+                >
+                  {o.name.replace(/\s*Funeral Home$/i, '')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Location switcher */}
         {accessibleLocations.length > 0 && (
@@ -224,6 +253,9 @@ export default function AppShell() {
             <button onClick={() => setMenuOpen(true)} className="lg:hidden h-10 w-10 -ml-1 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-100" aria-label="Menu">
               <Menu size={22} />
             </button>
+            {organizations.length > 1 && activeOrg && (
+              <span className="shrink-0 rounded-full bg-[#3b4a35] px-3 py-1 text-xs font-semibold text-white" title="The company you are working in">{activeOrg.name}</span>
+            )}
             <div className="hidden md:block text-sm text-slate-500 truncate">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>

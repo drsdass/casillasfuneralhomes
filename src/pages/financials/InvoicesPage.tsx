@@ -5,6 +5,8 @@ import { api } from '@/lib/api'
 import { Card, SectionHeading, formatCurrency } from '@/components/ui/Primitives'
 import { Printer, CheckCircle2, Circle, ArrowLeft } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { getCompanyName } from '@/lib/company'
+import { BrandLogo } from '@/components/ui/BrandLogo'
 
 export default function InvoicesPage() {
   const { currentUser, accessibleLocations } = useSession()
@@ -63,9 +65,9 @@ export default function InvoicesPage() {
           <Card className="p-8 max-w-2xl">
             <div className="flex items-start justify-between mb-8 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-12 w-auto shrink-0" />
+                <BrandLogo className="h-12 w-auto shrink-0" />
                 <div>
-                  <div className="font-display text-lg font-semibold text-[#3b4a35]">Casillas Funeral Home</div>
+                  <div className="font-display text-lg font-semibold text-[#3b4a35]">{getCompanyName()}</div>
                   {selectedLocation && (
                     <div className="text-xs text-slate-500 mt-1">
                       {selectedLocation.address}, {selectedLocation.city}, {selectedLocation.state} {selectedLocation.zip}

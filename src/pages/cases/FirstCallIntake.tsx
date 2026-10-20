@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check } from 'lucide-react'
 import type { FirstCallInfo } from '@/types'
+import { getCompanyName } from '@/lib/company'
 
 const sectionLabel = 'bg-slate-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-t-md'
 const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
@@ -144,7 +145,7 @@ export default function FirstCallIntake() {
   })
 
   const smsMutation = useMutation({
-    mutationFn: (phone: string) => api.notifyFamilySms(phone, `This is Casillas Funeral Home. Please complete the remaining information for your loved one here: ${generatedLink}`),
+    mutationFn: (phone: string) => api.notifyFamilySms(phone, `This is ${getCompanyName()}. Please complete the remaining information for your loved one here: ${generatedLink}`),
   })
 
   async function handleSend() {
@@ -155,7 +156,7 @@ export default function FirstCallIntake() {
     }
     if (sendMethod === 'text' && sendTarget) smsMutation.mutate(sendTarget)
     if (sendMethod === 'email' && sendTarget) {
-      window.location.href = `mailto:${sendTarget}?subject=${encodeURIComponent('Please complete your information — Casillas Funeral Home')}&body=${encodeURIComponent(`Hello,\n\nPlease complete the remaining information for your loved one here:\n${link}\n\nThank you,\nCasillas Funeral Home`)}`
+      window.location.href = `mailto:${sendTarget}?subject=${encodeURIComponent(`Please complete your information — ${getCompanyName()}`)}&body=${encodeURIComponent(`Hello,\n\nPlease complete the remaining information for your loved one here:\n${link}\n\nThank you,\n${getCompanyName()}`)}`
     }
   }
 

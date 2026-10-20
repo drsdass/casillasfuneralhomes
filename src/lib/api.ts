@@ -9,6 +9,7 @@ import type {
   Family, FamilyInteraction, FamilyInteractionType, Vendor, VitalSheetInfo, TaskTemplate,
 } from '@/types'
 import { locations as mockLocations } from '@/data/mockData'
+import { getCompanyName } from '@/lib/company'
 import {
   caseToRow, rowToCase, contactToRow, rowToStaff, documentToRow, rowToDocument,
   eventToRow, rowToEvent, rowToGplItem, rowToContract, rowToVehicle,
@@ -276,6 +277,20 @@ export const api = {
     return updated
   },
 
+  /** super_admin only — lets an admin switch between companies (e.g. Casillas and Sanders). */
+  async updateStaffAllCompanies(staffId: string, allCompanies: boolean, changedBy: StaffMember): Promise<StaffMember[]> {
+    if (USE_MOCK) return delay(mockStore.updateStaffAllCompanies(staffId, allCompanies, changedBy))
+    const { error } = await supabase!.from('staff_members').update({ all_companies: allCompanies }).eq('id', staffId)
+    if (error) throw error
+    const updated = await this.getStaff()
+    logAuditReal({
+      entityType: 'staff', entityId: staffId, action: 'update',
+      summary: `${allCompanies ? 'Allowed' : 'Stopped'} ${updated.find((s) => s.id === staffId)?.name ?? staffId} ${allCompanies ? 'to switch between companies' : 'from switching between companies'}`,
+      changedBy: changedBy.id,
+    })
+    return updated
+  },
+
   /** super_admin only — features explicitly disabled for this user, overriding their role default. */
   async updateStaffFeatures(staffId: string, disabledFeatures: string[], changedBy: StaffMember): Promise<StaffMember[]> {
     if (USE_MOCK) return delay(mockStore.updateStaffFeatures(staffId, disabledFeatures, changedBy))
@@ -295,7 +310,7 @@ export const api = {
     name: string; email: string; role: UserRole; title?: string; department?: string; phone?: string; locationIds: string[]
   }, changedBy: StaffMember): Promise<{ tempPassword: string }> {
     if (USE_MOCK) return delay(mockStore.createStaffMember(input, changedBy))
-    const { data, error } = await supabase!.functions.invoke('create-staff-member', { body: input })
+    const { data, error } = await supabase!.functions.invoke('create-staff-member', { body: { ...input, orgId: changedBy.orgId } })
     if (error) {
       const context = (error as { context?: Response }).context
       if (context) {
@@ -824,7 +839,7 @@ export const api = {
       if (contactPhone) {
         this.notifyFamilySms(
           contactPhone,
-          `This is Casillas Funeral Home. We want you to know that ${current.decedent.firstName} has arrived safely at our care facility and is being treated with the utmost care and respect. We are here for you and your family every step of the way.`
+          `This is ${getCompanyName()}. We want you to know that ${current.decedent.firstName} has arrived safely at our care facility and is being treated with the utmost care and respect. We are here for you and your family every step of the way.`
         )
       }
     }
@@ -1075,7 +1090,7 @@ export const api = {
     sentBy: StaffMember
   ): Promise<InboundEmail> {
     if (USE_MOCK) return delay(mockStore.sendEmail(params, sentBy))
-    const { data, error } = await supabase!.functions.invoke('email-send', { body: params })
+    const { data, error } = await supabase!.functions.invoke('email-send', { body: { ...params, orgId: sentBy.orgId } })
     if (error) {
       const context = (error as { context?: Response }).context
       if (context) {

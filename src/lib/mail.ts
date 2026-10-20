@@ -9,7 +9,13 @@ export interface MailStatus {
   status: string | null
   lastError: string | null
   connectedAt: string | null
+  tenant: string | null
+  provider: 'microsoft' | 'google' | null
+  configuredMicrosoft: boolean
+  configuredGoogle: boolean
 }
+
+export type MailProvider = 'microsoft' | 'google'
 
 async function call(body: Record<string, unknown>) {
   if (USE_MOCK) throw new Error('Email needs the live database.')
@@ -27,8 +33,9 @@ async function call(body: Record<string, unknown>) {
 
 export const mail = {
   available: !USE_MOCK,
-  status: (): Promise<MailStatus> => call({ action: 'status' }),
-  start: (state: string): Promise<{ url: string }> => call({ action: 'start', state }),
-  finish: (code: string): Promise<{ ok: boolean; address: string }> => call({ action: 'finish', code }),
-  disconnect: (): Promise<{ ok: boolean }> => call({ action: 'disconnect' }),
+  // Each company (Casillas, Sanders...) has its own mailbox, so every call says which company it is about.
+  status: (orgId: string): Promise<MailStatus> => call({ action: 'status', orgId }),
+  start: (state: string, orgId: string, provider: MailProvider, tenant?: string): Promise<{ url: string }> => call({ action: 'start', state, orgId, provider, tenant }),
+  finish: (code: string, orgId: string, provider: MailProvider, tenant?: string): Promise<{ ok: boolean; address: string }> => call({ action: 'finish', code, orgId, provider, tenant }),
+  disconnect: (orgId: string): Promise<{ ok: boolean }> => call({ action: 'disconnect', orgId }),
 }

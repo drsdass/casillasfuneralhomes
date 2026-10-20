@@ -1,0 +1,39 @@
+/* Sanders look: the same screens, recoloured. Generated from the colour classes the app uses; applies only when a Sanders user (or a Sanders family link) is showing. */
+html[data-company="sanders"] {
+  --brand: #2c4a5a; --brand-hover: #3d6074; --brand-dark: #1c3341; --brand-soft: #5a7f91;
+  --accent: #5f8ea5; --accent-light: #c7dbe5; --accent-hover: #74a0b5;
+}
+html[data-company="sanders"] .accent-\[\#3b4a35\] { accent-color: var(--brand) !important; }
+html[data-company="sanders"] .active\:bg-\[\#3b4a35\]:active { background-color: var(--brand) !important; }
+html[data-company="sanders"] .bg-\[\#2b3327\] { background-color: var(--brand-dark) !important; }
+html[data-company="sanders"] .bg-\[\#3b4a35\] { background-color: var(--brand) !important; }
+html[data-company="sanders"] .bg-\[\#3b4a35\]\/10 { background-color: color-mix(in srgb, var(--brand) 10%, transparent) !important; }
+html[data-company="sanders"] .bg-\[\#3b4a35\]\/5 { background-color: color-mix(in srgb, var(--brand) 5%, transparent) !important; }
+html[data-company="sanders"] .bg-\[\#5f6f4f\] { background-color: var(--brand-soft) !important; }
+html[data-company="sanders"] .bg-\[\#b3925a\] { background-color: var(--accent) !important; }
+html[data-company="sanders"] .bg-\[\#b3925a\]\/10 { background-color: color-mix(in srgb, var(--accent) 10%, transparent) !important; }
+html[data-company="sanders"] .bg-\[\#b3925a\]\/15 { background-color: color-mix(in srgb, var(--accent) 15%, transparent) !important; }
+html[data-company="sanders"] .bg-\[\#b3925a\]\/5 { background-color: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
+html[data-company="sanders"] .bg-\[\#cbb98c\] { background-color: var(--accent-light) !important; }
+html[data-company="sanders"] .border-\[\#3b4a35\] { border-color: var(--brand) !important; }
+html[data-company="sanders"] .border-\[\#3b4a35\]\/30 { border-color: color-mix(in srgb, var(--brand) 30%, transparent) !important; }
+html[data-company="sanders"] .border-\[\#4d5f45\] { border-color: var(--brand-hover) !important; }
+html[data-company="sanders"] .border-\[\#b3925a\] { border-color: var(--accent) !important; }
+html[data-company="sanders"] .border-\[\#b3925a\]\/20 { border-color: color-mix(in srgb, var(--accent) 20%, transparent) !important; }
+html[data-company="sanders"] .border-\[\#b3925a\]\/30 { border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important; }
+html[data-company="sanders"] .border-\[\#b3925a\]\/40 { border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
+html[data-company="sanders"] .focus\:ring-\[\#b3925a\]:focus { --tw-ring-color: var(--accent) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/20:hover { background-color: color-mix(in srgb, var(--brand) 20%, transparent) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/5:hover { background-color: color-mix(in srgb, var(--brand) 5%, transparent) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#4d5f45\]:hover { background-color: var(--brand-hover) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#b3925a\]\/5:hover { background-color: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#c4a36b\]:hover { background-color: var(--accent-hover) !important; }
+html[data-company="sanders"] .hover\:border-\[\#b3925a\]:hover { border-color: var(--accent) !important; }
+html[data-company="sanders"] .hover\:text-\[\#3b4a35\]:hover { color: var(--brand) !important; }
+html[data-company="sanders"] .hover\:text-\[\#b3925a\]:hover { color: var(--accent) !important; }
+html[data-company="sanders"] .hover\:text-\[\#d9c78f\]:hover { color: var(--accent-light) !important; }
+html[data-company="sanders"] .ring-\[\#b3925a\]\/40 { --tw-ring-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
+html[data-company="sanders"] .text-\[\#2b3327\] { color: var(--brand-dark) !important; }
+html[data-company="sanders"] .text-\[\#3b4a35\] { color: var(--brand) !important; }
+html[data-company="sanders"] .text-\[\#b3925a\] { color: var(--accent) !important; }
+html[data-company="sanders"] .text-\[\#d9c78f\] { color: var(--accent-light) !important; }

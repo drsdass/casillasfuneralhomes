@@ -10,6 +10,8 @@ import {
 import { formatCurrency } from '@/components/ui/Primitives'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
+import { BrandLogo } from '@/components/ui/BrandLogo'
+import { brandFor } from '@/lib/company'
 
 const sectionKeys = ['intake', 'vitalSheet', 'obituary', 'photos', 'billing', 'messages'] as const
 const sectionIcons = { intake: ClipboardList, vitalSheet: FileText, obituary: PenLine, photos: ImageIcon, billing: CreditCard, messages: MessageSquare }
@@ -114,6 +116,10 @@ export default function FamilyPortal() {
     if (c && c.intakeOpenForFamily === false && active === 'intake') setActive('vitalSheet')
   }, [c, active])
   const loc = data?.location
+  // Colours follow the funeral home this family link belongs to.
+  useEffect(() => {
+    document.documentElement.dataset.company = brandFor(loc?.name).key
+  }, [loc?.name])
   const gplItems = data?.gplItems ?? []
   const contracts = data?.contracts ?? []
   const statusMessage = data?.statusMessage
@@ -274,10 +280,12 @@ export default function FamilyPortal() {
         <div className="max-w-5xl mx-auto px-6 relative">
           {/* Logo card */}
           <div className="absolute -top-2 left-0 bg-white rounded-sm shadow-md px-5 py-3 flex items-center gap-3 z-10">
-            <img src="/casillas-logo.png" alt="Casillas Funeral Home" className="h-11 w-auto shrink-0" />
-            <div className="leading-tight">
-              <div className="font-display font-bold text-slate-800 text-sm tracking-wide">CASILLAS<br />FUNERAL HOME</div>
-            </div>
+            <BrandLogo name={loc?.name} className="h-11 w-auto shrink-0" />
+            {brandFor(loc?.name).key === 'casillas' && (
+              <div className="leading-tight">
+                <div className="font-display font-bold text-slate-800 text-sm tracking-wide">CASILLAS<br />FUNERAL HOME</div>
+              </div>
+            )}
             <div className="text-[11px] leading-tight text-red-700 font-medium pl-2 border-l border-slate-200">
               {loc && <div>{loc.city}, {loc.state} <span className="text-slate-400">{loc.licenseNumber}</span></div>}
             </div>

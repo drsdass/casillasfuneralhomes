@@ -42,25 +42,51 @@ interface RequestBody {
   changedBy: string // staffId
 }
 
-async function getGraphToken(): Promise<string> {
-  const { data: conn } = await supabase.from('mail_connection').select('*').eq('id', 1).maybeSingle()
-  if (!conn?.refresh_token) throw new Error('Email is not connected yet. An admin needs to press "Connect Outlook mailbox" in Email Inbox.')
-  const res = await fetch(`https://login.microsoftonline.com/${(Deno.env.get('MS_TENANT_ID') ?? '').trim()}/oauth2/v2.0/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: (Deno.env.get('MS_CLIENT_ID') ?? '').trim(), client_secret: (Deno.env.get('MS_CLIENT_SECRET') ?? '').trim(),
-      grant_type: 'refresh_token', refresh_token: conn.refresh_token, scope: 'offline_access Mail.Read Mail.Send User.Read',
-    }),
-  })
-  if (!res.ok) throw new Error(`Microsoft sign-in needs to be renewed: ${(await res.text()).slice(0, 200)}`)
+async function getMailToken(orgId: string): Promise<{ token: string; provider: 'microsoft' | 'google' }> {
+  const { data: conn } = await supabase.from('mail_connection').select('*').eq('org_id', orgId).maybeSingle()
+  if (!conn?.refresh_token) throw new Error('Email is not connected yet. An admin needs to press "Connect" in Email Inbox.')
+  const provider: 'microsoft' | 'google' = conn.provider === 'google' ? 'google' : 'microsoft'
+  const env = (k: string) => (Deno.env.get(k) ?? '').trim()
+  const res = provider === 'google'
+    ? await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: env('GOOGLE_CLIENT_ID'), client_secret: env('GOOGLE_CLIENT_SECRET'), grant_type: 'refresh_token', refresh_token: conn.refresh_token }),
+      })
+    : await fetch(`https://login.microsoftonline.com/${(conn.tenant || env('MS_TENANT_ID'))}/oauth2/v2.0/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: env('MS_CLIENT_ID'), client_secret: env('MS_CLIENT_SECRET'),
+          grant_type: 'refresh_token', refresh_token: conn.refresh_token, scope: 'offline_access Mail.Read Mail.Send User.Read',
+        }),
+      })
+  if (!res.ok) throw new Error(`The email sign-in needs to be renewed: ${(await res.text()).slice(0, 200)}`)
   const d = await res.json()
-  if (d.refresh_token && d.refresh_token !== conn.refresh_token) await supabase.from('mail_connection').update({ refresh_token: d.refresh_token }).eq('id', 1)
-  return d.access_token
+  if (d.refresh_token && d.refresh_token !== conn.refresh_token) await supabase.from('mail_connection').update({ refresh_token: d.refresh_token }).eq('org_id', orgId)
+  return { token: d.access_token, provider }
 }
 
-/** Returns the attachment's raw bytes as base64, straight from Outlook. */
-async function fetchAttachmentContent(token: string, messageId: string, attachmentId: string): Promise<string> {
+/** Returns the attachment's raw bytes as base64, straight from the mailbox. */
+async function fetchAttachmentContent(token: string, provider: 'microsoft' | 'google', messageId: string, attachmentId: string, filename: string, sizeHint?: number): Promise<string> {
+  if (provider === 'google') {
+    const base = 'https://gmail.googleapis.com/gmail/v1/users/me/messages'
+    const h = { Authorization: `Bearer ${token}` }
+    // Gmail can change an attachment's id between looks, so find it again in the message by file name first.
+    let attId = attachmentId
+    const mr = await fetch(`${base}/${messageId}?format=full`, { headers: h })
+    if (mr.ok) {
+      // deno-lint-ignore no-explicit-any
+      const walk = (p: any): any[] => [p, ...(p?.parts ?? []).flatMap(walk)]
+      // deno-lint-ignore no-explicit-any
+      const hit = walk((await mr.json()).payload).find((p: any) => p?.filename === filename && p?.body?.attachmentId)
+      if (hit) attId = hit.body.attachmentId
+    }
+    const res = await fetch(`${base}/${messageId}/attachments/${attId}`, { headers: h })
+    if (!res.ok) throw new Error(`Failed to fetch attachment: ${(await res.text()).slice(0, 200)}`)
+    const b = String((await res.json()).data ?? '').replace(/-/g, '+').replace(/_/g, '/')
+    return b + '='.repeat((4 - (b.length % 4)) % 4)
+  }
   const url = `https://graph.microsoft.com/v1.0/me/messages/${messageId}/attachments/${attachmentId}`
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Prefer: 'IdType="ImmutableId"' } })
   if (!res.ok) throw new Error(`Failed to fetch attachment: ${await res.text()}`)
@@ -91,8 +117,11 @@ Deno.serve(async (req) => {
 
   try {
     const body: RequestBody = await req.json()
-    const token = await getGraphToken()
-    const contentBase64 = await fetchAttachmentContent(token, body.graphMessageId, body.attachmentId)
+    // Use the mailbox of the company this case belongs to.
+    const { data: caseRow } = await supabase.from('cases').select('org_id').eq('id', body.caseId).maybeSingle()
+    if (!caseRow) throw new Error('Case not found.')
+    const { token, provider } = await getMailToken(caseRow.org_id)
+    const contentBase64 = await fetchAttachmentContent(token, provider, body.graphMessageId, body.attachmentId, body.filename)
 
     if (body.action === 'save') {
       const bytes = Uint8Array.from(atob(contentBase64), (c) => c.charCodeAt(0))

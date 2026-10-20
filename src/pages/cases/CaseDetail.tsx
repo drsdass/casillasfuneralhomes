@@ -20,6 +20,7 @@ import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskS
 import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
+import { getCompanyName } from '@/lib/company'
 const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
@@ -1191,11 +1192,11 @@ function SendToVendorModal({
     try {
       const link = await api.getDocumentSignedUrl(docPath)
       if (method === 'email') {
-        const subject = `${docName} — from Casillas Funeral Home`
-        const body = `Hello,\n\nPlease find the document "${docName}" here (link expires in 7 days):\n${link}\n\nThank you,\nCasillas Funeral Home`
+        const subject = `${docName} — from ${getCompanyName()}`
+        const body = `Hello,\n\nPlease find the document "${docName}" here (link expires in 7 days):\n${link}\n\nThank you,\n${getCompanyName()}`
         window.location.href = `mailto:${vendor.email ?? ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
       } else {
-        await api.notifyFamilySms(vendor.phone!, `This is Casillas Funeral Home. Please see "${docName}" here: ${link}`)
+        await api.notifyFamilySms(vendor.phone!, `This is ${getCompanyName()}. Please see "${docName}" here: ${link}`)
       }
       onCancel()
     } catch (err) {

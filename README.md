@@ -277,6 +277,12 @@ Cost is genuinely small — this uses Claude Sonnet for better accuracy on
 messy/handwritten documents than the Haiku model used for email matching,
 but it's still a single request per upload, not a recurring cost.
 
+## Companies (Casillas and Sanders)
+Sanders Funeral Home is a separate company inside the same system. See `docs/companies.md` and run `src/db/companies.sql`.
+
+## Gmail for a company's shared mailbox
+Sanders uses Gmail. See `docs/gmail-setup.md` and run `src/db/gmail.sql`.
+
 ## Email inbox setup (shared Outlook / Microsoft 365 → cases, with replies)
 
 Fully written: `src/pages/inbox/EmailInbox.tsx` (review screen, Reply, New email, and the admin

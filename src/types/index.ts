@@ -32,6 +32,7 @@ export interface Organization {
   id: string
   name: string
   createdAt: string
+  logoUrl?: string // shown in the sidebar; Casillas has its own logo, a company without one shows its name only
 }
 
 export interface Location {
@@ -52,6 +53,7 @@ export interface StaffMember {
   id: string
   orgId: string
   locationIds: string[] // which locations this person can access
+  allCompanies?: boolean // admins who can switch between companies (e.g. Casillas and Sanders)
   name: string
   email: string
   role: UserRole

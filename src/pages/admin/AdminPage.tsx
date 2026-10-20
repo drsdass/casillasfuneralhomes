@@ -21,7 +21,7 @@ const roleBadgeStyles: Record<UserRole, string> = {
 }
 
 export default function AdminPage() {
-  const { currentUser } = useSession()
+  const { currentUser, organizations, activeOrg } = useSession()
   const queryClient = useQueryClient()
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [accessPanelId, setAccessPanelId] = useState<string | null>(null)
@@ -58,6 +58,12 @@ export default function AdminPage() {
   const featuresMutation = useMutation({
     mutationFn: ({ staffId, disabledFeatures }: { staffId: string; disabledFeatures: string[] }) =>
       api.updateStaffFeatures(staffId, disabledFeatures, currentUser!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
+  })
+
+  const companiesMutation = useMutation({
+    mutationFn: ({ staffId, allCompanies }: { staffId: string; allCompanies: boolean }) =>
+      api.updateStaffAllCompanies(staffId, allCompanies, currentUser!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
   })
 
@@ -105,7 +111,7 @@ export default function AdminPage() {
 
   return (
     <div>
-      <SectionHeading title="Admin" subtitle="Organization-wide locations, staff, and access" />
+      <SectionHeading title="Admin" subtitle={`${activeOrg?.name ?? 'Company'} locations, staff, and access`} />
 
       <h2 className="text-sm font-medium text-slate-700 mb-3">Locations</h2>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -290,6 +296,21 @@ export default function AdminPage() {
                               </div>
                               <p className="text-[11px] text-slate-400 mt-2">Unchecking a feature blocks it for this person even though their role would normally allow it.</p>
                             </div>
+                            {organizations.length > 1 && (s.role === 'admin' || s.role === 'super_admin') && (
+                              <div className="col-span-2 border-t border-slate-200 pt-3">
+                                <div className="text-xs font-semibold text-slate-700 mb-2">Companies</div>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!s.allCompanies}
+                                    onChange={() => companiesMutation.mutate({ staffId: s.id, allCompanies: !s.allCompanies })}
+                                    className="accent-[#3b4a35]"
+                                  />
+                                  Can switch between {organizations.map((o) => o.name).join(' and ')}
+                                </label>
+                                <p className="text-[11px] text-slate-400 mt-1">When off, {s.name} only ever sees {activeOrg?.name ?? 'their own company'}.</p>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

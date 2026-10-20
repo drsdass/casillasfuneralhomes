@@ -8,7 +8,16 @@ export const organization: Organization = {
   id: 'org-1',
   name: 'Casillas Funeral Home',
   createdAt: '2022-01-01T00:00:00Z',
+  logoUrl: '/casillas-logo.png',
 }
+
+// Sanders Funeral Home (Eureka) is its own company. Admins marked allCompanies can switch between the two.
+export const sandersOrganization: Organization = {
+  id: 'org-2',
+  name: 'Sanders Funeral Home',
+  createdAt: '2026-10-19T00:00:00Z',
+}
+export const organizations: Organization[] = [organization, sandersOrganization]
 
 // NOTE: license numbers for Cathedral City, Desert Hot Springs, and
 // Coachella are taken from the site screenshot (FD 2117 / FD 2432 / FD 1498).
@@ -37,10 +46,10 @@ export const locations: Location[] = [
     licenseNumber: 'FD 1498', active: true,
   },
   {
-    id: 'loc-4', orgId: 'org-1', name: 'Sanders Funeral Home',
-    address: '1835 E St', city: 'Eureka', state: 'CA', zip: '95501',
+    id: 'loc-4', orgId: 'org-2', name: 'Sanders Funeral Home',
+    address: '1835 E. St.', city: 'Eureka', state: 'CA', zip: '95501',
     phone: '(707) 442-2941', timezone: 'America/Los_Angeles',
-    licenseNumber: 'FD TBD', active: true,
+    licenseNumber: 'FD-320', active: true,
   },
 ]
 
@@ -56,14 +65,14 @@ const ALL_LOCATIONS = ['loc-1', 'loc-2', 'loc-3', 'loc-4']
 
 export const staff: StaffMember[] = [
   // --- Super Admins (all locations) ---
-  { id: 'stf-joel-casillas', orgId: 'org-1', locationIds: ALL_LOCATIONS, name: 'Joel Casillas', email: 'casillasjoel@live.com', password: 'qwerty', role: 'super_admin', title: 'Owner', phone: '760-702-5848', avatarColor: '#2b3327', active: true },
-  { id: 'stf-carolina-casillas', orgId: 'org-1', locationIds: ALL_LOCATIONS, name: 'Carolina Casillas', email: 'carolina.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Owner', phone: '760-702-6143', avatarColor: '#3d4f3a', active: true },
-  { id: 'stf-rosie-canas', orgId: 'org-1', locationIds: ALL_LOCATIONS, name: 'Rosie Canas', email: 'rosie.canas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Operations', phone: '760-702-9778', avatarColor: '#8b5e34', active: true },
-  { id: 'stf-ashlie-casillas', orgId: 'org-1', locationIds: ALL_LOCATIONS, name: 'Ashlie Casillas', email: 'ashlie.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Operations', phone: '760-397-7274', avatarColor: '#6b7f4f', active: true },
+  { id: 'stf-joel-casillas', orgId: 'org-1', allCompanies: true, locationIds: ALL_LOCATIONS, name: 'Joel Casillas', email: 'casillasjoel@live.com', password: 'qwerty', role: 'super_admin', title: 'Owner', phone: '760-702-5848', avatarColor: '#2b3327', active: true },
+  { id: 'stf-carolina-casillas', orgId: 'org-1', allCompanies: true, locationIds: ALL_LOCATIONS, name: 'Carolina Casillas', email: 'carolina.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Owner', phone: '760-702-6143', avatarColor: '#3d4f3a', active: true },
+  { id: 'stf-rosie-canas', orgId: 'org-1', allCompanies: true, locationIds: ALL_LOCATIONS, name: 'Rosie Canas', email: 'rosie.canas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Operations', phone: '760-702-9778', avatarColor: '#8b5e34', active: true },
+  { id: 'stf-ashlie-casillas', orgId: 'org-1', allCompanies: true, locationIds: ALL_LOCATIONS, name: 'Ashlie Casillas', email: 'ashlie.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'super_admin', title: 'Operations', phone: '760-397-7274', avatarColor: '#6b7f4f', active: true },
 
   // --- Admins ---
-  { id: 'stf-joseph-casillas', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Joseph Casillas', email: 'joseph.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'admin', title: 'Admin', phone: '760-702-0435', avatarColor: '#a8763e', active: true },
-  { id: 'stf-leticia-casillas', orgId: 'org-1', locationIds: EUREKA_ONLY, name: 'Leticia Casillas', email: 'leticia.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'admin', title: 'Admin', phone: '760-899-1680', avatarColor: '#2f4a3f', active: true },
+  { id: 'stf-joseph-casillas', orgId: 'org-1', allCompanies: true, locationIds: CA_LOCATIONS, name: 'Joseph Casillas', email: 'joseph.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'admin', title: 'Admin', phone: '760-702-0435', avatarColor: '#a8763e', active: true },
+  { id: 'stf-leticia-casillas', orgId: 'org-2', locationIds: EUREKA_ONLY, name: 'Leticia Casillas', email: 'leticia.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'admin', title: 'Admin', phone: '760-899-1680', avatarColor: '#2f4a3f', active: true },
 
   // --- Managers ---
   { id: 'stf-noemi-mejia', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Noemi Mejia', email: 'noemi.mejia@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-574-5821', avatarColor: '#6b3d6b', active: true },
@@ -71,7 +80,7 @@ export const staff: StaffMember[] = [
   { id: 'stf-marichuy-lopez', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Marichuy Lopez', email: 'marichuy.lopez@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-567-4798', avatarColor: '#8b5e34', active: true },
   { id: 'stf-isaiah-casillas', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Isaiah Casillas', email: 'isaiah.casillas@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-609-2134', avatarColor: '#b3925a', active: true },
   { id: 'stf-amber-lopez', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Amber Lopez', email: 'amber.lopez@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-485-0198', avatarColor: '#6b7f4f', active: true },
-  { id: 'stf-kenne-kersey', orgId: 'org-1', locationIds: EUREKA_ONLY, name: 'Kenne Kersey', email: 'kenne.kersey@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-673-8551', avatarColor: '#5f6f4f', active: true },
+  { id: 'stf-kenne-kersey', orgId: 'org-2', locationIds: EUREKA_ONLY, name: 'Kenne Kersey', email: 'kenne.kersey@casillasfuneralhome.com', password: 'demo1234', role: 'manager', title: 'Manager', phone: '760-673-8551', avatarColor: '#5f6f4f', active: true },
 
   // --- Staff Members ---
   { id: 'stf-david-escoto', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'David Escoto', email: 'david.escoto@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', department: 'Funeral Services', phone: '760-472-9625', avatarColor: '#6b7f4f', active: true },
@@ -80,8 +89,8 @@ export const staff: StaffMember[] = [
   { id: 'stf-hector-salas', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Hector Salas', email: 'hector.salas@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', department: 'Funeral Services', phone: '760-835-2917', avatarColor: '#a8763e', active: true },
   { id: 'stf-david-espinoza', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'David Espinoza', email: 'david.espinoza@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', department: 'Funeral Services', phone: '760-578-7907', avatarColor: '#6b3d6b', active: true },
   { id: 'stf-silvia-rochin', orgId: 'org-1', locationIds: CA_LOCATIONS, name: 'Silvia Rochin', email: 'silvia.rochin@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', phone: '760-391-1656', avatarColor: '#b3925a', active: true },
-  { id: 'stf-kelly-little', orgId: 'org-1', locationIds: EUREKA_ONLY, name: 'Kelly Little', email: 'kelly.little@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', phone: '916-672-7436', avatarColor: '#b3925a', active: true },
-  { id: 'stf-martha-barcelo', orgId: 'org-1', locationIds: EUREKA_ONLY, name: 'Martha Barcelo', email: 'martha.barcelo@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', phone: '707-726-3874', avatarColor: '#6b7f4f', active: true },
+  { id: 'stf-kelly-little', orgId: 'org-2', locationIds: EUREKA_ONLY, name: 'Kelly Little', email: 'kelly.little@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', phone: '916-672-7436', avatarColor: '#b3925a', active: true },
+  { id: 'stf-martha-barcelo', orgId: 'org-2', locationIds: EUREKA_ONLY, name: 'Martha Barcelo', email: 'martha.barcelo@casillasfuneralhome.com', password: 'demo1234', role: 'staff_member', title: 'Staff Member', phone: '707-726-3874', avatarColor: '#6b7f4f', active: true },
 ]
 
 export const cases: FuneralCase[] = [

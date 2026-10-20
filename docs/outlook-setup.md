@@ -61,3 +61,13 @@ Email the funeral home address from another address. Within 3 minutes it appears
 - Who can reply and write emails: Supervisor and above. Who can connect or disconnect the mailbox: Admin and above.
 - Nothing is filed to a family's case without a known sender, a conversation already on that case, or a person confirming it.
 - If `info@` is a shared mailbox without its own login, tell me. It needs one extra permission and a small change.
+
+## Sanders Funeral Home (a second company with its own mailbox)
+Sanders is its own company inside Casillas OS (see `docs/companies.md`). Each company has its own mailbox connection, and mail only ever files to that company's cases.
+
+1. Switch to **Sanders** with the Company switcher in the sidebar (admins who can see both companies), or sign in as a Sanders admin such as Leticia.
+2. Open **Email Inbox**. Press **Connect Outlook mailbox** and sign in with Sanders's shared email address.
+3. If Sanders's email lives in the SAME Microsoft account (directory) as Casillas, that is all. If it is a DIFFERENT Microsoft account, two extra things are needed first:
+   - In the Microsoft Entra app (the one you registered), open **Authentication** and set **Supported account types** to **Accounts in any organizational directory (Multitenant)**.
+   - Someone who is an admin of the Sanders Microsoft account must approve the app once. On the Connect screen, press "Is this mailbox in a different Microsoft account...?" and paste that account's **Directory (tenant) ID** before pressing Connect.
+4. The same 3-minute check reads both mailboxes. No new schedule is needed.
