@@ -9,6 +9,7 @@ import { ArrowLeft, Check, Clock } from 'lucide-react'
 import type { FuneralCase, CalendarEvent, Contract, StaffMember } from '@/types'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { isCaseDone } from '@/lib/caseDone'
 
 /**
  * Keeps everything on one screen: no scrolling down or sideways, however many cases or notes there are.
@@ -84,7 +85,7 @@ export default function TvBoard() {
 
   const activeCases = cases
     // Done is done: either marked completed, or moved to the Completed column on Chain of Custody.
-    .filter((c) => c.status !== 'completed' && c.custodyStage !== 'completed')
+    .filter((c) => !isCaseDone(c))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   return (

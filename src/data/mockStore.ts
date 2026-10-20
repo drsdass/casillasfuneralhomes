@@ -237,6 +237,12 @@ export const mockStore = {
     caseStore = caseStore.map((c) => {
       if (c.id !== id) return c
       updated = { ...c, ...patch, updatedAt: new Date().toISOString() }
+      // Same rules as the database: status Completed <-> Completed column.
+      const done = (st: string) => st === 'completed' || st === 'shipped_released'
+      if (patch.status && patch.status !== c.status) {
+        if (patch.status === 'completed' && !done(updated.custodyStage)) updated = { ...updated, custodyStage: 'completed' }
+        else if (c.status === 'completed' && patch.status !== 'completed' && done(updated.custodyStage)) updated = { ...updated, custodyStage: 'funeral_home' }
+      }
       return updated
     })
     if (updated) {
@@ -388,7 +394,14 @@ export const mockStore = {
     const existing = caseStore.find((c) => c.id === caseId)
     const fromStage = existing?.custodyStage
     const now = new Date().toISOString()
-    caseStore = caseStore.map((c) => (c.id === caseId ? { ...c, custodyStage: toStage, updatedAt: now } : c))
+    caseStore = caseStore.map((c) => {
+      if (c.id !== caseId) return c
+      const done = (st: string) => st === 'completed' || st === 'shipped_released'
+      let status = c.status
+      if (done(toStage) && status !== 'completed') status = 'completed'
+      else if (done(c.custodyStage) && !done(toStage) && status === 'completed') status = 'in_progress'
+      return { ...c, custodyStage: toStage, status, updatedAt: now }
+    })
     const entry: CustodyLogEntry = {
       id: newId('cl'), caseId, fromStage, toStage,
       movedBy: movedBy.id, movedByName: movedBy.name, timestamp: now, note,

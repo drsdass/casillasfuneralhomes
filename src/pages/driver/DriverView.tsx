@@ -11,6 +11,7 @@ import { suggestStage, casesNamedIn } from '@/lib/voiceNote'
 import { canViewAllLocations } from '@/lib/permissions'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { CUSTODY_STAGE_LABELS, type CustodyStage } from '@/types'
+import { isCaseDone } from '@/lib/caseDone'
 
 // The next step for a case, in plain words a driver would use.
 const NEXT_STEP: Partial<Record<CustodyStage, { to: CustodyStage; label: string }>> = {
@@ -33,7 +34,7 @@ export default function DriverView() {
     queryKey: ['cases', all ? 'all' : activeLocationId],
     queryFn: () => api.getCases(all ? undefined : activeLocationId),
   })
-  const open = useMemo(() => cases.filter((c) => c.custodyStage !== 'completed' && c.status !== 'completed'), [cases])
+  const open = useMemo(() => cases.filter((c) => !isCaseDone(c)), [cases])
   const active = open.filter((c) => c.custodyStage in NEXT_STEP).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   const refresh = () => { queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['custody-log'] }); queryClient.invalidateQueries({ queryKey: ['case-notes'] }) }

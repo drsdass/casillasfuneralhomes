@@ -10,6 +10,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import TodayHome from '@/pages/TodayHome'
+import { isCaseDone } from '@/lib/caseDone'
 
 export default function Dashboard() {
   const { easy } = useEasyView()
@@ -34,7 +35,7 @@ function FullDashboard() {
 
   if (!currentUser) return null
 
-  const activeCases = cases.filter((c) => c.status !== 'completed')
+  const activeCases = cases.filter((c) => !isCaseDone(c))
   const openCount = activeCases.length
   const scheduledToday = events.filter((e) => isToday(parseISO(e.start)))
   const needsAttention = cases.filter((c) => c.status === 'first_call' || c.status === 'arrangement_pending')
