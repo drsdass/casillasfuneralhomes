@@ -60,7 +60,7 @@ export default function FinancialsPage() {
   }, {})
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
     <div>
       <SectionHeading
         title="Financials"

@@ -99,7 +99,7 @@ export default function EmailInbox() {
   })
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
     <div>
       <SectionHeading
         title="Email Inbox"
@@ -161,8 +161,8 @@ export default function EmailInbox() {
                   </div>
                   <div className="text-sm text-slate-800 font-medium mt-1">{email.subject}</div>
                   {openBody.has(email.id) && email.body
-                    ? <div className="mt-1 whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700 max-h-80 overflow-y-auto">{email.body}</div>
-                    : <div className="text-sm text-slate-500 truncate">{email.preview}</div>}
+                    ? <div className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md bg-slate-50 p-3 text-sm text-slate-700 max-h-80 overflow-y-auto">{email.body}</div>
+                    : <div className="text-sm text-slate-500 truncate break-all">{email.preview}</div>}
                   <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
                     <span>{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</span>
                     {email.body && (

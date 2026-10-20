@@ -189,7 +189,7 @@ export default function CustodyBoard() {
   }
 
   return (
-    <div className={`grid grid-cols-1 gap-6 items-start ${showActivity ? 'lg:grid-cols-[1fr_280px]' : ''}`}>
+    <div className={`grid grid-cols-1 gap-6 items-start ${showActivity ? 'lg:grid-cols-[minmax(0,1fr)_280px]' : ''}`}>
     <div>
       <SectionHeading
         title="Chain of Custody"

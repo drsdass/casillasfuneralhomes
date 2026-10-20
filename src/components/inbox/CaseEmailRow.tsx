@@ -100,7 +100,7 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
       {compose && <ComposeEmail {...compose} caseId={caseId} onClose={() => setCompose(null)} />}
       {open && (
         <div className="px-2 pb-3 pl-9 space-y-3">
-          <div className="whitespace-pre-wrap rounded-md bg-slate-50 border border-slate-100 p-3 text-sm text-slate-700 max-h-96 overflow-y-auto">
+          <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md bg-slate-50 border border-slate-100 p-3 text-sm text-slate-700 max-h-96 overflow-y-auto">
             {email.body?.trim() || email.preview || '(This email has no text.)'}
           </div>
 

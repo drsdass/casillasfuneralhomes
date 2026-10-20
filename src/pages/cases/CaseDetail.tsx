@@ -302,7 +302,7 @@ export default function CaseDetail() {
 
   return (
     <>
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
     <div>
       <Link to="/cases" className="no-print inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4">
         <ArrowLeft size={15} /> Back to cases
