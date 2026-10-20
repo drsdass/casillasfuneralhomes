@@ -18,7 +18,11 @@ self.addEventListener('push', (event) => {
     icon: d.icon || '/icon-casillas-192.png',
     badge: '/icon-casillas-192.png',
     tag: d.tag || undefined,
-    renotify: !!d.tag,
+    renotify: !!d.tag,            // a new message in the same chat alerts again, like a new text
+    silent: false,                // ask for the phone's normal notification sound
+    vibrate: [250, 120, 250],
+    requireInteraction: !!(d.tag && String(d.tag).startsWith('pickup-')), // pickups stay on screen until tapped
+    timestamp: Date.now(),
     data: { url: d.url || '/' },
     })
   })())
