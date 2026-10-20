@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Casillas EDRS Assist",
+  "version": "0.1.0",
+  "description": "Helps a licensed funeral director copy case data from Casillas OS into the EDRS screen they are already logged into. Does nothing until clicked. Never submits, saves or navigates.",
+  "permissions": ["storage"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://casillasfuneralhomes-lzdc.vercel.app/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://edrs.calivrs.org/ca-edrs/*"],
+      "js": ["mapping.js", "fill-core.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

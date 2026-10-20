@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# React Router uses client-side routing, so any deep link (e.g. /cases/case-1
+# or /portal/case-1) needs to be served index.html and let the router take
+# over, instead of Netlify looking for a matching file and 404ing.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
