@@ -189,6 +189,8 @@ async function syncOrg(orgId: string, backfillDays: number) {
     let latest = lastMs
     let saved = 0
     let skippedOwn = 0
+    let lastFrom = ''
+    let lastSubject = ''
     const problems: string[] = []
     let stuck = false
     for (const it of fresh) {
@@ -245,11 +247,25 @@ async function syncOrg(orgId: string, backfillDays: number) {
       const { error } = await supabase.from('inbound_emails').upsert(row, { onConflict: 'graph_message_id' })
       if (error) { stuck = true; problems.push(error.message) } else {
         saved++
+        lastFrom = n.fromName || n.fromAddr
+        lastSubject = subject
         if (!stuck) latest = Math.max(latest, new Date(n.receivedAt).getTime()) // never move past a mail that failed to save
       }
     }
     if (!backfillDays && latest > lastMs) await supabase.from('sync_state').upsert({ key: syncKey, value: new Date(latest).toISOString() })
+    // Tell on-duty staff's phones (never during a catch-up, so old mail doesn't buzz anyone).
+    if (saved > 0 && !backfillDays) await pingPush(orgId, saved, lastFrom, lastSubject)
     return { synced: saved, skippedOwn, problems: problems.slice(0, 3), more: !!more }
+}
+
+async function pingPush(orgId: string, count: number, from: string, subject: string) {
+  try {
+    await fetchT(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-sync-secret': env('SYNC_SECRET') },
+      body: JSON.stringify({ type: 'email', orgId, count, from, subject }),
+    })
+  } catch { /* notifications are a bonus; never let them break the mail check */ }
 }
 
 Deno.serve(async (req) => {

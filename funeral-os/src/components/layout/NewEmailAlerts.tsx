@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { Mail, FolderCheck, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { playMessageChime } from '@/lib/notificationSound'
+import { useNotificationPrefs } from '@/components/presence/NotificationSettings'
+import { isPushOn } from '@/lib/push'
 import type { InboundEmail } from '@/types'
 
 type Alert = { id: string; orgId: string; email: InboundEmail; caseName?: string; handledBy?: string }
@@ -25,6 +27,10 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
   const navigate = useNavigate()
   const qc = useQueryClient()
   const multi = orgs.length > 1
+  const { prefs } = useNotificationPrefs()
+  const quiet = !prefs.onDuty || !prefs.notifyEmail // off duty (or email un-ticked): no pop-ups, no sounds
+  const quietRef = useRef(quiet)
+  quietRef.current = quiet
   const key = `casillas_email_alert_since_v2_${userId}`
   const [alerts, setAlerts] = useState<Alert[]>([])
   // "Newest mail already seen", kept separately per company so one company's hiccup never hides the other's mail.
@@ -73,10 +79,12 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         since.current![orgId] = emails.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
       }
       saveSince()
+      qc.invalidateQueries({ queryKey: ['emails'] })
+      if (quietRef.current) return
       setAlerts((old) => [...old, ...fresh.filter((f) => !old.some((o) => o.id === f.id))].slice(-4))
       qc.invalidateQueries({ queryKey: ['emails'] })
       playMessageChime()
-      if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+      if (!isPushOn() && 'Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
         const f = fresh[fresh.length - 1]
         const co = multi ? ` (${orgName(f.orgId).replace(/\s*Funeral Home$/i, '')})` : ''
         new Notification(`New email${fresh.length > 1 ? 's' : ''} for the funeral home${co}`, { body: `${f.email.fromName || f.email.from}: ${f.email.subject}`, icon: '/casillas-logo.png' })

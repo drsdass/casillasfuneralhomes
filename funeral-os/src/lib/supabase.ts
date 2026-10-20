@@ -18,6 +18,17 @@ export const USE_MOCK = !url || !anonKey
 // Which company (Casillas, Sanders...) this browser tab is working in. Kept per tab so two tabs can't
 // disturb each other. The database only honours it if this person is allowed to see that company.
 const ORG_KEY = 'casillas_os_active_org'
+// A notification can open the app straight into the right company: /inbox?org=<company id>.
+try {
+  const u = new URL(window.location.href)
+  const o = u.searchParams.get('org')
+  if (o) {
+    sessionStorage.setItem(ORG_KEY, o)
+    u.searchParams.delete('org')
+    window.history.replaceState(null, '', u.pathname + u.search + u.hash)
+  }
+} catch { /* ignore */ }
+
 export function getStoredOrgId(): string | null {
   try { return sessionStorage.getItem(ORG_KEY) } catch { return null }
 }

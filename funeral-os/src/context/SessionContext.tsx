@@ -155,7 +155,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // The look (colours, logo) follows the company being worked in.
   useEffect(() => {
-    document.documentElement.dataset.company = brandFor(activeOrg?.name).key
+    const key = brandFor(activeOrg?.name).key
+    document.documentElement.dataset.company = key
+    // "Add to Home Screen" picks up the right name and icon for the company.
+    document.getElementById('app-manifest')?.setAttribute('href', `/manifest-${key}.webmanifest`)
+    document.getElementById('app-touch-icon')?.setAttribute('href', `/icon-${key}-180.png`)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', key === 'sanders' ? '#2c4a5a' : '#3b4a35')
   }, [activeOrg])
   setCompany(activeOrg?.name) // so messages and forms outside React hooks use the right company name
 

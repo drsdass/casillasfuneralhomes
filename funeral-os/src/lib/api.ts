@@ -10,7 +10,7 @@ import type {
 } from '@/types'
 import { locations as mockLocations } from '@/data/mockData'
 import { getCompanyName } from '@/lib/company'
-import type { PresenceDevice, PresenceRow } from '@/lib/presence'
+import { DEFAULT_PREFS, type NotificationPrefs, type PresenceDevice, type PresenceRow } from '@/lib/presence'
 import {
   caseToRow, rowToCase, contactToRow, rowToStaff, documentToRow, rowToDocument,
   eventToRow, rowToEvent, rowToGplItem, rowToContract, rowToVehicle,
@@ -260,6 +260,45 @@ export const api = {
     return (data ?? []).map((r: { staff_id: string; device: PresenceDevice; online: boolean; last_seen: string }) => ({ staffId: r.staff_id, device: r.device, online: r.online, lastSeen: r.last_seen }))
   },
 
+  // Notifications: On duty switch, what each person wants to hear about, and which phones/computers are signed up (src/db/push.sql).
+  async getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+    if (USE_MOCK) {
+      try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(`casillas_notif_prefs_${userId}`) ?? '{}') } } catch { return DEFAULT_PREFS }
+    }
+    const { data } = await supabase!.from('staff_notification_prefs').select('*').eq('staff_id', userId).maybeSingle()
+    return data ? { onDuty: data.on_duty, notifyEmail: data.notify_email, notifyMessage: data.notify_message, notifyCase: data.notify_case, notifyDriver: data.notify_driver } : DEFAULT_PREFS
+  },
+  async saveNotificationPrefs(userId: string, p: NotificationPrefs): Promise<void> {
+    if (USE_MOCK) { try { localStorage.setItem(`casillas_notif_prefs_${userId}`, JSON.stringify(p)) } catch { /* ignore */ } return }
+    const { error } = await supabase!.from('staff_notification_prefs').upsert({
+      staff_id: userId, on_duty: p.onDuty, notify_email: p.notifyEmail, notify_message: p.notifyMessage,
+      notify_case: p.notifyCase, notify_driver: p.notifyDriver, updated_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  },
+  /** Staff ids who are off duty (their light shows as off). */
+  async getOffDuty(): Promise<string[]> {
+    if (USE_MOCK) return delay(mockStore.getOffDuty())
+    const { data, error } = await supabase!.rpc('off_duty_list')
+    if (error) throw error
+    return (data ?? []).map((r: { staff_id: string }) => r.staff_id)
+  },
+  async savePushSubscription(userId: string, sub: PushSubscriptionJSON, device: PresenceDevice): Promise<void> {
+    if (USE_MOCK) return
+    const { error } = await supabase!.from('push_subscriptions').upsert(
+      { staff_id: userId, endpoint: sub.endpoint, p256dh: sub.keys?.p256dh, auth: sub.keys?.auth, device }, { onConflict: 'endpoint' })
+    if (error) throw error
+  },
+  async removePushSubscription(endpoint: string): Promise<void> {
+    if (USE_MOCK) return
+    await supabase!.from('push_subscriptions').delete().eq('endpoint', endpoint)
+  },
+  /** Tells the server something happened that staff's phones should hear about. The server decides who. Never blocks the action. */
+  firePush(payload: { type: 'message'; conversationId: string } | { type: 'case'; caseId: string; event: 'created' | 'pickup' }): void {
+    if (USE_MOCK) return
+    supabase!.functions.invoke('send-push', { body: payload }).catch(() => undefined)
+  },
+
   /** Only callable by super_admin in the UI — enforced there and by a DB trigger (see schema.sql). */
   async updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): Promise<StaffMember[]> {
     if (USE_MOCK) return delay(mockStore.updateStaffRole(staffId, role, changedBy))
@@ -412,6 +451,7 @@ export const api = {
     if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName)
     if ('serviceDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'service', input.serviceDate, input.serviceLocation, decedentName)
     await this.seedTasksFromTemplates(caseRow.id, input.orgId)
+    this.firePush({ type: 'case', caseId: caseRow.id, event: 'created' })
     this.notifySlack(`🆕 New case created: *${decedentName}* (${input.caseNumber}) — by ${changedBy.name}`)
     logAuditReal({
       entityType: 'case', entityId: caseRow.id, caseId: caseRow.id, action: 'create',
@@ -843,6 +883,7 @@ export const api = {
       moved_by: movedBy.id, note,
     })
     if (logErr) throw logErr
+    if (toStage === 'scene_first_call') this.firePush({ type: 'case', caseId, event: 'pickup' })
     const decedentName = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
     this.notifySlack(`📦 ${decedentName} moved to *${toStage.replace(/_/g, ' ')}* — by ${movedBy.name}`)
     logAuditReal({
@@ -1513,6 +1554,7 @@ export const api = {
       .select()
       .single()
     if (error) throw error
+    this.firePush({ type: 'message', conversationId })
     return rowToChatMessage(data)
   },
 

@@ -120,6 +120,16 @@ export const mockStore = {
     return rows.filter((r) => staffStore.some((x) => x.id === r.staffId && x.orgId === org))
   },
 
+  /** Demo: a couple of pretend colleagues are off duty, plus anyone who switched themselves off in this browser. */
+  getOffDuty: (): string[] => {
+    const org = demoOrgId()
+    const ids = staffStore.filter((x) => x.orgId === org && ['Joe Galvan'].includes(x.name)).map((x) => x.id)
+    try {
+      for (const x of staffStore) { if (x.orgId === org && JSON.parse(localStorage.getItem(`casillas_notif_prefs_${x.id}`) ?? '{}').onDuty === false) ids.push(x.id) }
+    } catch { /* ignore */ }
+    return ids
+  },
+
   getStaff: (): StaffMember[] => {
     const org = demoOrgId()
     return staffStore.filter((s) => s.orgId === org)

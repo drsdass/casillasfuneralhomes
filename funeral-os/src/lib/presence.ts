@@ -10,3 +10,13 @@ export function deviceKind(): PresenceDevice {
   } catch { /* ignore */ }
   return 'computer'
 }
+
+/** One person's On duty switch and which kinds of notification they want. */
+export interface NotificationPrefs {
+  onDuty: boolean
+  notifyEmail: boolean
+  notifyMessage: boolean
+  notifyCase: boolean
+  notifyDriver: boolean
+}
+export const DEFAULT_PREFS: NotificationPrefs = { onDuty: true, notifyEmail: true, notifyMessage: true, notifyCase: true, notifyDriver: true }
