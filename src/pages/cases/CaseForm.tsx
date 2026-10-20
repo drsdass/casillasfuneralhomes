@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
+import { LocationPicker, useDefaultLocation } from '@/components/ui/LocationPicker'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
@@ -65,6 +66,9 @@ export default function CaseForm() {
     enabled: !!existing?.familyId,
   })
 
+  const defaultLoc = useDefaultLocation()
+  const [chosenLocationId, setChosenLocationId] = useState(existing?.locationId ?? '')
+  const locId = chosenLocationId || defaultLoc
   const [caseNumber, setCaseNumber] = useState(existing?.caseNumber ?? '')
   const [firstName, setFirstName] = useState(existing?.decedent.firstName ?? extracted?.decedentFirstName ?? '')
   const [middleName, setMiddleName] = useState(existing?.decedent.middleName ?? '')
@@ -102,6 +106,7 @@ export default function CaseForm() {
   useEffect(() => {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
+    setChosenLocationId(existing.locationId)
     setFirstName(existing.decedent.firstName)
     setMiddleName(existing.decedent.middleName ?? '')
     setLastName(existing.decedent.lastName)
@@ -130,7 +135,7 @@ export default function CaseForm() {
       if (isEdit && caseId) {
         return api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
-          type, status, disposition,
+          type, status, disposition, locationId: locId,
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
           contacts,
           familyId,
@@ -142,7 +147,7 @@ export default function CaseForm() {
       }
       return api.createCase({
         orgId: currentUser!.orgId,
-        locationId: activeLocationId,
+        locationId: locId,
         caseNumber: `NEW-${Date.now().toString().slice(-6)}`,
         type, status, disposition,
         decedent: { firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
@@ -226,6 +231,7 @@ export default function CaseForm() {
 
         <Card className="p-5 mb-5">
           <h3 className="text-sm font-medium text-slate-800 mb-3">Case Details</h3>
+          <div className="mb-4"><LocationPicker value={locId} onChange={setChosenLocationId} /></div>
           <div className="mb-4">
             <label className={labelClass}>Case Number</label>
             <input value={caseNumber} onChange={(e) => setCaseNumber(e.target.value)} className={inputClass + ' max-w-xs'} />
@@ -375,7 +381,8 @@ export default function CaseForm() {
           </Link>
           <button
             type="submit"
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || !locId}
+            title={locId ? undefined : 'Please choose a location first'}
             className="text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
           >
             {saveMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Case'}

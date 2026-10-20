@@ -3,6 +3,7 @@ import { isKnownPlace, isBuiltInAddress, knownAddress } from '@/lib/firstCallPla
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
+import { LocationPicker, useDefaultLocation } from '@/components/ui/LocationPicker'
 import { api } from '@/lib/api'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check } from 'lucide-react'
@@ -21,6 +22,9 @@ export default function FirstCallIntake() {
 
   const { data: existing } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: isEdit })
 
+  const defaultLoc = useDefaultLocation()
+  const [chosenLocationId, setChosenLocationId] = useState('')
+  const locId = chosenLocationId || defaultLoc
   const [caseNumber, setCaseNumber] = useState('')
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
@@ -61,6 +65,7 @@ export default function FirstCallIntake() {
   useEffect(() => {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
+    setChosenLocationId(existing.locationId)
     setFirstName(existing.decedent.firstName)
     setMiddleName(existing.decedent.middleName ?? '')
     setLastName(existing.decedent.lastName)
@@ -120,13 +125,13 @@ export default function FirstCallIntake() {
         await api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
-          contacts, firstCall,
+          contacts, firstCall, locationId: locId,
         }, currentUser!)
         if (ssn.trim()) await api.setDecedentSsn(caseId, ssn, currentUser!)
         return caseId
       }
       const created = await api.createCase({
-        orgId: currentUser!.orgId, locationId: activeLocationId,
+        orgId: currentUser!.orgId, locationId: locId,
         caseNumber: caseNumber.trim() || `NEW-${Date.now().toString().slice(-6)}`,
         type: 'at_need', status: 'first_call', disposition: 'undetermined',
         decedent: { firstName: firstName || 'Unknown', middleName: middleName || undefined, lastName: lastName || 'Unknown', dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
@@ -175,6 +180,7 @@ export default function FirstCallIntake() {
 
       {!savedCaseId ? (
         <div className="space-y-4">
+          <LocationPicker value={locId} onChange={setChosenLocationId} />
           <Card className="overflow-hidden">
             <div className={sectionLabel}>DECEASED</div>
             <div className="p-4 space-y-3">
@@ -276,7 +282,8 @@ export default function FirstCallIntake() {
           <div className="flex justify-end">
             <button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || !locId}
+              title={locId ? undefined : 'Please choose a location first'}
               className="bg-[#3b4a35] text-white text-sm font-medium px-5 py-2.5 rounded-md hover:bg-[#4d5f45] disabled:opacity-60"
             >
               {saveMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Save & Create Case'}
