@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { playMessageChime } from '@/lib/notificationSound'
 import { useNotificationPrefs } from '@/components/presence/NotificationSettings'
 import { isPushOn } from '@/lib/push'
+import { junkKind } from '@/lib/emailJunk'
 import type { InboundEmail } from '@/types'
 
 type Alert = { id: string; orgId: string; email: InboundEmail; caseName?: string; handledBy?: string }
@@ -44,7 +45,7 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
   const { data } = useQuery({
     queryKey: ['new-email-alerts', userId, orgs.map((o) => o.id).join(',')],
     queryFn: async () => {
-      const out: { orgId: string; emails: InboundEmail[] }[] = []
+      const out: { orgId: string; emails: InboundEmail[]; all: InboundEmail[] }[] = []
       for (const o of orgs) {
         // First time on this computer: start from "now" so old mail doesn't pop up.
         if (!since.current![o.id]) {
@@ -54,7 +55,8 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         }
         try {
           const emails = await api.getNewInbound(since.current![o.id], multi ? o.id : undefined)
-          if (emails.length) out.push({ orgId: o.id, emails })
+          // Phishing and marketing never pop up; they wait quietly in the Junk & Marketing tab.
+          if (emails.length) out.push({ orgId: o.id, emails: emails.filter((e) => !junkKind(e)), all: emails })
         } catch { /* try again next round */ }
       }
       return out
@@ -75,12 +77,12 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         }
       }
       if (cancelled) return
-      for (const { orgId, emails } of data) {
-        since.current![orgId] = emails.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
+      for (const { orgId, all } of data) {
+        since.current![orgId] = all.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
       }
       saveSince()
       qc.invalidateQueries({ queryKey: ['emails'] })
-      if (quietRef.current) return
+      if (quietRef.current || fresh.length === 0) return
       setAlerts((old) => [...old, ...fresh.filter((f) => !old.some((o) => o.id === f.id))].slice(-4))
       qc.invalidateQueries({ queryKey: ['emails'] })
       playMessageChime()

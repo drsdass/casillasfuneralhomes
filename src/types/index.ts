@@ -617,6 +617,8 @@ export interface InboundEmail {
   threadId?: string
   sentBy?: string // staff id, for outgoing mail
   sentByName?: string // who pressed Send
+  /** Staff choice: true = moved to Junk, false = "not junk", unset = decided automatically. */
+  junk?: boolean | null
 }
 
 // ---------------------------------------------------------------------------

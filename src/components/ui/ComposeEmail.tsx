@@ -8,8 +8,8 @@ import { DictateButton } from '@/components/ui/DictateButton'
 import type { InboundEmail } from '@/types'
 
 /** Write or reply to an email from the shared funeral home address. The system records who sent it. */
-export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '', caseId, replyTo, onClose }: {
-  to?: string; subject?: string; caseId?: string; replyTo?: InboundEmail; onClose: () => void
+export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '', body: initialBody = '', forward, caseId, replyTo, onClose }: {
+  to?: string; subject?: string; body?: string; forward?: boolean; caseId?: string; replyTo?: InboundEmail; onClose: () => void
 }) {
   const { currentUser } = useSession()
   const { language } = useLanguage()
@@ -17,7 +17,7 @@ export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '',
   const qc = useQueryClient()
   const [to, setTo] = useState(initialTo)
   const [subject, setSubject] = useState(initialSubject)
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initialBody)
   const [sent, setSent] = useState(false)
 
   const send = useMutation({
@@ -36,7 +36,7 @@ export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '',
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-display font-semibold text-slate-900">{replyTo ? tx('Reply', 'Responder') : tx('New email', 'Nuevo correo')}</h2>
+          <h2 className="text-xl font-display font-semibold text-slate-900">{forward ? tx('Forward', 'Reenviar') : replyTo ? tx('Reply', 'Responder') : tx('New email', 'Nuevo correo')}</h2>
           <button onClick={onClose} aria-label={tx('Close', 'Cerrar')} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
         </div>
         <div className="space-y-3">

@@ -715,6 +715,11 @@ export const mockStore = {
     return emailStore
   },
 
+  setEmailJunk(emailId: string, junk: boolean, changedBy: StaffMember): void {
+    emailStore = emailStore.map((e) => (e.id === emailId ? { ...e, junk } : e))
+    logAudit({ entityType: 'email', entityId: emailId, action: 'update', summary: junk ? 'Moved an email to Junk & Marketing' : 'Moved an email back out of Junk', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
   /** Dismisses an email as not case-relevant (e.g. spam, a vendor newsletter). */
   ignoreEmail(emailId: string, changedBy: StaffMember): InboundEmail[] {
     emailStore = emailStore.map((e) => (e.id === emailId ? { ...e, matchStatus: 'ignored' as EmailMatchStatus } : e))

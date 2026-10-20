@@ -345,6 +345,7 @@ export function rowToEmail(row: any): InboundEmail {
     threadId: row.thread_id ?? undefined,
     sentBy: row.sent_by ?? undefined,
     sentByName: row.sent_by_name ?? undefined,
+    junk: row.junk ?? undefined,
   }
 }
 
@@ -381,7 +382,7 @@ export function rowToAuditLogEntry(row: any): AuditLogEntry {
     action: row.action,
     summary: row.summary,
     changedBy: row.changed_by,
-    changedByName: row.staff_members?.name ?? 'Unknown',
+    changedByName: row.staff_members?.name ?? (row.changed_by ? 'Unknown' : 'The family'),
     timestamp: row.timestamp,
   }
 }

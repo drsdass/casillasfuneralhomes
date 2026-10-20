@@ -7,10 +7,11 @@ import { mail } from '@/lib/mail'
 import { MailConnectionPanel } from '@/components/inbox/MailConnectionPanel'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { format, parseISO } from 'date-fns'
-import { Mail, Paperclip, CheckCircle2, X, Sparkles, Check, FileSearch, Save, Loader2, Reply, Send, PenSquare, ChevronDown, ChevronRight } from 'lucide-react'
+import { Mail, Paperclip, CheckCircle2, X, Sparkles, Check, FileSearch, Save, Loader2, Reply, Send, PenSquare, ChevronDown, ChevronRight, Forward, ShieldAlert, Inbox, Undo2 } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { Link } from 'react-router-dom'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
+import { junkKind, quotedOriginal, replySubject, forwardSubject } from '@/lib/emailJunk'
 import type { EmailAttachment, ExtractedCaseData, InboundEmail } from '@/types'
 
 const statusStyles: Record<string, string> = {
@@ -33,17 +34,21 @@ function formatSize(bytes: number): string {
 export default function EmailInbox() {
   const { currentUser } = useSession()
   const queryClient = useQueryClient()
-  const [filter, setFilter] = useState<'needs_review' | 'all'>('needs_review')
+  const [filter, setFilter] = useState<'needs_review' | 'all' | 'junk'>('needs_review')
   const [assigningId, setAssigningId] = useState<string | null>(null)
-  const [compose, setCompose] = useState<{ to?: string; subject?: string; caseId?: string; replyTo?: InboundEmail } | null>(null)
+  const [compose, setCompose] = useState<{ to?: string; subject?: string; body?: string; forward?: boolean; caseId?: string; replyTo?: InboundEmail } | null>(null)
   const [openBody, setOpenBody] = useState<Set<string>>(new Set())
   const canManage = currentUser ? canEditCases(currentUser.role) : false
   const isAdmin = currentUser ? canViewAuditLog(currentUser.role) : false // admin and above
 
-  const { data: emails = [] } = useQuery({
-    queryKey: ['emails', filter],
+  const { data: fetched = [] } = useQuery({
+    queryKey: ['emails', filter === 'needs_review' ? 'needs_review' : 'all'],
     queryFn: () => api.getEmails(filter === 'needs_review' ? { needsReview: true } : undefined),
   })
+  // Suspected phishing and marketing live in their own tab so Needs Review stays about real mail.
+  const { data: everything = [] } = useQuery({ queryKey: ['emails', 'all'], queryFn: () => api.getEmails() })
+  const junkCount = everything.filter((e) => junkKind(e) && e.matchStatus !== 'ignored').length
+  const emails = filter === 'junk' ? everything.filter((e) => junkKind(e)) : filter === 'needs_review' ? fetched.filter((e) => !junkKind(e)) : fetched
   const { data: allCases = [] } = useQuery({ queryKey: ['cases', 'all'], queryFn: () => api.getCases() })
 
   const confirmMutation = useMutation({
@@ -52,6 +57,11 @@ export default function EmailInbox() {
       queryClient.invalidateQueries({ queryKey: ['emails'] })
       setAssigningId(null)
     },
+  })
+
+  const junkMutation = useMutation({
+    mutationFn: ({ emailId, junk }: { emailId: string; junk: boolean }) => api.setEmailJunk(emailId, junk, currentUser!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['emails'] }),
   })
 
   const ignoreMutation = useMutation({
@@ -104,7 +114,7 @@ export default function EmailInbox() {
       {compose && <ComposeEmail {...compose} onClose={() => setCompose(null)} />}
 
       <div className="flex gap-1 border-b border-slate-200 mb-5">
-        {(['needs_review', 'all'] as const).map((f) => (
+        {(['needs_review', 'all', 'junk'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -112,7 +122,7 @@ export default function EmailInbox() {
               filter === f ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            {f === 'needs_review' ? 'Needs Review' : 'All Messages'}
+            {f === 'needs_review' ? 'Needs Review' : f === 'all' ? 'All Messages' : `Junk & Marketing${junkCount ? ` (${junkCount})` : ''}`}
           </button>
         ))}
       </div>
@@ -145,6 +155,8 @@ export default function EmailInbox() {
                         {statusLabels[email.matchStatus]}
                       </span>
                     )}
+                    {junkKind(email) === 'phishing' && <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><ShieldAlert size={11} /> Possible phishing — do not click links</span>}
+                    {junkKind(email) === 'marketing' && <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Marketing</span>}
                     {email.attachments.length > 0 && <Paperclip size={12} className="text-slate-400" />}
                   </div>
                   <div className="text-sm text-slate-800 font-medium mt-1">{email.subject}</div>
@@ -159,9 +171,19 @@ export default function EmailInbox() {
                       </button>
                     )}
                     {canManage && email.direction === 'in' && (
-                      <button onClick={() => setCompose({ to: email.from, subject: /^re:/i.test(email.subject) ? email.subject : `Re: ${email.subject}`, caseId: email.caseId, replyTo: email })} className="inline-flex items-center gap-1 font-semibold text-[#3b4a35] hover:underline">
+                      <button onClick={() => setCompose({ to: email.from, subject: replySubject(email.subject), body: quotedOriginal(email), caseId: email.caseId, replyTo: email })} className="inline-flex items-center gap-1 font-semibold text-[#3b4a35] hover:underline">
                         <Reply size={12} /> Reply
                       </button>
+                    )}
+                    {canManage && (
+                      <button onClick={() => setCompose({ to: '', subject: forwardSubject(email.subject), body: quotedOriginal(email), forward: true, caseId: email.caseId })} className="inline-flex items-center gap-1 font-semibold text-[#3b4a35] hover:underline">
+                        <Forward size={12} /> Forward
+                      </button>
+                    )}
+                    {canManage && email.direction === 'in' && (
+                      junkKind(email)
+                        ? <button onClick={() => junkMutation.mutate({ emailId: email.id, junk: false })} className="inline-flex items-center gap-1 font-medium text-slate-600 hover:underline"><Undo2 size={12} /> Not junk</button>
+                        : <button onClick={() => junkMutation.mutate({ emailId: email.id, junk: true })} className="inline-flex items-center gap-1 font-medium text-slate-500 hover:underline"><ShieldAlert size={12} /> Move to Junk</button>
                     )}
                   </div>
 

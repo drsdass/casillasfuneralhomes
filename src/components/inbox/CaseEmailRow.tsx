@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { Mail, Paperclip, ChevronDown, ChevronRight, Save, Check, FileSearch, Loader2, Send } from 'lucide-react'
+import { Mail, Paperclip, ChevronDown, ChevronRight, Save, Check, FileSearch, Loader2, Send, Reply, Forward } from 'lucide-react'
+import { ComposeEmail } from '@/components/ui/ComposeEmail'
+import { quotedOriginal, replySubject, forwardSubject } from '@/lib/emailJunk'
 import { api } from '@/lib/api'
 import type { CaseDocument, ExtractedCaseData, InboundEmail, StaffMember } from '@/types'
 
@@ -46,6 +48,7 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
   const [extracted, setExtracted] = useState<Record<string, ExtractedCaseData>>({})
   const [pending, setPending] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [compose, setCompose] = useState<{ to: string; subject: string; body: string; forward?: boolean; replyTo?: InboundEmail } | null>(null)
   // Which attachment is being labelled right now, and what the person has chosen/typed.
   const [labelling, setLabelling] = useState<string | null>(null)
   const [labelText, setLabelText] = useState('')
@@ -94,12 +97,22 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
         </div>
       </button>
 
+      {compose && <ComposeEmail {...compose} caseId={caseId} onClose={() => setCompose(null)} />}
       {open && (
         <div className="px-2 pb-3 pl-9 space-y-3">
           <div className="whitespace-pre-wrap rounded-md bg-slate-50 border border-slate-100 p-3 text-sm text-slate-700 max-h-96 overflow-y-auto">
             {email.body?.trim() || email.preview || '(This email has no text.)'}
           </div>
 
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              {!out && (
+                <button onClick={() => setCompose({ to: email.from, subject: replySubject(email.subject), body: quotedOriginal(email), replyTo: email })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-[#3b4a35] rounded-md px-3 py-1.5 hover:bg-[#4d5f45]"><Reply size={13} /> Reply</button>
+              )}
+              <button onClick={() => setCompose({ to: '', subject: forwardSubject(email.subject), body: quotedOriginal(email), forward: true })} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#3b4a35] border border-[#3b4a35]/40 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"><Forward size={13} /> Forward</button>
+              {email.attachments.length > 0 && <span className="text-[11px] text-slate-400">Attachments are not included when forwarding. Save them to the case first if needed.</span>}
+            </div>
+          )}
           {email.attachments.map((att) => {
             const isPending = pending === att.id
             const isSaved = saved.has(att.id)

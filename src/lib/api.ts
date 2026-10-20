@@ -1189,7 +1189,7 @@ export const api = {
   async getNewInbound(since: string, orgId?: string): Promise<InboundEmail[]> {
     if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => e.direction === 'in' && e.receivedAt > since && mockStore.emailOrgId(e) === (orgId ?? mockStore.emailOrgId(e))))
     let q = supabase!.from('inbound_emails')
-      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction')
+      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction, junk')
       .eq('direction', 'in').neq('match_status', 'ignored').gt('received_at', since)
       .order('received_at', { ascending: true }).limit(10)
     if (orgId) q = q.setHeader('x-org-id', orgId)
@@ -1262,6 +1262,14 @@ export const api = {
       summary: 'Confirmed email match to case', changedBy: changedBy.id,
     })
     return this.getEmails()
+  },
+
+  /** Moves an email to (or back from) Junk & Marketing. Nothing is deleted; the original stays in the mailbox. */
+  async setEmailJunk(emailId: string, junk: boolean, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.setEmailJunk(emailId, junk, changedBy); return }
+    const { error } = await supabase!.from('inbound_emails').update({ junk }).eq('id', emailId)
+    if (error) throw error
+    logAuditReal({ entityType: 'email', entityId: emailId, action: 'update', summary: junk ? 'Moved an email to Junk & Marketing' : 'Moved an email back out of Junk', changedBy: changedBy.id })
   },
 
   async ignoreEmail(emailId: string, changedBy: StaffMember): Promise<InboundEmail[]> {

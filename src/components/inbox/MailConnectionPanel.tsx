@@ -18,6 +18,7 @@ export function MailConnectionPanel() {
   const [showTenant, setShowTenant] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [manage, setManage] = useState(false)
 
   const { data: status, error: statusError } = useQuery({ queryKey: ['mail-status', orgId], queryFn: () => mail.status(orgId), retry: false, enabled: !!orgId })
 
@@ -88,8 +89,11 @@ export function MailConnectionPanel() {
       </div>
       {status && (status.configured || status.connected) && (
         <div className="flex flex-wrap gap-2">
-          {status.connected ? (
+          {status.connected && !needsReconnect && !manage ? (
+            <button onClick={() => setManage(true)} className="text-xs text-slate-500 underline">Manage connection</button>
+          ) : status.connected ? (
             <>
+              {!needsReconnect && <span className="basis-full text-xs text-slate-500">Only needed to switch mailboxes or if mail stops arriving.</span>}
               <button onClick={() => connect(status.provider ?? 'microsoft')} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5f45] disabled:opacity-50">
                 {busy && <Loader2 size={14} className="animate-spin" />} Reconnect
               </button>
