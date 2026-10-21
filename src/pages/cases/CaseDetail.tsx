@@ -17,6 +17,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
 import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
+import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
@@ -843,6 +844,23 @@ export default function CaseDetail() {
               </>
             )}
           </Card>
+
+          {c.type === 'pre_need' && (
+            <PreNeedPlanner
+              contract={caseContract}
+              gplItems={gplItems}
+              canEdit={canEdit}
+              disposition={c.disposition}
+              onToggle={(item, lineId) => lineId
+                ? caseContract && removeLineMutation.mutate({ lineItemId: lineId, contractId: caseContract.id })
+                : addGplToQuoteMutation.mutate({ id: item.id, name: item.name, price: item.price })}
+              onAddMany={async (items) => {
+                for (const it of items) await api.addGplItemToQuote(caseId!, c.locationId, { id: it.id, name: it.name, price: it.price }, currentUser!)
+                queryClient.invalidateQueries({ queryKey: ['contracts'] })
+              }}
+              onSetDisposition={(d) => setDispositionMutation.mutate(d)}
+            />
+          )}
 
           <QuoteBuilder
             caseObj={c}

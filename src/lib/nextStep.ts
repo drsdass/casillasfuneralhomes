@@ -38,6 +38,7 @@ export function nextStep(c: FuneralCase, o: { contract?: Contract; tasks: CaseTa
   }
   if (!pre && !c.vitalSheet) return { text: tx('Fill out the Vital Sheet.', 'Llene la hoja de datos vitales.'), button: tx('Open Vital Sheet', 'Abrir hoja vital'), to: `/cases/${id}/vital-sheet` }
   const fin = tx('Go to Financials', 'Ir a Finanzas')
+  if (pre && !o.contract) return { text: tx('Walk the family through the plan and pick everything out ahead of time.', 'Revise el plan con la familia y elija todo con anticipación.'), button: tx('Open the Pre-Need Plan', 'Abrir el plan pre-necesidad'), tab: 'Orders' }
   if (!o.contract) return { text: tx('Sit down with the family and prepare the arrangement and prices.', 'Reúnase con la familia y prepare el arreglo y los precios.'), button: fin, tab: 'Financials' }
   if (o.contract.status === 'draft' || o.contract.status === 'sent') {
     return { text: tx('Get the contract signed by the family.', 'Pida a la familia que firme el contrato.'), button: fin, tab: 'Financials' }

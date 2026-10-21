@@ -89,7 +89,7 @@ export function QuoteBuilder({ caseObj, contract, gplItems, canEdit, currentUser
   return (
     <Card className="p-5 no-print">
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-sm font-medium text-slate-800">Quote</h3>
+        <h3 className="text-sm font-medium text-slate-800">{caseObj.type === 'pre_need' ? 'Pre-Need Invoice (itemized selections)' : 'Quote'}</h3>
         {canEdit && (
           <button
             onClick={() => setShowPriceList((v) => !v)}
@@ -258,7 +258,7 @@ export function QuoteBuilder({ caseObj, contract, gplItems, canEdit, currentUser
               <BrandLogo className="h-14 w-auto" />
               <div>
                 <div className="font-display font-bold text-lg">{getCompanyName().toUpperCase()}</div>
-                <div className="text-xs text-slate-500">Service Quote</div>
+                <div className="text-xs text-slate-500">{caseObj.type === 'pre_need' ? 'Pre-Need Arrangement — Itemized Selections' : 'Service Quote'}</div>
               </div>
             </div>
             <div className="mb-6">
@@ -288,7 +288,7 @@ export function QuoteBuilder({ caseObj, contract, gplItems, canEdit, currentUser
                 <span>{formatCurrency(grandTotal)}</span>
               </div>
             </div>
-            <div className="text-xs text-slate-400 mt-10">This is a quote, not a final invoice. Prices are subject to change until arrangements are finalized.</div>
+            <div className="text-xs text-slate-400 mt-10">{caseObj.type === 'pre_need' ? 'These are the selections made ahead of time, at the prices on the current price list. Prices may change unless held by a signed pre-need agreement.' : 'This is a quote, not a final invoice. Prices are subject to change until arrangements are finalized.'}</div>
           </div>
         </div>
       )}
