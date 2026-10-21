@@ -65,7 +65,8 @@ export function formatCurrency(n: number): string {
 }
 
 /** Where the decedent is right now (Chain of Custody) - shown beside the status so both always agree. */
-export function CustodyChip({ stage }: { stage?: CustodyStage }) {
+export function CustodyChip({ stage, preNeed }: { stage?: CustodyStage; preNeed?: boolean }) {
+  if (preNeed) return <span className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 whitespace-nowrap">Pre-Need</span>
   if (!stage || stage === 'completed') return null
   return (
     <span className="inline-flex items-center rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 whitespace-nowrap">

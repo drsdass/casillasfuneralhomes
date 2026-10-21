@@ -10,7 +10,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import TodayHome from '@/pages/TodayHome'
-import { isCaseDone } from '@/lib/caseDone'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 
 export default function Dashboard() {
   const { easy } = useEasyView()
@@ -35,7 +35,7 @@ function FullDashboard() {
 
   if (!currentUser) return null
 
-  const activeCases = cases.filter((c) => !isCaseDone(c))
+  const activeCases = cases.filter((c) => !isCaseDone(c) && !isPreNeed(c))
   const openCount = activeCases.length
   const scheduledToday = events.filter((e) => isToday(parseISO(e.start)))
   const needsAttention = cases.filter((c) => c.status === 'first_call' || c.status === 'arrangement_pending')
@@ -117,7 +117,7 @@ function FullDashboard() {
                     {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}
                   </div>
                 </div>
-                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
               </Link>
             ))}
             {activeCases.length === 0 && (
@@ -158,7 +158,7 @@ function FullDashboard() {
             {needsAttention.map((c) => (
               <Link to={`/cases/${c.id}`} key={c.id} className="flex items-center justify-between text-sm px-3 py-2 rounded-md hover:bg-slate-50">
                 <span>{c.decedent.firstName} {c.decedent.lastName} — {c.caseNumber}</span>
-                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
               </Link>
             ))}
           </div>

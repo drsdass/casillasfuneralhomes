@@ -53,6 +53,7 @@ export default function CaseForm() {
   const location = useLocation()
   const { activeLocationId, currentUser } = useSession()
   const queryClient = useQueryClient()
+  const preNeedStart = !isEdit && new URLSearchParams(location.search).get('type') === 'pre_need'
   const extracted = (location.state as { extracted?: ExtractedCaseData } | null)?.extracted
 
   const { data: existing } = useQuery({
@@ -75,8 +76,8 @@ export default function CaseForm() {
   const [lastName, setLastName] = useState(existing?.decedent.lastName ?? extracted?.decedentLastName ?? '')
   const [dateOfDeath, setDateOfDeath] = useState(existing?.decedent.dateOfDeath ?? extracted?.dateOfDeath ?? '')
   const [placeOfDeath, setPlaceOfDeath] = useState(existing?.decedent.placeOfDeath ?? extracted?.placeOfDeath ?? '')
-  const [type, setType] = useState<CaseType>(existing?.type ?? extracted?.type ?? 'at_need')
-  const [status, setStatus] = useState<CaseStatus>(existing?.status ?? 'first_call')
+  const [type, setType] = useState<CaseType>(existing?.type ?? (preNeedStart ? 'pre_need' : extracted?.type) ?? 'at_need')
+  const [status, setStatus] = useState<CaseStatus>(existing?.status ?? (preNeedStart ? 'arrangement_pending' : 'first_call'))
   const [disposition, setDisposition] = useState<DispositionType>(existing?.disposition ?? extracted?.disposition ?? 'undetermined')
   const [familyId, setFamilyId] = useState<string | undefined>(existing?.familyId)
   const [familySearch, setFamilySearch] = useState('')
@@ -179,7 +180,7 @@ export default function CaseForm() {
         <ArrowLeft size={15} /> {isEdit ? 'Back to case' : 'Back to cases'}
       </Link>
 
-      <SectionHeading title={isEdit ? 'Edit Case' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : 'Enter decedent and case details'} />
+      <SectionHeading title={isEdit ? 'Edit Case' : type === 'pre_need' ? 'New Pre-Need Plan' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : type === 'pre_need' ? 'Planning ahead — the person has not passed away. There is no first call or pickup until they do.' : 'Enter decedent and case details'} />
 
       {extracted && (
         <Card className="max-w-2xl p-4 mb-5 border-[#b3925a]/40 bg-[#b3925a]/5">
@@ -217,7 +218,7 @@ export default function CaseForm() {
               <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          {type !== 'pre_need' && <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Date of Death</label>
               <input type="date" value={dateOfDeath} onChange={(e) => setDateOfDeath(e.target.value)} className={inputClass} />
@@ -226,7 +227,7 @@ export default function CaseForm() {
               <label className={labelClass}>Place of Death</label>
               <input value={placeOfDeath} onChange={(e) => setPlaceOfDeath(e.target.value)} className={inputClass} />
             </div>
-          </div>
+          </div>}
         </Card>
 
         <Card className="p-5 mb-5">

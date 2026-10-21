@@ -10,7 +10,7 @@ import { canViewAllLocations } from '@/lib/permissions'
 import { suggestStage, casesNamedIn } from '@/lib/voiceNote'
 import { CUSTODY_STAGE_LABELS, type CustodyStage } from '@/types'
 import { DictateButton } from '@/components/ui/DictateButton'
-import { isCaseDone } from '@/lib/caseDone'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 import { interpretVoice, describeAction, speak, type VoiceAction } from '@/lib/voiceCommand'
 
 /** The big microphone in the top bar of every page: say a note, pick (or say) the file, save. */
@@ -52,7 +52,7 @@ function VoiceNoteDialog({ onClose }: { onClose: () => void }) {
   const [ran, setRan] = useState<string[] | null>(null)
 
   const { data: cases = [] } = useQuery({ queryKey: ['cases', all ? 'all' : activeLocationId], queryFn: () => api.getCases(all ? undefined : activeLocationId) })
-  const open = useMemo(() => cases.filter((c) => !isCaseDone(c)), [cases])
+  const open = useMemo(() => cases.filter((c) => !isCaseDone(c) && !isPreNeed(c)), [cases])
   useEffect(() => { if (routeCase && !caseId && open.some((c) => c.id === routeCase)) setCaseId(routeCase) }, [routeCase, open, caseId])
   useEffect(() => { const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey) }, [onClose])
 

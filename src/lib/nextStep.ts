@@ -22,7 +22,8 @@ export function nextStep(c: FuneralCase, o: { contract?: Contract; tasks: CaseTa
   const id = c.id
   if (c.status === 'completed') return { text: tx('This case is complete.', 'Este caso está completo.'), done: true }
   if (c.status === 'on_hold') return { text: tx('This case is on hold.', 'Este caso está en espera.') }
-  if (c.status === 'first_call') return { text: tx('Finish the first call details.', 'Termine los detalles de la primera llamada.'), button: tx('Open First Call', 'Abrir primera llamada'), to: `/cases/${id}/first-call` }
+  const pre = c.type === 'pre_need'
+  if (!pre && c.status === 'first_call') return { text: tx('Finish the first call details.', 'Termine los detalles de la primera llamada.'), button: tx('Open First Call', 'Abrir primera llamada'), to: `/cases/${id}/first-call` }
   if (!c.contacts || c.contacts.length === 0) return { text: tx('Add the family contact (who is making the arrangements).', 'Agregue el contacto de la familia (quién hace los arreglos).'), button: tx('Add contact', 'Agregar contacto'), to: `/cases/${id}/edit` }
   if (c.disposition === 'undetermined') {
     return {
@@ -35,7 +36,7 @@ export function nextStep(c: FuneralCase, o: { contract?: Contract; tasks: CaseTa
       ],
     }
   }
-  if (!c.vitalSheet) return { text: tx('Fill out the Vital Sheet.', 'Llene la hoja de datos vitales.'), button: tx('Open Vital Sheet', 'Abrir hoja vital'), to: `/cases/${id}/vital-sheet` }
+  if (!pre && !c.vitalSheet) return { text: tx('Fill out the Vital Sheet.', 'Llene la hoja de datos vitales.'), button: tx('Open Vital Sheet', 'Abrir hoja vital'), to: `/cases/${id}/vital-sheet` }
   const fin = tx('Go to Financials', 'Ir a Finanzas')
   if (!o.contract) return { text: tx('Sit down with the family and prepare the arrangement and prices.', 'Reúnase con la familia y prepare el arreglo y los precios.'), button: fin, tab: 'Financials' }
   if (o.contract.status === 'draft' || o.contract.status === 'sent') {

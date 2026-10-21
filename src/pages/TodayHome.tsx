@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
 import { Card, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { FirstDayTour } from '@/components/ui/FirstDayTour'
-import { isCaseDone } from '@/lib/caseDone'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 
 /** The Easy view home: a few big buttons and what needs attention today — nothing else. */
 export default function TodayHome() {
@@ -51,7 +51,7 @@ export default function TodayHome() {
   if (!currentUser) return null
   const hour = new Date().getHours()
   const greeting = hour < 12 ? tx('Good morning', 'Buenos días') : hour < 18 ? tx('Good afternoon', 'Buenas tardes') : tx('Good evening', 'Buenas noches')
-  const open = cases.filter((c) => !isCaseDone(c))
+  const open = cases.filter((c) => !isCaseDone(c) && !isPreNeed(c))
   const mine = open.filter((c) => c.assignedDirectorId === currentUser.id || c.assignedEmbalmerId === currentUser.id)
   const list = (mine.length ? mine : open).slice(0, 8)
   const today = events.filter((e) => isToday(parseISO(e.start))).sort((a, b) => a.start.localeCompare(b.start))
@@ -99,7 +99,7 @@ export default function TodayHome() {
                 </div>
                 <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}</div>
               </div>
-              <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span>
+              <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
             </Link>))}
           {list.length === 0 && <p className="text-slate-500 py-2">{tx('No open cases.', 'No hay casos abiertos.')}</p>}
           {open.length > list.length && <Link to="/cases" className="block text-center text-[#3b4a35] font-medium pt-2 hover:underline">{tx(`See all ${open.length} cases`, `Ver los ${open.length} casos`)}</Link>}

@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -66,6 +66,7 @@ const docCategoryLabels: Record<CaseDocument['category'], string> = {
 
 export default function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>()
+  const navigate = useNavigate()
   const { currentUser } = useSession()
   const [searchParams] = useSearchParams()
   const wantedTab = searchParams.get('tab')
@@ -114,6 +115,11 @@ export default function CaseDetail() {
     },
   })
 
+  const [confirmPassed, setConfirmPassed] = useState(false)
+  const passedMutation = useMutation({
+    mutationFn: () => api.markPassedAway(caseId!, currentUser!),
+    onSuccess: () => { setConfirmPassed(false); navigate(`/cases/${caseId}/first-call`) },
+  })
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingNoteText, setEditingNoteText] = useState('')
   const updateNoteMutation = useMutation({
@@ -322,7 +328,7 @@ export default function CaseDetail() {
           <div className="text-sm text-slate-500 mt-1">
             {c.caseNumber} · {c.type.replace('_', '-')} · {c.disposition}
           </div>
-          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span></div>
+          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">
               <Users2 size={11} /> {linkedFamily.name}
@@ -336,12 +342,12 @@ export default function CaseDetail() {
           </label>
           {canEdit && (
             <>
-              <Link
+              {c.type !== 'pre_need' && <Link
                 to={`/cases/${c.id}/first-call`}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
               >
                 First Call
-              </Link>
+              </Link>}
               <Link
                 to={`/cases/${c.id}/vital-sheet`}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
@@ -409,6 +415,22 @@ export default function CaseDetail() {
             ))}
           </div>
         </Card>
+      )}
+
+      {c.type === 'pre_need' && (
+        <div className="no-print mt-4 rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3">
+          <div className="text-sm font-semibold text-violet-900">Pre-Need plan — {c.decedent.firstName} has not passed away</div>
+          <p className="text-sm text-violet-900/80 mt-0.5">This plan stays off the Chain of Custody, TV board and Driver screens. When the family calls to say they have passed, tap the button to start the First Call — everything already planned stays on the file.</p>
+          {canEdit && (confirmPassed ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-slate-800">Start the First Call for {c.decedent.firstName} now?</span>
+              <button type="button" disabled={passedMutation.isPending} onClick={() => passedMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">{passedMutation.isPending ? 'Starting…' : 'Yes, start First Call'}</button>
+              <button type="button" onClick={() => setConfirmPassed(false)} className="text-sm rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-600">Not yet</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmPassed(true)} className="mt-2 text-sm font-medium rounded-md bg-violet-700 text-white px-3.5 py-2 hover:bg-violet-800">Passed away — start First Call</button>
+          ))}
+        </div>
       )}
 
       {/* Next step — one plain sentence and one button, so nobody has to know the whole process */}

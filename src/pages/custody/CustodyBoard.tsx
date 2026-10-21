@@ -146,7 +146,7 @@ export default function CustodyBoard() {
   // top of that column — not just the top of the whole board.
   function casesByStage(stage: CustodyStage): FuneralCase[] {
     const q = search.trim().toLowerCase()
-    const rows = cases.filter((c) => c.custodyStage === stage && (!q || `${c.decedent.firstName} ${c.decedent.lastName} ${c.caseNumber}`.toLowerCase().includes(q)))
+    const rows = cases.filter((c) => c.type !== 'pre_need' && c.custodyStage === stage && (!q || `${c.decedent.firstName} ${c.decedent.lastName} ${c.caseNumber}`.toLowerCase().includes(q)))
     return rows.slice().sort((a, b) => {
       if (sortMode === 'name') return `${a.decedent.lastName}${a.decedent.firstName}`.localeCompare(`${b.decedent.lastName}${b.decedent.firstName}`)
       if (sortMode === 'oldest') return a.updatedAt.localeCompare(b.updatedAt)

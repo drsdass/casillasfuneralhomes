@@ -545,6 +545,19 @@ export const api = {
     return result
   },
 
+  /** A pre-need person has passed away: the plan becomes a live case and the First Call starts. */
+  async markPassedAway(caseId: string, changedBy: StaffMember): Promise<void> {
+    const current = await this.getCase(caseId)
+    if (!current) return
+    const today = new Date().toISOString().slice(0, 10)
+    await this.updateCase(caseId, {
+      type: 'at_need', status: 'first_call', custodyStage: 'scene_first_call',
+      decedent: { ...current.decedent, dateOfDeath: current.decedent.dateOfDeath ?? today },
+    }, changedBy)
+    await this.addNote(caseId, changedBy, 'Passed away — the pre-need plan is now an active case. First call started.')
+    if (!USE_MOCK) this.firePush({ type: 'case', caseId, event: 'pickup' })
+  },
+
   // -------------------------------------------------------------------
   // Tasks
   // -------------------------------------------------------------------

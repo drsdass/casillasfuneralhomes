@@ -8,10 +8,12 @@ import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components
 import { Search, Upload, Phone } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
+import { FilePlus2 } from 'lucide-react'
 import { shortLocationName } from '@/lib/company'
 
-const statusFilters: { value: CaseStatus | 'all'; label: string }[] = [
+const statusFilters: { value: CaseStatus | 'all' | 'pre_need'; label: string }[] = [
   { value: 'all', label: 'All' },
+  { value: 'pre_need', label: 'Pre-Need' },
   { value: 'first_call', label: 'First Call' },
   { value: 'arrangement_pending', label: 'Arrangement Pending' },
   { value: 'arrangement_scheduled', label: 'Arrangement Scheduled' },
@@ -23,7 +25,7 @@ const statusFilters: { value: CaseStatus | 'all'; label: string }[] = [
 export default function CaseList() {
   const { activeLocationId, accessibleLocations, currentUser } = useSession()
   const navigate = useNavigate()
-  const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all' | 'pre_need'>('all')
   const [search, setSearch] = useState('')
   const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
 
@@ -37,7 +39,8 @@ export default function CaseList() {
   const locationName = (id: string) => accessibleLocations.find((l) => l.id === id)?.name ?? id
 
   const filtered = cases.filter((c) => {
-    if (statusFilter !== 'all' && c.status !== statusFilter) return false
+    if (statusFilter === 'pre_need') { if (c.type !== 'pre_need') return false }
+    else if (statusFilter !== 'all' && (c.status !== statusFilter || c.type === 'pre_need')) return false
     if (search) {
       const q = search.toLowerCase()
       const name = `${c.decedent.firstName} ${c.decedent.lastName}`.toLowerCase()
@@ -74,6 +77,12 @@ export default function CaseList() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 transition"
             >
               <Upload size={16} /> Upload Document
+            </button>
+            <button
+              onClick={() => navigate('/cases/new?type=pre_need')}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-800 border border-violet-300 bg-violet-50 rounded-md px-3.5 py-2 hover:bg-violet-100 transition"
+            >
+              <FilePlus2 size={16} /> New Pre-Need
             </button>
             <button
               onClick={() => navigate('/cases/first-call')}
@@ -144,7 +153,7 @@ export default function CaseList() {
                 <td className="px-4 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}
                 </td>
-                <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} /></span></td>
+                <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></td>
               </tr>
             ))}
             {!isLoading && filtered.length === 0 && (
