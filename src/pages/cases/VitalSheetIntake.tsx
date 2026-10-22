@@ -268,7 +268,7 @@ export default function VitalSheetIntake() {
         [data-issue="error"] input, [data-issue="error"] select, [data-issue="error"] textarea { border-color: #f87171; background-color: #fef2f2; }
         [data-issue="warn"] input, [data-issue="warn"] select, [data-issue="warn"] textarea { border-color: #fbbf24; background-color: #fffbeb; }
         .only-issues > div:not([data-keep]):not(:has([data-issue], [data-pinned])) { display: none; }
-        .only-issues [data-field]:not([data-issue]):not([data-pinned]) { display: none; }
+        .only-issues [data-field]:not([data-issue]):not([data-pinned]):not([data-group]:has([data-issue], [data-pinned]) *) { display: none; }
       `}</style>
 
       {issueByKey.size > 0 || onlyIssues ? (
@@ -296,7 +296,7 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>DECEDENT</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="firstName"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></L>
               <L id="middleName"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></L>
               <L id="lastName"><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></L>
@@ -391,7 +391,7 @@ export default function VitalSheetIntake() {
           <div className={sectionLabel}>RESIDENCE</div>
           <div className="p-4 space-y-3">
             <L id="residence"><input {...text('residenceAddress')} /></L>
-            <div className="grid grid-cols-5 gap-3">
+            <div data-group className="grid grid-cols-5 gap-3">
               <L id="residenceCity"><input {...text('residenceCity')} /></L>
               <L id="residenceCounty"><input {...text('residenceCounty')} /></L>
               <L id="residenceZip"><input {...text('residenceZip')} /></L>
@@ -404,7 +404,7 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>INFORMANT & FAMILY</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-[1fr_110px_1fr] gap-3">
+            <div data-group className="grid grid-cols-[1fr_110px_1fr] gap-3">
               <L id="informantName"><input {...text('informantName')} /></L>
               <L id="informantSuffix"><VocabSelect value={f.informantSuffix ?? ''} onChange={(v) => set('informantSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="informantRelationship">
@@ -413,20 +413,20 @@ export default function VitalSheetIntake() {
               </L>
             </div>
             <L id="informantAddress"><input {...text('informantMailingAddress')} /></L>
-            <div className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="spouseFirst"><input {...text('spouseFirstName')} /></L>
               <L id="spouseMiddle"><input {...text('spouseMiddleName')} /></L>
               <L id="spouseLast"><input {...text('spouseLastName')} /></L>
               <L id="spouseSuffix"><VocabSelect value={f.spouseSuffix ?? ''} onChange={(v) => set('spouseSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
             </div>
-            <div className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="fatherFirst"><input {...text('fatherFirstName')} /></L>
               <L id="fatherMiddle"><input {...text('fatherMiddleName')} /></L>
               <L id="fatherLast"><input {...text('fatherLastName')} /></L>
               <L id="fatherSuffix"><VocabSelect value={f.fatherSuffix ?? ''} onChange={(v) => set('fatherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="fatherBirthState"><PlacePicker value={f.fatherBirthState ?? ''} onChange={(v) => set('fatherBirthState', v)} className={inputClass} /></L>
             </div>
-            <div className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="motherFirst"><input {...text('motherFirstName')} /></L>
               <L id="motherMiddle"><input {...text('motherMiddleName')} /></L>
               <L id="motherLast"><input {...text('motherLastName')} /></L>
@@ -441,16 +441,16 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <L id="dispositionDate"><input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} className={inputClass} /></L>
-              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} placeholder="Name of the place — e.g. cemetery, crematory, or RESIDENCE + family name" /></L>
             </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+            <div data-group className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} placeholder="Name of the place — e.g. cemetery, crematory, or RESIDENCE + family name" /></L>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Item 40 — address of the place (EDRS has a box for each)</span>
                 <button type="button" onClick={() => { set('dispositionAddress', f.residenceAddress ?? ''); set('dispositionCity', f.residenceCity ?? ''); set('dispositionZip', f.residenceZip ?? ''); set('dispositionState', f.residenceState ?? ''); if (!f.placeOfFinalDisposition && f.informantName) set('placeOfFinalDisposition', `RESIDENCE ${f.informantName}`.toUpperCase()) }}
                   className="text-xs font-medium rounded-md border border-[#3b4a35]/40 text-[#3b4a35] px-2.5 py-1 hover:bg-[#3b4a35]/5">Same as the family's home address</button>
               </div>
-              <div className="grid grid-cols-[120px_1fr_1fr_110px] gap-3">
-                <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA — outside the US: JALISCO, Mexico" /></L>
+              <div className="grid grid-cols-[200px_1fr_1fr_110px] gap-3">
+                <L id="dispositionState"><PlacePicker value={f.dispositionState ?? ''} onChange={(v) => set('dispositionState', v)} className={inputClass} /></L>
                 <L id="dispositionAddress"><input {...text('dispositionAddress')} placeholder="32520 Whispering Palms Apt A" /></L>
                 <L id="dispositionCity"><input {...text('dispositionCity')} /></L>
                 <L id="dispositionZip"><input {...text('dispositionZip')} /></L>

@@ -244,6 +244,7 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
   if (us) {
     if (!state) return { type: '', value: '', notes: [note('warn', 'Missing — type UNK if it truly is not known')] }
     if (/^(unk|unknown|unk\.)$/i.test(state)) return { type: 'US State', value: 'Unknown', notes: [] }
+    if (/^(us|usa|u\.?s\.?a?\.?|united states( of america)?)$/i.test(state)) return { type: 'US State', value: '', notes: [note('warn', 'Pick the state — for example California')] }
     const abbr = state.toUpperCase().replace(/\./g, '')
     const byAbbr = US_STATES[abbr]
     const byName = Object.values(US_STATES).find((n) => n.toLowerCase() === state.toLowerCase())
