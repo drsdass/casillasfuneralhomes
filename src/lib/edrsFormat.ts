@@ -232,8 +232,11 @@ export function splitMailing(raw: string | undefined): { street: string; city: s
 }
 
 function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; value: string; notes: EdrsNote[] } {
-  const state = (stateRaw ?? '').trim()
-  const country = (countryRaw ?? '').trim()
+  let state = (stateRaw ?? '').trim()
+  let country = (countryRaw ?? '').trim()
+  // "SAN LUIS POTOSI, Mexico" typed into the one box → state + country
+  const combo = !country && state.match(/^(.+?),\s*(mexico|m[eé]xico|canada)\s*$/i)
+  if (combo) { state = combo[1].trim(); country = combo[2] }
   const us = !country || /^(us|usa|u\.?s\.?a?\.?|united states( of america)?)$/i.test(country)
   if (us) {
     if (!state) return { type: '', value: '', notes: [note('warn', 'Missing — type UNK if it truly is not known')] }
@@ -338,7 +341,7 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
       case 'ssn': {
         const r = edrsSsn(ssnRaw ?? undefined)
         add('ssn', '10', 'SOCIAL SECURITY NUMBER', 'decedent', r.value,
-          [r.note, ctx.ssn === null ? note('warn', 'None on file — enter UNK if unknown, or NONE if they never had one') : undefined, note('info', 'After entering it, request SSN verification (Certificate menu) at least once')], { sensitive: true })
+          [r.note, ctx.ssn === null ? note('info', 'EDRS requires this, but it can be added later — come back when the family has it (UNK if unknown, NONE if they never had one)') : undefined, note('info', 'After entering it, request SSN verification (Certificate menu) at least once')], { sensitive: true })
         break
       }
       case 'armedForces':

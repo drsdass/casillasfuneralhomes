@@ -36,7 +36,7 @@ function IssueNote({ issue }: { issue?: Issue }) {
   return <div className={`mt-1 text-[11px] ${issue.level === 'error' ? 'text-red-600' : 'text-amber-700'}`}>{issue.messages.join(' · ')}</div>
 }
 
-const ROW_FOR_FIELD: Record<string, string> = { dispositionState: 'disp-value', dispositionAddress: 'disp-name', dispositionCity: 'disp-city', dispositionZip: 'disp-zip5', informantSuffix: 'inf-suffix' }
+const ROW_FOR_FIELD: Record<string, string> = { finalDisposition: 'finalDisposition', dispositionState: 'disp-value', dispositionAddress: 'disp-name', dispositionCity: 'disp-city', dispositionZip: 'disp-zip5', informantSuffix: 'inf-suffix' }
 
 function L({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   const f = byId[id]

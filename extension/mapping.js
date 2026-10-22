@@ -97,6 +97,13 @@ self.CASILLAS_EDRS_MAPPING = {
         M("res-kindAlt", "personalInfo.decedentAddress.kindAlt"),
         M("inf-type", "personalInfo.informantMailingAddress.kind"),
         M("disp-type", "funeralDirectorInfo.dispositionPlaceAddress.kind"),
+        // Item 40 address boxes — named by analogy with the place-of-death address; confirm with "Capture this screen's structure" if one stays empty.
+        M("disp-number", "funeralDirectorInfo.dispositionPlaceAddress.streetNumber"),
+        M("disp-name", "funeralDirectorInfo.dispositionPlaceAddress.streetName"),
+        M("disp-unit", "funeralDirectorInfo.dispositionPlaceAddress.aptSte"),
+        M("disp-city", "funeralDirectorInfo.dispositionPlaceAddress.city"),
+        M("disp-zip5", "funeralDirectorInfo.dispositionPlaceAddress.zip5"),
+        M("disp-zip4", "funeralDirectorInfo.dispositionPlaceAddress.zip4"),
         M("fac-number", "personalMedicalInfo.deathPlaceAddress.streetNumber"),
         M("fac-name", "personalMedicalInfo.deathPlaceAddress.streetName"),
         M("fac-unit", "personalMedicalInfo.deathPlaceAddress.aptSte"),
