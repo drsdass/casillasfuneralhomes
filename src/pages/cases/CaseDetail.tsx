@@ -18,6 +18,7 @@ import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
 import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
+import { StatementTabBar, StatementViewer, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
@@ -116,6 +117,7 @@ export default function CaseDetail() {
     },
   })
 
+  const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
   const [confirmPassed, setConfirmPassed] = useState(false)
   const passedMutation = useMutation({
     mutationFn: () => api.markPassedAway(caseId!, currentUser!),
@@ -736,7 +738,14 @@ export default function CaseDetail() {
       )}
 
       {tab === 'Orders' && (
-        <div className="space-y-5">
+        <div className="space-y-4">
+          <StatementTabBar view={ordersView} onView={setOrdersView} />
+          {ordersView !== ORDERS_VIEW && <StatementViewer caseObj={c} sheetName={ordersView} canEdit={canEdit} currentUser={currentUser!} />}
+        </div>
+      )}
+
+      {tab === 'Orders' && ordersView === ORDERS_VIEW && (
+        <div className="space-y-5 mt-4">
           {canEdit && (
             <Card className="p-4">
               <h3 className="text-sm font-medium text-slate-800 mb-3">Add an Order</h3>

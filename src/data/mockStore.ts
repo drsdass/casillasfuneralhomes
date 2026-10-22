@@ -35,6 +35,7 @@ let taskTemplateStore: TaskTemplate[] = [
   { id: 'tt-3', orgId: 'org-1', label: 'Schedule arrangement conference', category: 'family', daysUntilDue: 1, sortOrder: 3, active: true },
   { id: 'tt-4', orgId: 'org-1', label: 'Select merchandise', category: 'merchandise', daysUntilDue: 3, sortOrder: 4, active: true },
 ]
+const statementStore: Record<string, Record<string, Record<string, string | number>>> = {}
 let noteStore: CaseNote[] = caseNotes.map((n) => ({ ...n }))
 let documentStore: CaseDocument[] = []
 let vehicleStore: Vehicle[] = vehicles.map((v) => ({ ...v }))
@@ -340,6 +341,11 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Notes
   // -----------------------------------------------------------------
+  getStatements: (caseId: string) => ({ ...(statementStore[caseId] ?? {}) }),
+  saveStatement(caseId: string, sheet: string, data: Record<string, string | number>): void {
+    statementStore[caseId] = { ...(statementStore[caseId] ?? {}), [sheet]: data }
+  },
+
   getCaseNotes: (caseId: string): CaseNote[] => noteStore.filter((n) => n.caseId === caseId),
 
   updateNote(id: string, patch: { body?: string; isSpecialRequest?: boolean }, changedBy: StaffMember): void {

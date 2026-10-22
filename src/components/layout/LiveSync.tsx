@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase, USE_MOCK } from '@/lib/supabase'
 
-const TABLES = ['cases', 'case_notes', 'service_orders', 'contracts', 'contract_line_items', 'calendar_events', 'custody_log', 'case_documents', 'case_tasks', 'case_contacts', 'payments', 'family_messages', 'obituary_drafts']
+const TABLES = ['cases', 'case_notes', 'service_orders', 'contracts', 'contract_line_items', 'calendar_events', 'custody_log', 'case_documents', 'case_tasks', 'case_contacts', 'payments', 'family_messages', 'obituary_drafts', 'case_statements']
 
 /**
  * Keeps every open screen in step with changes made by OTHER people/devices:

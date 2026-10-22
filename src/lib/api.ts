@@ -670,6 +670,20 @@ export const api = {
   // Notes
   // -------------------------------------------------------------------
 
+  /** What staff filled in on the Statement of Funeral Goods and Services tabs, per tab. */
+  async getCaseStatements(caseId: string): Promise<Record<string, Record<string, string | number>>> {
+    if (USE_MOCK) return delay(mockStore.getStatements(caseId))
+    const { data, error } = await supabase!.from('case_statements').select('sheet, data').eq('case_id', caseId)
+    if (error) throw error
+    return Object.fromEntries((data ?? []).map((r) => [r.sheet as string, (r.data ?? {}) as Record<string, string | number>]))
+  },
+
+  async saveCaseStatement(caseId: string, sheet: string, data: Record<string, string | number>, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.saveStatement(caseId, sheet, data); return }
+    const { error } = await supabase!.from('case_statements').upsert({ case_id: caseId, sheet, data, updated_by: changedBy.id, updated_at: new Date().toISOString() }, { onConflict: 'case_id,sheet' })
+    if (error) throw error
+  },
+
   async getCaseNotes(caseId: string): Promise<CaseNote[]> {
     if (USE_MOCK) return delay(mockStore.getCaseNotes(caseId))
     const { data, error } = await supabase!.from('case_notes').select('*, staff_members(name)').eq('case_id', caseId)
