@@ -120,6 +120,11 @@ export default function CaseDetail() {
     },
   })
 
+  const { data: caseStatements } = useQuery({ queryKey: ['case-statements', caseId], queryFn: () => api.getCaseStatements(caseId!), enabled: !!caseId })
+  const signoffMutation = useMutation({
+    mutationFn: (v: { key: string; fp: string; label: string }) => api.signOffCheck(caseId!, v.key, v.fp, v.label, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-statements', caseId] }); queryClient.invalidateQueries({ queryKey: ['all-signoffs'] }) },
+  })
   const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
   const [confirmPassed, setConfirmPassed] = useState(false)
   const passedMutation = useMutation({
@@ -464,7 +469,14 @@ export default function CaseDetail() {
         )
       })()}
 
-      <WorkflowTrack wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents }, language)} onTab={(t) => { setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language} />
+      <WorkflowTrack
+        wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents, signoffs: caseStatements?.['_signoffs'] }, language)}
+        onTab={(t) => { setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language}
+        signoff={{
+          lang: language, busy: signoffMutation.isPending,
+          blocked: c.assignedDirectorId && c.assignedDirectorId === currentUser!.id ? (language === 'es' ? 'Otra persona debe hacer esta revisión (usted es el director de este caso).' : 'Someone else has to do this check — you are the director on this case.') : undefined,
+          onSign: (it) => signoffMutation.mutate({ key: it.signoff!.key, fp: it.signoff!.fp, label: it.label }),
+        }} />
 
       <div className="mt-4"><FamilyActivityCard c={c} currentUser={currentUser!} /></div>
 

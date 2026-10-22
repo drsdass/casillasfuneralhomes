@@ -693,6 +693,24 @@ export const api = {
     return Object.fromEntries((data ?? []).map((r) => [r.sheet as string, (r.data ?? {}) as Record<string, string | number>]))
   },
 
+  /** Every case's second-person checks, keyed by case — for the Cases list, Today screen and sidebar counts. */
+  async getAllSignoffs(): Promise<Record<string, Record<string, string | number>>> {
+    if (USE_MOCK) return delay(mockStore.getAllSignoffs())
+    const { data, error } = await supabase!.from('case_statements').select('case_id, data').eq('sheet', '_signoffs')
+    if (error) throw error
+    return Object.fromEntries((data ?? []).map((r) => [r.case_id as string, (r.data ?? {}) as Record<string, string | number>]))
+  },
+
+  /** "I looked at this and it is right." Remembers who and when, plus a fingerprint so a later change asks for a new check. */
+  async signOffCheck(caseId: string, key: string, fp: string, label: string, changedBy: StaffMember): Promise<void> {
+    const all = await this.getCaseStatements(caseId)
+    const cur = all['_signoffs'] ?? {}
+    await this.saveCaseStatement(caseId, '_signoffs', { ...cur, [key]: [fp, changedBy.name, new Date().toISOString()].join('§') }, changedBy)
+    const summary = `Second check: ${changedBy.name} checked "${label.replace(/^Changed since it was checked — check again: /, '')}"`
+    if (USE_MOCK) mockStore.logSignoff(caseId, summary, changedBy)
+    else logAuditReal({ entityType: 'case', entityId: caseId, caseId, action: 'update', summary, changedBy: changedBy.id })
+  },
+
   async saveCaseStatement(caseId: string, sheet: string, data: Record<string, string | number>, changedBy: StaffMember): Promise<void> {
     if (USE_MOCK) { mockStore.saveStatement(caseId, sheet, data); return }
     const { error } = await supabase!.from('case_statements').upsert({ case_id: caseId, sheet, data, updated_by: changedBy.id, updated_at: new Date().toISOString() }, { onConflict: 'case_id,sheet' })

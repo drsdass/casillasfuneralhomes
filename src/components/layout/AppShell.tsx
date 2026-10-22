@@ -10,7 +10,9 @@ import { brandFor } from '@/lib/company'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { visibleNavKeys } from '@/lib/permissions'
+import { visibleNavKeys, canViewAllLocations } from '@/lib/permissions'
+import { useWorkflowFor } from '@/lib/useWorkflow'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 import { ROLE_LABELS } from '@/types'
 import { playMessageChime, isMessageSoundEnabled, setMessageSoundEnabled } from '@/lib/notificationSound'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
@@ -70,6 +72,13 @@ export default function AppShell() {
     enabled: !!currentUser,
   })
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff, enabled: !!currentUser })
+  // Red count on "Cases": how many open cases still have something missing (flashes when any is urgent).
+  const workflowFor = useWorkflowFor()
+  const seesAll = currentUser ? canViewAllLocations(currentUser.role) : false
+  const { data: navCases = [] } = useQuery({ queryKey: ['cases', seesAll ? 'all' : activeLocationId], queryFn: () => api.getCases(seesAll ? undefined : activeLocationId), enabled: !!currentUser })
+  const needing = navCases.filter((c) => !isCaseDone(c) && !isPreNeed(c) && !c.caseNumber.startsWith('PRACTICE-')).map(workflowFor).filter((w) => !w.allDone)
+  const needCount = needing.length
+  const needUrgent = needing.some((w) => w.urgentCount > 0)
   const unreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
 
   // Ask once for OS-level notification permission — this is what lets a
@@ -220,6 +229,11 @@ export default function AppShell() {
             >
               <Icon size={17} />
               <span className="flex-1">{easy && key === 'dashboard' ? (language === 'es' ? 'Hoy' : 'Today') : t(label)}</span>
+              {key === 'cases' && needCount > 0 && (
+                <span title={`${needCount} open case${needCount === 1 ? '' : 's'} with something missing`} className={`text-[10px] font-semibold bg-red-500 text-white rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center ${needUrgent ? 'wf-flash wf-blink' : ''}`}>
+                  {needCount}
+                </span>
+              )}
               {key === 'messages' && unreadCount > 0 && (
                 <span className="text-[10px] font-semibold bg-red-500 text-white rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">
                   {unreadCount}

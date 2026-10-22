@@ -5,26 +5,39 @@ import type { Workflow, WorkItem } from '@/lib/workflow'
 import type { CaseTab } from '@/lib/nextStep'
 
 /** The status light for one line: green check when done, flashing red when missing and urgent, steady amber when missing. */
-export function StatusLight({ item, size = 28 }: { item: Pick<WorkItem, 'done' | 'urgent' | 'auto'>; size?: number }) {
+export function StatusLight({ item, size = 28 }: { item: Pick<WorkItem, 'done' | 'urgent' | 'auto' | 'waiting'>; size?: number }) {
   const s = { width: size, height: size }
+  if (!item.done && item.waiting) return <span style={s} className="shrink-0 inline-flex items-center justify-center rounded-full border-[3px] border-dashed border-slate-300 bg-white" aria-label="Waiting" />
   if (item.done) return <span style={s} className="shrink-0 inline-flex items-center justify-center rounded-full bg-emerald-600 text-white"><Check size={size * 0.62} strokeWidth={3} /></span>
   if (item.urgent) return <span style={s} className="wf-flash wf-blink shrink-0 inline-flex items-center justify-center rounded-full bg-red-600 text-white font-bold" aria-label="Urgent">!</span>
   return <span style={s} className="shrink-0 inline-flex items-center justify-center rounded-full border-[3px] border-amber-500 bg-white" aria-label="Missing" />
 }
 
-function FixButton({ item, onTab, canEdit }: { item: WorkItem; onTab: (t: CaseTab) => void; canEdit: boolean }) {
-  if (!canEdit || !item.button) return null
+export interface SignoffCtl { onSign: (item: WorkItem) => void; busy: boolean; blocked?: string; lang: 'en' | 'es' }
+
+function FixButton({ item, onTab, canEdit, ctl }: { item: WorkItem; onTab: (t: CaseTab) => void; canEdit: boolean; ctl?: SignoffCtl }) {
+  if (!canEdit) return null
   const cls = 'shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]'
-  return item.to ? <Link to={item.to} className={cls}>{item.button}</Link> : <button type="button" onClick={() => item.tab && onTab(item.tab)} className={cls}>{item.button}</button>
+  const look = item.button ? (item.to ? <Link to={item.to} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</Link> : <button type="button" onClick={() => item.tab && onTab(item.tab)} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</button>) : null
+  if (!item.signoff || !ctl) return look
+  const es = ctl.lang === 'es'
+  return (
+    <span className="flex flex-wrap items-center justify-end gap-2">
+      {look}
+      <button type="button" disabled={ctl.busy || !!ctl.blocked} onClick={() => ctl.onSign(item)} title={ctl.blocked} className={`${cls} disabled:opacity-40`}>{es ? 'Ya lo revisé — está bien' : 'I checked it — it is right'}</button>
+      {ctl.blocked && <span className="basis-full text-right text-xs text-amber-700">{ctl.blocked}</span>}
+    </span>
+  )
 }
 
 /** The big picture on a case: six blocks like a progress bar, then exactly what is still missing, each with a button to fix it. */
-export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en' }: { wf: Workflow; onTab: (t: CaseTab) => void; canEdit: boolean; lang?: 'en' | 'es' }) {
+export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en', signoff }: { wf: Workflow; onTab: (t: CaseTab) => void; canEdit: boolean; lang?: 'en' | 'es'; signoff?: SignoffCtl }) {
   const tx = (en: string, es: string) => (lang === 'es' ? es : en)
   const [showAll, setShowAll] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
   const shown = wf.phases.find((p) => p.key === picked) ?? wf.current
-  const shownMissing = shown ? shown.items.filter((i) => !i.done && !i.auto) : []
+  const shownMissing = shown ? shown.items.filter((i) => !i.done && !i.auto && !i.waiting) : []
+  const shownWaiting = shown ? shown.items.filter((i) => !i.done && i.waiting) : []
   const laterMissing = wf.missing.filter((m) => !shownMissing.includes(m))
 
   return (
@@ -55,16 +68,22 @@ export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en' }: { wf: Workflo
 
       {shown && (
         <div className="mt-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{shown.label} {shownMissing.length ? `— ${tx('still to do', 'por hacer')}` : `— ${tx('all done', 'todo listo')}`}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">{shown.label} {shownMissing.length ? `— ${tx('still to do', 'por hacer')}` : shownWaiting.length ? `— ${tx('waiting', 'en espera')}` : `— ${tx('all done', 'todo listo')}`}</div>
           <div className="space-y-2">
             {(shownMissing.length ? shownMissing : shown.items.filter((i) => !i.auto).slice(0, 0)).map((it) => (
               <div key={it.key} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 ${it.urgent ? 'border-red-300 bg-red-50' : 'border-amber-200 bg-amber-50/60'}`}>
                 <StatusLight item={it} />
                 <div className="flex-1 text-base font-medium text-slate-900">{it.label}</div>
-                <FixButton item={it} onTab={onTab} canEdit={canEdit} />
+                <FixButton item={it} onTab={onTab} canEdit={canEdit} ctl={signoff} />
               </div>
             ))}
-            {shownMissing.length === 0 && <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-900"><StatusLight item={{ done: true }} /> {tx('Everything in this step is finished.', 'Todo en este paso está terminado.')}</div>}
+            {shownWaiting.map((it) => (
+              <div key={it.key} className="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2.5">
+                <StatusLight item={it} />
+                <div className="flex-1 text-base text-slate-500">{it.label}<span className="block text-xs text-slate-400">{tx('Not ready yet — the step before it is not finished.', 'Todavía no — falta terminar el paso anterior.')}</span></div>
+              </div>
+            ))}
+            {shownMissing.length === 0 && shownWaiting.length === 0 && <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-900"><StatusLight item={{ done: true }} /> {tx('Everything in this step is finished.', 'Todo en este paso está terminado.')}</div>}
           </div>
         </div>
       )}
@@ -75,7 +94,7 @@ export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en' }: { wf: Workflo
       {(showAll || (laterMissing.length === 0 && wf.allDone === false)) && showAll && (
         <div className="mt-3 space-y-1.5">
           {laterMissing.map((it) => (
-            <div key={it.key} className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2"><StatusLight item={it} size={22} /><div className="flex-1 text-sm text-slate-800">{it.label}</div><FixButton item={it} onTab={onTab} canEdit={canEdit} /></div>
+            <div key={it.key} className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2"><StatusLight item={it} size={22} /><div className="flex-1 text-sm text-slate-800">{it.label}</div><FixButton item={it} onTab={onTab} canEdit={canEdit} ctl={signoff} /></div>
           ))}
           <button type="button" onClick={() => setShowAll(false)} className="text-sm text-slate-500 hover:underline">{tx('Hide', 'Ocultar')}</button>
         </div>
@@ -87,7 +106,7 @@ export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en' }: { wf: Workflo
           {wf.phases.map((p) => (
             <div key={p.key}>
               <div className="text-sm font-semibold text-slate-800 mb-1">{p.label}</div>
-              <ul className="space-y-1">{p.items.map((i) => <li key={i.key} className="flex items-center gap-2 text-sm text-slate-700"><StatusLight item={i} size={18} /><span className={i.done ? 'text-slate-500' : ''}>{i.label}</span></li>)}</ul>
+              <ul className="space-y-1">{p.items.map((i) => <li key={i.key} className="flex items-center gap-2 text-sm text-slate-700"><StatusLight item={i} size={18} /><span className={i.done ? 'text-slate-500' : i.waiting ? 'text-slate-400' : ''}>{i.label}{i.done && i.signoff?.by ? <span className="text-emerald-700"> — {lang === 'es' ? 'revisado por' : 'checked by'} {i.signoff.by}{i.signoff.at ? `, ${new Date(i.signoff.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}</span> : null}</span></li>)}</ul>
             </div>
           ))}
         </div>

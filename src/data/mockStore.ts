@@ -343,6 +343,11 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Notes
   // -----------------------------------------------------------------
+  getAllSignoffs: (): Record<string, Record<string, string | number>> =>
+    Object.fromEntries(Object.entries(statementStore).filter(([, v]) => v['_signoffs']).map(([id, v]) => [id, v['_signoffs']])),
+  logSignoff(caseId: string, summary: string, changedBy: StaffMember): void {
+    logAudit({ entityType: 'case', entityId: caseId, caseId, action: 'update', summary, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
   getStatements: (caseId: string) => ({ ...(statementStore[caseId] ?? {}) }),
   saveStatement(caseId: string, sheet: string, data: Record<string, string | number>): void {
     statementStore[caseId] = { ...(statementStore[caseId] ?? {}), [sheet]: data }

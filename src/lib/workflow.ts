@@ -1,5 +1,32 @@
-import type { FuneralCase, Contract, CaseTask, CaseDocument } from '@/types'
-import type { CaseTab } from '@/lib/nextStep'
+// Self-contained on purpose (no imports): the same file is copied into the morning-digest Edge Function by scripts/build_digest.py,
+// so the phone notification and the screens can never disagree about what is missing.
+
+export type CaseTab = 'Overview' | 'Tasks' | 'Orders' | 'Notes' | 'Documents' | 'Emails' | 'Financials'
+export interface WfCase {
+  id: string; type: string; status: string; disposition: string; custodyStage: string
+  contacts: { name?: string; relationship?: string; phone?: string }[]
+  decedent?: unknown; vitalSheet?: unknown
+  serviceDate?: string; serviceLocation?: string; visitationDate?: string; visitationLocation?: string
+  obituaryCompleted?: boolean
+}
+export interface WfContract { status: string; lineItems: { name: string; quantity: number; unitPrice: number }[]; total: number; taxTotal: number; discount: number; amountPaid: number; paid: boolean }
+export interface WfTask { id: string; label: string; category: string; status: string; dueDate?: string }
+export interface WfDoc { id: string; category: string; signed?: boolean }
+type FuneralCase = WfCase; type Contract = WfContract; type CaseTask = WfTask; type CaseDocument = WfDoc
+
+/** Short stable fingerprint of what a second person looked at — if it changes later, the check has to be done again. */
+export function fingerprint(x: unknown): string {
+  const str = JSON.stringify(x) ?? ''
+  let h = 5381
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+export const SIGNOFF_SEP = '§'
+export const parseSignoff = (v: unknown): { fp: string; by: string; at: string } | null => {
+  if (typeof v !== 'string') return null
+  const [fp, by, at] = v.split(SIGNOFF_SEP)
+  return fp ? { fp, by: by ?? '', at: at ?? '' } : null
+}
 
 export interface WorkItem {
   key: string
@@ -9,6 +36,10 @@ export interface WorkItem {
   auto?: boolean
   /** Missing AND time is short (service within 3 days, or a task is past due) — these flash. */
   urgent?: boolean
+  /** Not ready to be looked at yet (what it checks is not finished) — shown grey, never counted as forgotten. */
+  waiting?: boolean
+  /** A second-person check: who signed it and when, and whether the thing changed since. */
+  signoff?: { key: string; fp: string; by?: string; at?: string; stale?: boolean }
   /** Where the fix button goes. */
   tab?: CaseTab
   to?: string
@@ -32,7 +63,7 @@ const FINAL = ['cemetery_burial', 'ashes_received', 'shipped_released', 'complet
  * When someone saves the vital sheet, signs the contract, uploads a permit or enters a payment, that line turns green by itself,
  * on this page, the Cases list and the Today screen alike.
  */
-export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks: CaseTask[]; docs: CaseDocument[] }, lang: 'en' | 'es' = 'en'): Workflow {
+export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks: CaseTask[]; docs: CaseDocument[]; signoffs?: Record<string, unknown> }, lang: 'en' | 'es' = 'en'): Workflow {
   const tx = (en: string, es: string) => (lang === 'es' ? es : en)
   const id = c.id
   const pre = c.type === 'pre_need'
@@ -50,6 +81,12 @@ export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks:
   const paperTasks = o.tasks.filter((t) => t.category === 'permits' || t.category === 'documents')
   const prepTasks = o.tasks.filter((t) => t.category !== 'permits' && t.category !== 'documents')
 
+  const sign = (key: string, label: string, ready: boolean, fp: unknown, extra: Partial<WorkItem>): WorkItem => {
+    const rec = parseSignoff(o.signoffs?.[key]); const valid = !!rec && rec.fp === fingerprint(fp)
+    const stale = ready && !!rec && !valid
+    return { key, label: stale ? tx('Changed since it was checked — check again: ', 'Cambió desde la revisión — revise otra vez: ') + label : label, done: completed || (ready && valid), waiting: !ready && !completed,
+      urgent: soon && ready && !valid, signoff: { key, fp: fingerprint(fp), by: valid ? rec!.by : undefined, at: valid ? rec!.at : undefined, stale }, ...extra }
+  }
   const I = (key: string, label: string, done: boolean, extra: Partial<WorkItem> = {}): WorkItem => ({ key, label, done: completed || done, ...extra })
   const U = (needed: boolean) => needed && soon
 
@@ -86,6 +123,12 @@ export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks:
       I('obit', tx('Obituary done', 'Obituario listo'), !!c.obituaryCompleted, { tab: 'Documents', button: tx('Open obituary', 'Abrir obituario'), urgent: U(!c.obituaryCompleted) }),
       ...prepTasks.map((t) => taskItem(t, true)),
     ] },
+    { key: 'check', label: tx('Second check', 'Segunda revisión'), items: [
+      sign('chk_vital', tx('Vital Sheet and family details looked over by a second person', 'Hoja vital y datos de la familia revisados por otra persona'), !!c.vitalSheet, [c.decedent, c.vitalSheet, c.contacts.map((x) => [x.name, x.relationship, x.phone])], { to: `/cases/${id}/vital-sheet`, button: tx('Look at it', 'Ver') }),
+      sign('chk_papers', tx('Authorization and permits looked over by a second person', 'Autorización y permisos revisados por otra persona'), (hasDoc('authorization') || o.docs.some((d) => d.signed)) && paperTasks.every((t) => t.status === 'confirmed'), [o.docs.map((d) => [d.id, d.category, d.signed]), paperTasks.map((t) => [t.id, t.status])], { tab: 'Documents', button: tx('Look at it', 'Ver') }),
+      sign('chk_money', tx('Invoice matches what the family chose — looked over by a second person', 'La factura coincide con lo elegido — revisada por otra persona'), hasInvoice, k ? [k.lineItems.map((l) => [l.name, l.quantity, l.unitPrice]), k.total, k.taxTotal, k.discount] : null, { tab: 'Financials', button: tx('Look at it', 'Ver') }),
+      sign('chk_service', tx('Service date, time and place looked over by a second person', 'Fecha, hora y lugar del servicio revisados por otra persona'), !!c.serviceDate, [c.serviceDate, c.serviceLocation, c.visitationDate, c.visitationLocation, c.disposition], { tab: 'Overview', button: tx('Look at it', 'Ver') }),
+    ] },
     { key: 'svc', label: tx('Service & final resting', 'Servicio y destino final'), items: [
       I('held', tx('Service held', 'Servicio realizado'), (svc !== null && svc < now) || FINAL.includes(c.custodyStage), { auto: true }),
       I('final', tx('Burial / cremation completed', 'Entierro / cremación completado'), FINAL.includes(c.custodyStage), { to: '/custody', button: tx('Chain of Custody', 'Cadena de custodia') }),
@@ -104,7 +147,7 @@ export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks:
     return { ...p, done, total, status }
   })
   const all = phases.flatMap((p) => p.items)
-  const missing = all.filter((i) => !i.done && !i.auto)
+  const missing = all.filter((i) => !i.done && !i.auto && !i.waiting)
   return {
     phases, missing, urgentCount: missing.filter((i) => i.urgent).length,
     percent: all.length ? Math.round((all.filter((i) => i.done).length / all.length) * 100) : 0,
