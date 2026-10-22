@@ -466,7 +466,13 @@ export const api = {
 
   async createCase(input: Omit<FuneralCase, 'id' | 'createdAt' | 'updatedAt'>, changedBy: StaffMember): Promise<FuneralCase> {
     if (USE_MOCK) return delay(mockStore.createCase(input, changedBy))
-    const { data: caseRow, error } = await supabase!.from('cases').insert(caseToRow(input)).select().single()
+    let { data: caseRow, error } = await supabase!.from('cases').insert(caseToRow(input)).select().single()
+    // Until visitation-end.sql has been run, the end-time column doesn't exist — save everything else rather than block the case.
+    if (error && /visitation_end/.test(error.message)) {
+      const { visitation_end: _skip, ...rest } = caseToRow(input) as Record<string, unknown>
+      void _skip
+      ;({ data: caseRow, error } = await supabase!.from('cases').insert(rest).select().single())
+    }
     if (error) throw error
     if (input.contacts?.length) {
       const { error: contactErr } = await supabase!
@@ -498,7 +504,12 @@ export const api = {
 
   async updateCase(id: string, patch: Partial<FuneralCase>, changedBy: StaffMember): Promise<FuneralCase | undefined> {
     if (USE_MOCK) return delay(mockStore.updateCase(id, patch, changedBy))
-    const { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)
+    let { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)
+    if (error && /visitation_end/.test(error.message)) {
+      const { visitation_end: _skip, ...rest } = caseToRow(patch) as Record<string, unknown>
+      void _skip
+      ;({ error } = await supabase!.from('cases').update(rest).eq('id', id))
+    }
     if (error) throw error
     if (patch.contacts) {
       // Update existing rows in place rather than deleting and
