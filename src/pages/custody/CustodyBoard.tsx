@@ -96,7 +96,7 @@ function ScrollColumn({ className, children }: { className: string; children: Re
 
 export default function CustodyBoard() {
   const { activeLocationId, currentUser } = useSession()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  const isAllLocations = !!currentUser // every location of the company is shown to everyone
   const queryClient = useQueryClient()
   const [dragCaseId, setDragCaseId] = useState<string | null>(null)
   const [selectedCase, setSelectedCase] = useState<string | null>(null)

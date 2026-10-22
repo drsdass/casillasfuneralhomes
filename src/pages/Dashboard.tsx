@@ -20,7 +20,7 @@ export default function Dashboard() {
 function FullDashboard() {
   const { activeLocationId, accessibleLocations, currentUser } = useSession()
   const { t } = useLanguage()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  const isAllLocations = !!currentUser // every location of the company is shown to everyone
 
   const { data: cases = [] } = useQuery({
     queryKey: ['cases', isAllLocations ? 'all' : activeLocationId],

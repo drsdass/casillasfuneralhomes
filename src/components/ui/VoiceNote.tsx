@@ -38,7 +38,7 @@ function VoiceNoteDialog({ onClose }: { onClose: () => void }) {
   const tx = (en: string, es: string) => (language === 'es' ? es : en)
   const qc = useQueryClient()
   const routeCase = useMatch('/cases/:caseId/*')?.params.caseId
-  const all = currentUser ? canViewAllLocations(currentUser.role) : false
+  const all = !!currentUser // every location of the company is shown to everyone
   const [text, setText] = useState('')
   const [caseId, setCaseId] = useState('')
   const [stage, setStage] = useState<CustodyStage | null>(null)

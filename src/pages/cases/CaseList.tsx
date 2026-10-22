@@ -31,18 +31,26 @@ export default function CaseList() {
   const [search, setSearch] = useState('')
   const [needsOnly, setNeedsOnly] = useState(false)
   const workflowFor = useWorkflowFor()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  // Everyone sees the cases of every location of their company — each one labelled with its location.
+  const isAllLocations = true
+  const [locFilter, setLocFilter] = useState<string>('all')
 
   const { data: cases = [], isLoading } = useQuery({
-    queryKey: ['cases', isAllLocations ? 'all' : activeLocationId],
-    queryFn: () => api.getCases(isAllLocations ? undefined : activeLocationId),
+    queryKey: ['cases', 'all'],
+    queryFn: () => api.getCases(),
   })
 
   if (!currentUser) return null
 
   const locationName = (id: string) => accessibleLocations.find((l) => l.id === id)?.name ?? id
 
-  const filtered = cases.filter((c) => {
+  const companyLocIds = new Set(accessibleLocations.map((l) => l.id))
+  const LOC_COLORS = ['bg-emerald-50 text-emerald-800 border-emerald-200', 'bg-amber-50 text-amber-800 border-amber-200', 'bg-sky-50 text-sky-800 border-sky-200', 'bg-violet-50 text-violet-800 border-violet-200']
+  const locColor = (id: string) => LOC_COLORS[Math.max(0, accessibleLocations.findIndex((l) => l.id === id)) % LOC_COLORS.length]
+  const inCompany = cases.filter((c) => companyLocIds.has(c.locationId))
+
+  const filtered = inCompany.filter((c) => {
+    if (locFilter !== 'all' && c.locationId !== locFilter) return false
     if (statusFilter === 'pre_need') { if (c.type !== 'pre_need') return false }
     else if (statusFilter !== 'all' && (c.status !== statusFilter || c.type === 'pre_need')) return false
     if (needsOnly && (c.status === 'completed' || workflowFor(c).allDone)) return false
@@ -109,6 +117,14 @@ export default function CaseList() {
             className="pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-[#b3925a]"
           />
         </div>
+        {accessibleLocations.length > 1 && (
+          <div className="flex gap-1 flex-wrap" aria-label="Location">
+            <button onClick={() => setLocFilter('all')} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${locFilter === 'all' ? 'bg-[#3b4a35] text-white border-[#3b4a35]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>All locations ({inCompany.length})</button>
+            {accessibleLocations.map((l) => (
+              <button key={l.id} onClick={() => setLocFilter(l.id)} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${locFilter === l.id ? 'bg-[#3b4a35] text-white border-[#3b4a35]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{shortLocationName(l.name)} ({inCompany.filter((c) => c.locationId === l.id).length})</button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-1 flex-wrap">
           {statusFilters.map((f) => (
             <button
@@ -154,7 +170,7 @@ export default function CaseList() {
                   </Link>
                   <Link to={`/cases/${c.id}`} className="block mt-1.5 ml-4"><MiniTrack wf={workflowFor(c)} /></Link>
                 </td>
-                <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}{isAllLocations && <div className="text-xs text-slate-400">{shortLocationName(locationName(c.locationId))}</div>}</td>
+                <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}<div className={`mt-1 inline-block text-[11px] font-medium border rounded-full px-2 py-0.5 ${locColor(c.locationId)}`}>{shortLocationName(locationName(c.locationId))}</div></td>
                 <td className="px-3 py-3 text-slate-500 capitalize">{c.disposition}</td>
                 <td className="px-3 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}

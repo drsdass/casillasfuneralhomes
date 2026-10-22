@@ -24,7 +24,7 @@ export default function DriverView() {
   const queryClient = useQueryClient()
   const { language } = useLanguage()
   const es = language === 'es'
-  const all = currentUser ? canViewAllLocations(currentUser.role) : false
+  const all = !!currentUser // every location of the company is shown to everyone
   const [text, setText] = useState('')
   const [caseId, setCaseId] = useState('')
   const [stage, setStage] = useState<CustodyStage | null>(null)

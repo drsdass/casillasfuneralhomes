@@ -26,7 +26,7 @@ export default function TodayHome() {
   const [tour, setTour] = useState(() => { try { return !!currentUser && localStorage.getItem(tourKey) !== '1' } catch { return false } })
   const closeTour = () => { setTour(false); try { localStorage.setItem(tourKey, '1') } catch { /* ignore */ } }
   const workflowFor = useWorkflowFor()
-  const all = currentUser ? canViewAllLocations(currentUser.role) : false
+  const all = !!currentUser // every location of the company is shown to everyone
 
   const { data: cases = [] } = useQuery({ queryKey: ['cases', all ? 'all' : activeLocationId], queryFn: () => api.getCases(all ? undefined : activeLocationId) })
   const { data: events = [] } = useQuery({ queryKey: ['events', all ? 'all' : activeLocationId], queryFn: () => api.getCalendarEvents(all ? undefined : activeLocationId) })

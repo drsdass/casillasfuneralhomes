@@ -74,7 +74,7 @@ export default function AppShell() {
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff, enabled: !!currentUser })
   // Red count on "Cases": how many open cases still have something missing (flashes when any is urgent).
   const workflowFor = useWorkflowFor()
-  const seesAll = currentUser ? canViewAllLocations(currentUser.role) : false
+  const seesAll = !!currentUser // every location of the company is shown to everyone
   const { data: navCases = [] } = useQuery({ queryKey: ['cases', seesAll ? 'all' : activeLocationId], queryFn: () => api.getCases(seesAll ? undefined : activeLocationId), enabled: !!currentUser })
   const needing = navCases.filter((c) => !isCaseDone(c) && !isPreNeed(c) && !c.caseNumber.startsWith('PRACTICE-')).map(workflowFor).filter((w) => !w.allDone)
   const needCount = needing.length
