@@ -333,7 +333,7 @@ export default function CustodyBoard() {
               .map((entry) => (
                 <div key={entry.id} className="flex gap-3 text-sm border-b border-slate-50 last:border-0 pb-3 last:pb-0">
                   <div className="w-32 shrink-0 text-slate-400 text-xs pt-0.5">
-                    {format(parseISO(entry.timestamp), 'MMM d, h:mm a')}
+                    {format(parseISO(entry.timestamp), 'MMM d, HH:mm')}
                   </div>
                   <div>
                     <div className="text-slate-800">

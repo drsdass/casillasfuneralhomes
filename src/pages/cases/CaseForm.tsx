@@ -1,3 +1,4 @@
+import { DateTime24, Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -85,6 +86,7 @@ export default function CaseForm() {
   const [selectedFamilyName, setSelectedFamilyName] = useState<string | null>(null)
   const [visitationDate, setVisitationDate] = useState(isoToLocalInput(existing?.visitationDate))
   const [visitationLocation, setVisitationLocation] = useState(existing?.visitationLocation ?? '')
+  const [visitationEndTime, setVisitationEndTime] = useState(isoToLocalInput(existing?.visitationEnd).slice(11, 16))
   const [serviceDate, setServiceDate] = useState(isoToLocalInput(existing?.serviceDate))
   const [serviceLocation, setServiceLocation] = useState(existing?.serviceLocation ?? '')
   const [contactName, setContactName] = useState(existing?.contacts[0]?.name ?? extracted?.contactName ?? '')
@@ -118,6 +120,7 @@ export default function CaseForm() {
     setDisposition(existing.disposition)
     setVisitationDate(isoToLocalInput(existing.visitationDate))
     setVisitationLocation(existing.visitationLocation ?? '')
+    setVisitationEndTime(isoToLocalInput(existing.visitationEnd).slice(11, 16))
     setServiceDate(isoToLocalInput(existing.serviceDate))
     setServiceLocation(existing.serviceLocation ?? '')
     setContactName(existing.contacts[0]?.name ?? '')
@@ -126,8 +129,12 @@ export default function CaseForm() {
     setContactEmail(existing.contacts[0]?.email ?? '')
   }, [existing])
 
+  // The end time is a time on the same day as the visitation start.
+  const visitationEndIso = visitationDate && visitationEndTime ? localInputToIso(`${visitationDate.slice(0, 10)}T${visitationEndTime}`) : undefined
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time.')
       const colorPalette = ['#3d4f3a', '#8b5e34', '#6b7f4f', '#a8763e', '#2f4a3f']
       const contacts = contactName
         ? [{ id: existing?.contacts[0]?.id ?? `c-${Date.now()}`, name: contactName, relationship: contactRelationship, phone: contactPhone, email: contactEmail, isPrimary: true, isAuthorizingAgent: true }]
@@ -141,6 +148,7 @@ export default function CaseForm() {
           contacts,
           familyId,
           visitationDate: localInputToIso(visitationDate),
+          visitationEnd: visitationEndIso,
           visitationLocation: visitationLocation || undefined,
           serviceDate: localInputToIso(serviceDate),
           serviceLocation: serviceLocation || undefined,
@@ -155,6 +163,7 @@ export default function CaseForm() {
         contacts,
         familyId,
         visitationDate: localInputToIso(visitationDate),
+        visitationEnd: visitationEndIso,
         visitationLocation: visitationLocation || undefined,
         serviceDate: localInputToIso(serviceDate),
         serviceLocation: serviceLocation || undefined,
@@ -320,8 +329,12 @@ export default function CaseForm() {
           <p className="text-xs text-slate-400 mb-3">Setting a date here automatically adds (or updates) it on the Calendar — no separate step needed.</p>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className={labelClass}>Visitation Date &amp; Time</label>
-              <input type="datetime-local" value={visitationDate} onChange={(e) => setVisitationDate(e.target.value)} className={inputClass} />
+              <label className={labelClass}>Visitation Date &amp; Start Time (24-hour)</label>
+              <DateTime24 label="Visitation start" value={visitationDate} onChange={setVisitationDate} inputClass={inputClass} />
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs font-medium text-slate-600">Visitation ends (24-hour)</span>
+                <Time24 label="Visitation end" value={visitationEndTime} onChange={setVisitationEndTime} />
+              </div>
             </div>
             <div>
               <label className={labelClass}>Visitation Location</label>
@@ -330,8 +343,8 @@ export default function CaseForm() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Service Date &amp; Time</label>
-              <input type="datetime-local" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} className={inputClass} />
+              <label className={labelClass}>Service Date &amp; Time (24-hour)</label>
+              <DateTime24 label="Service" value={serviceDate} onChange={setServiceDate} inputClass={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Service Location</label>

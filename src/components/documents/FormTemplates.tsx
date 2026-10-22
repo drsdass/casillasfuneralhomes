@@ -636,8 +636,8 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
         <div className="border border-slate-400 border-t-0">
           <div className="grid grid-cols-[100px_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">VISITATION</div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ?? ''}</div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{vs?.visitationHours ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ? new Date(c.visitationDate).toLocaleDateString('en-US') : ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{c.visitationDate ? [c.visitationDate, c.visitationEnd].filter(Boolean).map((x) => new Date(x as string).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })).join('–') : (vs?.visitationHours ?? '')}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">Place</div>{c.visitationLocation ?? ''}</div>
           </div>
           <div className="grid grid-cols-[100px_1fr_1fr_1fr_1fr] border-b border-slate-400">

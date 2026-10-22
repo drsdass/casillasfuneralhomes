@@ -88,6 +88,8 @@ export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks:
   const now = Date.now()
   const svc = c.serviceDate ? new Date(c.serviceDate).getTime() : null
   const soon = !pre && !completed && svc !== null && svc - now < 3 * 86400000 // within 3 days, or already past
+  const vs = c.vitalSheet as { dispositionDate?: string; finalDisposition?: string } | undefined
+  const afterService = !pre && ((svc !== null && svc < now) || FINAL.includes(c.custodyStage))
   const hasInvoice = !!k && k.lineItems.length > 0
   const signed = !!k && (k.status === 'signed' || k.status === 'paid')
   const paidIn = !!k && k.total > 0 && (k.paid || k.amountPaid >= k.total)
@@ -150,6 +152,10 @@ export function computeWorkflow(c: FuneralCase, o: { contract?: Contract; tasks:
       I('final', tx('Burial / cremation completed', 'Entierro / cremación completado'), FINAL.includes(c.custodyStage), { to: '/custody', button: tx('Chain of Custody', 'Cadena de custodia') }),
     ] },
     { key: 'close', label: tx('Closing out', 'Cierre'), items: [
+      // EDRS lets the disposition be added later, so this stays quiet until the service is over — then it becomes the reminder.
+      I('edrs', tx('EDRS finished — disposition date and place added (and the Social Security number, once the family has it)', 'EDRS terminado — fecha y lugar de la disposición agregados (y el número de Seguro Social, cuando la familia lo tenga)'),
+        !!(vs?.dispositionDate?.trim() && vs?.finalDisposition?.trim()),
+        { to: `/cases/${id}/edrs`, button: tx('Open EDRS Entry', 'Abrir EDRS'), waiting: !completed && !afterService, urgent: afterService && !completed }),
       I('bal', tx('Balance paid in full', 'Saldo pagado por completo'), paidIn, { tab: 'Financials', button: tx('Collect balance', 'Cobrar saldo') }),
       I('closed', tx('Case marked complete', 'Caso marcado completo'), completed, { tab: 'Overview', button: tx('Mark complete', 'Marcar completo') }),
     ] },

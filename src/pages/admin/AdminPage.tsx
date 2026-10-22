@@ -477,7 +477,7 @@ export default function AdminPage() {
             <tbody>
               {auditLog.map((entry) => (
                 <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{format(parseISO(entry.timestamp), 'MMM d, h:mm:ss a')}</td>
+                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{format(parseISO(entry.timestamp), 'MMM d, HH:mm:ss')}</td>
                   <td className="px-4 py-3 text-slate-700">{entry.changedByName}</td>
                   <td className="px-4 py-3 text-slate-500 capitalize">{entry.entityType}</td>
                   <td className="px-4 py-3 text-slate-800">{entry.summary}</td>

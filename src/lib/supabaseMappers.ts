@@ -29,6 +29,7 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if (c.assignedDirectorId !== undefined) row.assigned_director_id = c.assignedDirectorId
   if (c.assignedEmbalmerId !== undefined) row.assigned_embalmer_id = c.assignedEmbalmerId
   if (c.visitationDate !== undefined) row.visitation_date = c.visitationDate
+  if (c.visitationEnd !== undefined) row.visitation_end = c.visitationEnd
   if (c.visitationLocation !== undefined) row.visitation_location = c.visitationLocation
   if (c.serviceDate !== undefined) row.service_date = c.serviceDate
   if (c.serviceLocation !== undefined) row.service_location = c.serviceLocation
@@ -88,6 +89,7 @@ export function rowToCase(row: any): FuneralCase {
     assignedDirectorId: row.assigned_director_id ?? undefined,
     assignedEmbalmerId: row.assigned_embalmer_id ?? undefined,
     visitationDate: row.visitation_date ?? undefined,
+    visitationEnd: row.visitation_end ?? undefined,
     visitationLocation: row.visitation_location ?? undefined,
     serviceDate: row.service_date ?? undefined,
     serviceLocation: row.service_location ?? undefined,

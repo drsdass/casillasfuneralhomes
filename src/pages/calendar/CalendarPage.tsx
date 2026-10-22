@@ -58,7 +58,7 @@ function EventHoverPopover({
   return (
     <div className="absolute z-20 left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg p-3 text-xs pointer-events-none">
       <div className="font-medium text-slate-800 mb-1">{e.title}</div>
-      <div className="text-slate-500 mb-1.5">{format(parseISO(e.start), 'MMM d, h:mm a')} – {format(parseISO(e.end), 'h:mm a')}</div>
+      <div className="text-slate-500 mb-1.5">{format(parseISO(e.start), 'MMM d, HH:mm')} – {format(parseISO(e.end), 'HH:mm')}</div>
       <div className="mb-1"><span className="text-slate-400">Staff:</span> {staffNames.length > 0 ? staffNames.join(', ') : '—'}</div>
       {linkedCase && (
         <>
@@ -300,7 +300,7 @@ function EventRow({
       }`}
     >
       <div className="w-32 shrink-0 text-sm text-slate-600">
-        {format(parseISO(e.start), 'h:mm a')} – {format(parseISO(e.end), 'h:mm a')}
+        {format(parseISO(e.start), 'HH:mm')} – {format(parseISO(e.end), 'HH:mm')}
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize shrink-0 ${typeColors[e.type]}`}>
         {e.type.replace('_', ' ')}
@@ -408,7 +408,7 @@ function MonthEventChip({ e, allCases, allStaff, onClick }: { e: CalendarEvent; 
         onClick={onClick}
         className={`block w-full text-left text-[10px] px-1 py-0.5 rounded truncate ${typeColors[e.type]}`}
       >
-        {format(parseISO(e.start), 'h:mma')} {e.title}
+        {format(parseISO(e.start), 'HH:mm')} {e.title}
       </button>
       {hovered && (
         <EventHoverPopover e={e} linkedCase={linkedCase} staffNames={staffNames} flowers={flowers} birds={birds} escort={escort} latestNote={latestNote} />

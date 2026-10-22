@@ -114,7 +114,7 @@ function FullDashboard() {
                   </div>
                   <div className="text-xs text-slate-500">
                     {isAllLocations && `${locationName(c.locationId)} · `}
-                    {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}
+                    {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, HH:mm')}`}
                   </div>
                 </div>
                 <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
@@ -137,7 +137,7 @@ function FullDashboard() {
               .sort((a, b) => a.start.localeCompare(b.start))
               .map((e) => (
                 <div key={e.id} className="flex gap-3 text-sm">
-                  <div className="w-16 shrink-0 text-slate-500">{format(parseISO(e.start), 'h:mm a')}</div>
+                  <div className="w-16 shrink-0 text-slate-500">{format(parseISO(e.start), 'HH:mm')}</div>
                   <div>
                     <div className="font-medium text-slate-800">{e.title}</div>
                     <div className="text-xs text-slate-500 capitalize">{t(`enums.eventType.${e.type}`)} {e.location && `· ${e.location}`}</div>

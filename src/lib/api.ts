@@ -189,7 +189,8 @@ async function syncCaseCalendarEvent(
   type: 'visitation' | 'service',
   dateIso: string | undefined,
   eventLocation: string | undefined,
-  decedentName: string
+  decedentName: string,
+  endIso?: string
 ): Promise<void> {
   const { data: existing } = await supabase!
     .from('calendar_events')
@@ -208,7 +209,7 @@ async function syncCaseCalendarEvent(
 
   const durationMs = type === 'visitation' ? 2 * 60 * 60 * 1000 : 60 * 60 * 1000
   const startAt = dateIso
-  const endAt = new Date(new Date(dateIso).getTime() + durationMs).toISOString()
+  const endAt = endIso && new Date(endIso) > new Date(dateIso) ? endIso : new Date(new Date(dateIso).getTime() + durationMs).toISOString()
   const title = `${decedentName} — ${type === 'visitation' ? 'Visitation' : 'Service'}`
 
   if (existing) {
@@ -474,7 +475,7 @@ export const api = {
       if (contactErr) throw contactErr
     }
     const decedentName = `${input.decedent.firstName} ${input.decedent.lastName}`
-    if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName)
+    if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName, input.visitationEnd)
     if ('serviceDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'service', input.serviceDate, input.serviceLocation, decedentName)
     await this.seedTasksFromTemplates(caseRow.id, input.orgId)
     this.firePush({ type: 'case', caseId: caseRow.id, event: 'created' })
@@ -533,7 +534,7 @@ export const api = {
       const current = await this.getCase(id)
       if (current) {
         const decedentName = `${current.decedent.firstName} ${current.decedent.lastName}`
-        if ('visitationDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'visitation', patch.visitationDate, patch.visitationLocation, decedentName)
+        if ('visitationDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'visitation', patch.visitationDate, patch.visitationLocation, decedentName, patch.visitationEnd ?? current.visitationEnd)
         if ('serviceDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'service', patch.serviceDate, patch.serviceLocation, decedentName)
       }
     }

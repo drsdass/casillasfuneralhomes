@@ -255,6 +255,13 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
   return { type: 'Other Country', value: country, notes: [note('info', 'Pick the country with the magnifying-glass browser in EDRS')] }
 }
 
+/** True when a typed state/country is outside the US (so zip codes and counties don't follow US rules). */
+export function isForeignPlace(stateRaw?: string): boolean {
+  if (!(stateRaw ?? '').trim()) return false
+  const t = placeFrom(stateRaw).type
+  return t !== 'US State' && t !== 'US Territory' && t !== ''
+}
+
 // ---------------------------------------------------------------------------
 // Building the rows
 // ---------------------------------------------------------------------------
@@ -419,10 +426,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         break
       }
       case 'residenceCounty':
-        add('res-county', '22', 'COUNTY/PROVINCE', 'residence', plain, plain ? [] : [note('error', 'Required — choose from the county list, UNK if unknown')])
+        add('res-county', '22', 'COUNTY/PROVINCE', 'residence', plain, plain ? [] : isForeignPlace(vs.residenceState) ? [note('info', 'Outside the US — the province or municipality, or UNK')] : [note('error', 'Required — choose from the county list, UNK if unknown')])
         break
       case 'residenceZip':
-        add('res-zip', '23', 'ZIP CODE', 'residence', plain, !plain ? [note('error', 'Required — a dash if there is none')] : /^\d{5}(-\d{4})?$/.test(plain.trim()) ? [] : [note('warn', 'US zip codes are 5 digits, optionally +4')])
+        add('res-zip', '23', 'ZIP CODE', 'residence', plain, !plain ? [note('error', 'Required — a dash if there is none')] : isForeignPlace(vs.residenceState) || /^\d{5}(-\d{4})?$/.test(plain.trim()) ? [] : [note('warn', 'US zip codes are 5 digits, optionally +4')])
         break
       case 'yearsInCounty':
         add('res-years', '24', 'YEARS IN COUNTY', 'residence', plain,
@@ -532,10 +539,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         placeRows('mother-birth', '38', "MOTHER/PARENT'S BIRTH STATE/COUNTRY", undefined, 'family', vs.motherBirthState, undefined)
         break
       case 'dispositionDate':
-        add('dispositionDate', '39', 'DATE OF DISPOSITION', 'office', plain, plain ? [] : [note('error', 'Required — a dash only if it is a pending coroner case')])
+        add('dispositionDate', '39', 'DATE OF DISPOSITION', 'office', plain, plain ? [] : [note('info', 'Not known yet? EDRS lets you add this later — Casillas OS will remind you after the service. A dash only for a pending coroner case')])
         break
       case 'finalDisposition':
-        add('finalDisposition', '40', 'PLACE OF FINAL DISPOSITION', 'office', plain, plain ? [] : [note('error', 'Required — a name or a complete address; a dash only for a pending coroner case')], { hint: 'name' })
+        add('finalDisposition', '40', 'PLACE OF FINAL DISPOSITION', 'office', plain, plain ? [] : [note('info', 'Not known yet? EDRS lets you add this later — Casillas OS will remind you after the service')], { hint: 'name' })
         break
       case 'dispositionAddress': {
         // EDRS splits the place's street into number / name / unit, like the residence.
@@ -554,6 +561,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
       }
       case 'dispositionZip': {
         const digits = (plain ?? '').replace(/\D/g, '')
+        if (isForeignPlace(vs.dispositionState)) {
+          add('disp-zip5', '40', 'PLACE OF FINAL DISPOSITION', 'office', (plain ?? '').trim(), [note('info', 'Outside the US — enter the postal code as written, or leave it blank if EDRS lets you')], { hint: 'postal code', hideWhenEmpty: true })
+          break
+        }
         add('disp-zip5', '40', 'PLACE OF FINAL DISPOSITION', 'office', digits.slice(0, 5), digits && digits.length < 5 ? [note('warn', 'US zip codes are 5 digits')] : [], { hint: 'zip code', hideWhenEmpty: true })
         if (digits.length > 5) add('disp-zip4', '40', 'PLACE OF FINAL DISPOSITION', 'office', digits.slice(5, 9), [], { hint: 'zip +4' })
         break

@@ -344,6 +344,7 @@ export interface FuneralCase {
   assignedDirectorId?: string
   assignedEmbalmerId?: string
   visitationDate?: string
+  visitationEnd?: string // end of the visitation window (same day as visitationDate)
   visitationLocation?: string
   serviceDate?: string
   serviceLocation?: string

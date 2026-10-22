@@ -99,7 +99,7 @@ export default function TvBoard() {
           <span className="font-display text-lg font-semibold tracking-wide">{getCompanyName()}</span>
         </div>
         <div className="text-sm text-slate-300 tabular-nums">
-          {format(now, 'EEEE, MMMM d')} · {format(now, 'h:mm a')}
+          {format(now, 'EEEE, MMMM d')} · {format(now, 'HH:mm')}
         </div>
       </div>
 
@@ -177,7 +177,7 @@ function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: 
       <td className="py-3 px-3 text-slate-200">
         {visitation ? (
           <>
-            <div>{format(parseISO(visitation.start), 'M/d')} {format(parseISO(visitation.start), 'h:mma')}–{format(parseISO(visitation.end), 'h:mma')}</div>
+            <div>{format(parseISO(visitation.start), 'M/d')} {format(parseISO(visitation.start), 'HH:mm')}–{format(parseISO(visitation.end), 'HH:mm')}</div>
             {visitationStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{visitationStaff.join(', ')}</div>}
           </>
         ) : '—'}
@@ -185,7 +185,7 @@ function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: 
       <td className="py-3 px-3 text-slate-200">
         {c.serviceDate || service ? (
           <>
-            <div>{c.serviceDate ? format(parseISO(c.serviceDate), 'M/d h:mm a') : format(parseISO(service!.start), 'M/d h:mm a')}</div>
+            <div>{c.serviceDate ? format(parseISO(c.serviceDate), 'M/d HH:mm') : format(parseISO(service!.start), 'M/d HH:mm')}</div>
             {serviceStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{serviceStaff.join(', ')}</div>}
           </>
         ) : '—'}

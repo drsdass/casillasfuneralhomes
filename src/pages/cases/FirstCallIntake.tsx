@@ -1,3 +1,4 @@
+import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect } from 'react'
 import { isKnownPlace, isBuiltInAddress, knownAddress } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
@@ -195,7 +196,7 @@ export default function FirstCallIntake() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className={labelClass}>Date of Death</label><input type="date" value={dateOfDeath} onChange={(e) => setDateOfDeath(e.target.value)} className={inputClass} /></div>
-                <div><label className={labelClass}>Time</label><input type="time" value={timeOfDeath} onChange={(e) => setTimeOfDeath(e.target.value)} className={inputClass} /></div>
+                <div><label className={labelClass}>Time</label><Time24 fine label="Time" value={timeOfDeath} onChange={setTimeOfDeath} /></div>
                 <div><label className={labelClass}>Date of Birth</label><input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3 items-end">

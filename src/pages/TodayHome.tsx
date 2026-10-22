@@ -108,7 +108,7 @@ export default function TodayHome() {
           ? <p className="text-slate-500 py-2">{tx('Nothing scheduled today.', 'Nada programado hoy.')}</p>
           : <div className="space-y-2">{today.map((e) => (
               <div key={e.id} className="flex gap-4 text-base">
-                <div className="w-24 shrink-0 text-slate-500">{format(parseISO(e.start), 'h:mm a')}</div>
+                <div className="w-24 shrink-0 text-slate-500">{format(parseISO(e.start), 'HH:mm')}</div>
                 <div><span className="font-medium text-slate-900">{e.title}</span>{e.location && <span className="text-slate-500"> · {e.location}</span>}</div>
               </div>))}</div>}
       </Card>
@@ -122,7 +122,7 @@ export default function TodayHome() {
                 <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName}
                   {c.caseNumber.startsWith('PRACTICE-') && <span className="ml-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">{tx('PRACTICE', 'PRÁCTICA')}</span>}
                 </div>
-                <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}</div>
+                <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, HH:mm')}`}</div>
               </div>
               <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
             </Link>))}

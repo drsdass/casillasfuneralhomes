@@ -23,7 +23,7 @@ export function FamilyActivityCard({ c, currentUser }: { c: FuneralCase; current
             <div>
               <div className="text-sm font-semibold text-emerald-900">The family updated their portal</div>
               <div className="text-sm text-emerald-800">{c.familyActivityNote?.replace(/^Family\s+/i, '') ?? 'Something new was added.'}
-                {c.familyActivityAt && <span className="text-emerald-700/80"> · {format(parseISO(c.familyActivityAt), 'MMM d, h:mm a')}</span>}</div>
+                {c.familyActivityAt && <span className="text-emerald-700/80"> · {format(parseISO(c.familyActivityAt), 'MMM d, HH:mm')}</span>}</div>
             </div>
           </div>
           <button onClick={() => seen.mutate()} disabled={seen.isPending} className="inline-flex items-center gap-1.5 text-sm font-medium text-white bg-emerald-700 rounded-md px-3 py-1.5 hover:bg-emerald-800 disabled:opacity-60">
@@ -33,7 +33,7 @@ export function FamilyActivityCard({ c, currentUser }: { c: FuneralCase; current
       )}
       {data?.obituary && (
         <div className={c.familyUnseen ? 'mt-3 pt-3 border-t border-emerald-200' : ''}>
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"><PenLine size={12} /> Obituary written by the family <span className="normal-case font-normal text-slate-400">· saved {format(parseISO(data.obituary.updatedAt), 'MMM d, h:mm a')}</span></div>
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1"><PenLine size={12} /> Obituary written by the family <span className="normal-case font-normal text-slate-400">· saved {format(parseISO(data.obituary.updatedAt), 'MMM d, HH:mm')}</span></div>
           <div className="whitespace-pre-wrap rounded-md bg-white border border-slate-200 p-3 text-sm text-slate-700 max-h-60 overflow-y-auto">{data.obituary.body}</div>
         </div>
       )}
@@ -44,7 +44,7 @@ export function FamilyActivityCard({ c, currentUser }: { c: FuneralCase; current
             {data.messages.map((m) => (
               <div key={m.id} className="rounded-md bg-white border border-slate-200 p-2.5 text-sm text-slate-700">
                 {m.body}
-                <div className="text-[11px] text-slate-400 mt-0.5">{format(parseISO(m.createdAt), 'MMM d, h:mm a')}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{format(parseISO(m.createdAt), 'MMM d, HH:mm')}</div>
               </div>
             ))}
           </div>

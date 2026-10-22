@@ -1,3 +1,4 @@
+import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
 import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
@@ -354,7 +355,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <L id="dod"><input type="date" value={dod} onChange={(e) => setDod(e.target.value)} className={inputClass} /></L>
-              <L id="timeOfDeath"><input type="time" value={timeOfDeath} onChange={(e) => setTimeOfDeath(e.target.value)} className={inputClass} /></L>
+              <L id="timeOfDeath"><Time24 fine label="Time" value={timeOfDeath} onChange={setTimeOfDeath} /></L>
             </div>
           </div>
         </Card>
@@ -448,7 +449,7 @@ export default function VitalSheetIntake() {
                   className="text-xs font-medium rounded-md border border-[#3b4a35]/40 text-[#3b4a35] px-2.5 py-1 hover:bg-[#3b4a35]/5">Same as the family's home address</button>
               </div>
               <div className="grid grid-cols-[120px_1fr_1fr_110px] gap-3">
-                <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA, Mexico…" /></L>
+                <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA — outside the US: JALISCO, Mexico" /></L>
                 <L id="dispositionAddress"><input {...text('dispositionAddress')} placeholder="32520 Whispering Palms Apt A" /></L>
                 <L id="dispositionCity"><input {...text('dispositionCity')} /></L>
                 <L id="dispositionZip"><input {...text('dispositionZip')} /></L>
@@ -538,14 +539,14 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className={labelClass}>Visitation — Hours</label>
-                <input {...text('visitationHours')} />
+                <label className={labelClass}>Visitation — Hours (24-hour)</label>
+                <input {...text('visitationHours')} placeholder="14:00–16:00" />
               </div>
               <div className="col-span-2 text-xs text-slate-400 self-end pb-2">Visitation and service dates and places are set under Edit on the case, so they stay in sync with the Calendar.</div>
             </div>
             <div className="grid grid-cols-5 gap-2 items-end">
               <div><label className={labelClass}>Rosary — Date</label><input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.rosaryTime ?? ''} onChange={(e) => set('rosaryTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time (24-hour)</label><Time24 label="Rosary" value={f.rosaryTime ?? ''} onChange={(v) => set('rosaryTime', v)} /></div>
               <div>
                 <label className={labelClass}>ENG / SPAN</label>
                 <select value={f.rosaryLanguage ?? ''} onChange={(e) => set('rosaryLanguage', e.target.value as VitalSheetInfo['rosaryLanguage'])} className={inputClass}>
@@ -557,7 +558,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-5 gap-2 items-end">
               <div><label className={labelClass}>Mass — Date</label><input type="date" value={f.massDate ?? ''} onChange={(e) => set('massDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.massTime ?? ''} onChange={(e) => set('massTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><Time24 label="Time" value={f.massTime ?? ''} onChange={(v) => set('massTime', v)} /></div>
               <div>
                 <label className={labelClass}>ENG / SPAN</label>
                 <select value={f.massLanguage ?? ''} onChange={(e) => set('massLanguage', e.target.value as VitalSheetInfo['massLanguage'])} className={inputClass}>
@@ -569,7 +570,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-4 gap-2 items-end">
               <div><label className={labelClass}>Graveside — Date</label><input type="date" value={f.gravesideDate ?? ''} onChange={(e) => set('gravesideDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.gravesideTime ?? ''} onChange={(e) => set('gravesideTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><Time24 label="Time" value={f.gravesideTime ?? ''} onChange={(v) => set('gravesideTime', v)} /></div>
               <div><label className={labelClass}>Place</label><input {...text('gravesidePlace')} /></div>
               <div><label className={labelClass}>By</label><input {...text('gravesideBy')} /></div>
             </div>

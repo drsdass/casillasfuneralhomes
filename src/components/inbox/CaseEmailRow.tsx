@@ -92,7 +92,7 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
           {!open && <div className="text-slate-500 text-xs truncate">{email.preview}</div>}
         </div>
         <div className="text-right shrink-0">
-          <div className="text-xs text-slate-400 whitespace-nowrap">{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</div>
+          <div className="text-xs text-slate-400 whitespace-nowrap">{format(parseISO(email.receivedAt), 'MMM d, HH:mm')}</div>
           <div className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-slate-600">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {open ? 'Hide' : 'Open'}</div>
         </div>
       </button>

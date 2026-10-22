@@ -518,7 +518,7 @@ export default function CaseDetail() {
               <>
                 <h3 className="text-sm font-medium text-slate-800 mt-6 mb-3">Visitation</h3>
                 <div className="flex gap-6 text-sm">
-                  <Field label="Date & Time" value={format(parseISO(c.visitationDate), 'MMM d, yyyy · h:mm a')} />
+                  <Field label="Date & Time" value={format(parseISO(c.visitationDate), 'MMM d, yyyy · HH:mm') + (c.visitationEnd ? '–' + format(parseISO(c.visitationEnd), 'HH:mm') : '')} />
                   <Field label="Location" value={c.visitationLocation ?? '—'} />
                 </div>
               </>
@@ -528,7 +528,7 @@ export default function CaseDetail() {
               <>
                 <h3 className="text-sm font-medium text-slate-800 mt-6 mb-3">Service</h3>
                 <div className="flex gap-6 text-sm">
-                  <Field label="Date & Time" value={format(parseISO(c.serviceDate), 'MMM d, yyyy · h:mm a')} />
+                  <Field label="Date & Time" value={format(parseISO(c.serviceDate), 'MMM d, yyyy · HH:mm')} />
                   <Field label="Location" value={c.serviceLocation ?? '—'} />
                 </div>
               </>
@@ -793,10 +793,10 @@ export default function CaseDetail() {
                       <div className="min-w-0 flex-1">
                         <div className="text-slate-800">{o.item}</div>
                         {o.confirmedAt && (
-                          <div className="text-xs text-slate-400">Confirmed {format(parseISO(o.confirmedAt), 'MMM d, h:mm a')}</div>
+                          <div className="text-xs text-slate-400">Confirmed {format(parseISO(o.confirmedAt), 'MMM d, HH:mm')}</div>
                         )}
                         {o.orderedAt && !o.confirmedAt && (
-                          <div className="text-xs text-slate-400">Ordered {format(parseISO(o.orderedAt), 'MMM d, h:mm a')}</div>
+                          <div className="text-xs text-slate-400">Ordered {format(parseISO(o.orderedAt), 'MMM d, HH:mm')}</div>
                         )}
                       </div>
                       {canEdit ? (
@@ -938,7 +938,7 @@ export default function CaseDetail() {
                     </span>
                   )}
                   <span className="font-medium text-slate-700">{n.authorName}</span>
-                  <span>· {format(parseISO(n.createdAt), 'MMM d, h:mm a')}</span>
+                  <span>· {format(parseISO(n.createdAt), 'MMM d, HH:mm')}</span>
                 </div>
                 {editingNoteId === n.id ? (
                   <div className="space-y-2">
@@ -1045,8 +1045,8 @@ export default function CaseDetail() {
                     <div className="min-w-0 flex-1">
                       <div className="text-slate-800">{sig.documentName}</div>
                       <div className="text-xs text-slate-400">
-                        To {sig.signerName}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, h:mm a')}`}
-                        {sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, h:mm a')}`}
+                        To {sig.signerName}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, HH:mm')}`}
+                        {sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, HH:mm')}`}
                       </div>
                     </div>
                     <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
@@ -1083,7 +1083,7 @@ export default function CaseDetail() {
                     <FileText size={16} className="text-slate-400 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="text-slate-800 truncate">{d.name}</div>
-                      <div className="text-xs text-slate-400">{docCategoryLabels[d.category]} · {format(parseISO(d.uploadedAt), 'MMM d, yyyy h:mm a')}</div>
+                      <div className="text-xs text-slate-400">{docCategoryLabels[d.category]} · {format(parseISO(d.uploadedAt), 'MMM d, yyyy HH:mm')}</div>
                     </div>
                     {d.url && (
                       <button

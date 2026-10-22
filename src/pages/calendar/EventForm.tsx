@@ -1,3 +1,4 @@
+import { DateTime24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -152,11 +153,11 @@ export default function EventForm() {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className={labelClass}>Start</label>
-              <input required type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} />
+              <DateTime24 required label="Start" value={start} onChange={setStart} inputClass={inputClass} />
             </div>
             <div>
               <label className={labelClass}>End</label>
-              <input required type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className={inputClass} />
+              <DateTime24 required label="End" value={end} onChange={setEnd} inputClass={inputClass} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -230,7 +231,7 @@ export default function EventForm() {
                 <ul className="text-sm text-amber-900 space-y-1 mb-2 ml-6 list-disc font-medium">
                   {staffConflicts.map((c, i) => (
                     <li key={i}>
-                      {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, h:mm a')}–{format(parseISO(c.conflictingEvent.end), 'h:mm a')}) — this can't be overridden.
+                      {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, HH:mm')}–{format(parseISO(c.conflictingEvent.end), 'HH:mm')}) — this can't be overridden.
                     </li>
                   ))}
                 </ul>
@@ -240,7 +241,7 @@ export default function EventForm() {
               <ul className="text-sm text-amber-800 space-y-1 mb-3 ml-6 list-disc">
                 {vehicleConflicts.map((c, i) => (
                   <li key={i}>
-                    {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, h:mm a')}–{format(parseISO(c.conflictingEvent.end), 'h:mm a')})
+                    {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, HH:mm')}–{format(parseISO(c.conflictingEvent.end), 'HH:mm')})
                   </li>
                 ))}
               </ul>

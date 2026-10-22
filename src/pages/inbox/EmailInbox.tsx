@@ -164,7 +164,7 @@ export default function EmailInbox() {
                     ? <div className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md bg-slate-50 p-3 text-sm text-slate-700 max-h-80 overflow-y-auto">{email.body}</div>
                     : <div className="text-sm text-slate-500 truncate break-all">{email.preview}</div>}
                   <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
-                    <span>{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</span>
+                    <span>{format(parseISO(email.receivedAt), 'MMM d, HH:mm')}</span>
                     {email.body && (
                       <button onClick={() => setOpenBody((prev) => { const n = new Set(prev); n.has(email.id) ? n.delete(email.id) : n.add(email.id); return n })} className="inline-flex items-center gap-0.5 font-medium text-slate-600 hover:underline">
                         {openBody.has(email.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {openBody.has(email.id) ? 'Hide message' : 'Read message'}

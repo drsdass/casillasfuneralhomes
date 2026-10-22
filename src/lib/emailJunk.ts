@@ -40,7 +40,7 @@ export function junkKind(e: InboundEmail): JunkKind | null {
 const clip = (t: string) => t.trim().slice(0, 4000)
 /** The quoted original that goes under a reply or forward. */
 export function quotedOriginal(e: InboundEmail): string {
-  const when = new Date(e.receivedAt).toLocaleString()
+  const when = new Date(e.receivedAt).toLocaleString('en-US', { hour12: false })
   return `\n\n----- ${e.direction === 'out' ? 'Sent' : 'Original message'} -----\nFrom: ${e.fromName ? `${e.fromName} <${e.from}>` : e.from}\nDate: ${when}\nSubject: ${e.subject}\n\n${clip(e.body ?? e.preview ?? '')}`
 }
 export const replySubject = (s: string) => (/^re:/i.test(s) ? s : `Re: ${s}`)
