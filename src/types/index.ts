@@ -419,6 +419,7 @@ export interface ContractLineItem {
   id: string
   gplItemId: string
   serviceOrderId?: string // set for line items synced from a priced Order — see the Orders tab
+  source?: 'statement' // set for lines that came from a ticked line on a Statement of Funeral Goods and Services tab
   name: string
   quantity: number
   unitPrice: number

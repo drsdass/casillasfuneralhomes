@@ -494,6 +494,28 @@ export const mockStore = {
     return contract
   },
 
+  /** Mock-mode counterpart to api.syncStatementInvoice. */
+  syncStatementInvoice(
+    input: { caseId: string; locationId: string; sheetName: string; lines: { name: string; amount: number }[]; tax: number; credit: number },
+    changedBy: StaffMember
+  ): void {
+    const contract = this.findOrCreateContract(input.caseId, input.locationId)
+    contractStore = contractStore.map((c) => c.id !== contract.id ? c : {
+      ...c, taxTotal: input.tax, discount: input.credit,
+      lineItems: [
+        ...c.lineItems.filter((i) => i.source !== 'statement'),
+        ...input.lines.map((l): ContractLineItem => ({ id: newId('line'), gplItemId: '', name: l.name || 'Other charge', quantity: 1, unitPrice: l.amount, source: 'statement' })),
+      ],
+    })
+    this.recalcContract(contract.id)
+    contractStore = contractStore.map((c) => c.id === contract.id ? { ...c, paid: c.total > 0 && c.amountPaid >= c.total } : c)
+    logAudit({
+      entityType: 'contract', entityId: contract.id, caseId: input.caseId, action: 'update',
+      summary: `Invoice updated from the "${input.sheetName.trim()}" statement — ${input.lines.length} item${input.lines.length === 1 ? '' : 's'} ordered`,
+      changedBy: changedBy.id, changedByName: changedBy.name,
+    })
+  },
+
   addGplItemToQuote(caseId: string, locationId: string, gplItem: { id: string; name: string; price: number }, changedBy: StaffMember): void {
     const contract = this.findOrCreateContract(caseId, locationId)
     const lineItem: ContractLineItem = { id: newId('line'), gplItemId: gplItem.id, name: gplItem.name, quantity: 1, unitPrice: gplItem.price }

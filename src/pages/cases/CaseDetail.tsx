@@ -18,7 +18,8 @@ import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
 import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
-import { StatementTabBar, StatementViewer, ORDERS_VIEW } from '@/components/statement/StatementTabs'
+import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
+import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
@@ -739,8 +740,7 @@ export default function CaseDetail() {
 
       {tab === 'Orders' && (
         <div className="space-y-4">
-          <StatementTabBar view={ordersView} onView={setOrdersView} />
-          {ordersView !== ORDERS_VIEW && <StatementViewer caseObj={c} sheetName={ordersView} canEdit={canEdit} currentUser={currentUser!} />}
+          <StatementWorkspace caseObj={c} view={ordersView} onView={setOrdersView} canEdit={canEdit} currentUser={currentUser!} />
         </div>
       )}
 
@@ -1214,7 +1214,7 @@ export default function CaseDetail() {
                 <tbody>
                   {caseContract.lineItems.map((li) => (
                     <tr key={li.id} className="border-b border-slate-50 last:border-0">
-                      <td className="py-2 text-slate-700">{li.name}</td>
+                      <td className="py-2 text-slate-700">{li.name}{li.source === 'statement' && <span className="ml-2 text-[10px] text-slate-400">from statement</span>}</td>
                       <td className="py-2 text-slate-500 text-right w-16">×{li.quantity}</td>
                       <td className="py-2 text-slate-900 text-right w-28">{formatCurrency(li.unitPrice * li.quantity)}</td>
                     </tr>
@@ -1227,6 +1227,10 @@ export default function CaseDetail() {
                 <div className="font-semibold text-slate-900 text-base">Total: {formatCurrency(caseContract.total)}</div>
                 <div className="text-emerald-600">Paid: {formatCurrency(caseContract.amountPaid)}</div>
                 <div className="text-red-500">Balance: {formatCurrency(caseContract.total - caseContract.amountPaid)}</div>
+              </div>
+              <div className="border-t border-slate-100 mt-5 pt-4">
+                <h4 className="text-sm font-medium text-slate-800 mb-2">Payments</h4>
+                <PaymentsPanel caseObj={c} contract={caseContract} canEdit={canEdit} currentUser={currentUser!} />
               </div>
             </div>
           ) : (

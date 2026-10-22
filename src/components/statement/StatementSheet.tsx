@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
-import { makeEvaluator, parseEntry, show, colLetter, type Raw, type SheetDef, type SheetStyle } from '@/lib/sheetEngine'
+import { parseEntry, show, colLetter, type Raw, type SheetDef, type SheetStyle } from '@/lib/sheetEngine'
+import { summarize, FLAG, type StatementSummary } from '@/lib/statementItems'
 
 const borderCss = (b?: [string, string]): string | undefined => {
   if (!b) return undefined
@@ -37,12 +38,18 @@ interface Props {
   defaults: Record<string, Raw>
   canEdit: boolean
   onChange: (key: string, value: Raw) => void
+  /** Called whenever the ticked lines or totals change, so the case's invoice can follow. */
+  onSummary?: (s: StatementSummary) => void
   /** Rendered natural width/height, so printing can scale the whole form to one page. */
 }
 
-export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Props) {
+export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSummary }: Props) {
   const over = useMemo(() => ({ ...defaults, ...saved }), [defaults, saved])
-  const ev = useMemo(() => makeEvaluator(sheet, over), [sheet, over])
+  const { ev, ev0, summary } = useMemo(() => summarize(sheet, over), [sheet, over])
+  const lineByKey = useMemo(() => new Map(summary.lines.map((l) => [l.key, l])), [summary])
+  const sig = JSON.stringify(summary)
+  const sentSig = useRef('')
+  useEffect(() => { if (onSummary && sig !== sentSig.current) { sentSig.current = sig; onSummary(summary) } }, [sig, summary, onSummary])
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -77,7 +84,10 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Pr
   function commit() {
     if (editing === null) return
     const st = sheet.styles[sheet.cells[editing]?.s ?? -1]
-    onChange(editing, parseEntry(draft, st?.nf))
+    const entry = parseEntry(draft, st?.nf)
+    onChange(editing, entry)
+    // typing a price into a line that was un-ticked ticks it again
+    if (lineByKey.has(editing) && saved[FLAG + editing] !== undefined && Number(saved[FLAG + editing]) === 0 && typeof entry === 'number' && entry !== 0) onChange(FLAG + editing, 1)
     setEditing(null)
   }
 
@@ -96,7 +106,9 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Pr
       if (covered.hidden.has(key) || sheet.cols[c - 1] === 0) continue
       const cell = sheet.cells[key]
       const st = cell ? sheet.styles[cell.s] : undefined
-      const val = ev.get(key)
+      const line = lineByKey.get(key)
+      const off = !!line && !line.checked
+      const val = off ? ev0.get(key) : ev.get(key)
       const sp = covered.spans.get(key)
       const shown = show(val, st?.nf)
       const readOnly = !canEdit || (cell?.f !== undefined && !(key in over))
@@ -122,7 +134,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Pr
           ) : rot ? (
             <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%) rotate(180deg)', writingMode: 'vertical-rl', whiteSpace: 'nowrap' }}>{shown.text}</span>
           ) : shown.kind === 'acct' ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>$</span><span>{shown.text}{shown.neg ? '' : ' '}</span></div>
+            <div className={off && line!.natural !== 0 ? 'stmt-off' : undefined} style={{ display: 'flex', justifyContent: 'space-between' }}><span>$</span><span>{shown.text}{shown.neg ? '' : ' '}</span></div>
           ) : flowsLeft ? (
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}><span style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{shown.text}</span></div>
           ) : shown.text}
@@ -136,10 +148,11 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Pr
     <div ref={wrapRef} className="w-full">
       <style>{`
         .stmt-sheet { zoom: var(--sz); }
+        .stmt-off { opacity: .35; text-decoration: line-through; }
         .stmt-edit:hover { outline: 1px dashed #b3925a; outline-offset: -1px; cursor: text; }
         main table.stmt-table { display: table !important; overflow: visible; }
         @page stmt { size: letter portrait; margin: 0.25in; }
-        @media print { .stmt-print { page: stmt; } .stmt-sheet { zoom: var(--pz) !important; } .stmt-edit:hover { outline: none; } }
+        @media print { .stmt-off { visibility: hidden !important; } .stmt-print { page: stmt; } .stmt-sheet { zoom: var(--pz) !important; } .stmt-edit:hover { outline: none; } }
       `}</style>
       <div className="print-target stmt-print">
         <div className="stmt-sheet" style={{ ['--sz' as string]: zoom, ['--pz' as string]: printZoom, width, background: '#fff', position: 'relative' } as CSSProperties}>
@@ -147,6 +160,17 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange }: Pr
             <colgroup>{sheet.cols.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
             <tbody>{rows}</tbody>
           </table>
+          {summary.lines.map((l) => {
+            const it = l.key.split(',').map(Number)
+            const r = it[0], c = it[1]
+            if (!l.label && l.natural === 0) return null
+            return (
+              <input key={l.key} type="checkbox" className="no-print" checked={l.checked} disabled={!canEdit}
+                title={`${l.checked ? 'Ordered' : 'Not ordered'}: ${l.label || 'other charge'}`}
+                onChange={() => onChange(FLAG + l.key, l.checked ? 0 : 1)}
+                style={{ position: 'absolute', left: colX[c - 1] - 22, top: rowY[r - 1] + (sheet.rows[r - 1] - 15) / 2, width: 15, height: 15, margin: 0, accentColor: '#3b4a35', cursor: canEdit ? 'pointer' : 'default', zIndex: 3 }} />
+            )
+          })}
           {imgStyle && <img src="/statement-logo.png" alt="" style={imgStyle} />}
         </div>
       </div>

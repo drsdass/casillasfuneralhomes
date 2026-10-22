@@ -830,6 +830,36 @@ export const api = {
   },
 
   /** Manual paid/unpaid toggle — the action the staff_member (lowest tier) role is permitted to take. */
+  /**
+   * Makes the case's invoice match the ticked lines of one Statement tab: replaces every invoice line that came from a
+   * statement (and only those), sets the sales tax and credits, and recomputes the total and paid flag. Payments are untouched.
+   */
+  async syncStatementInvoice(input: {
+    caseId: string; locationId: string; sheetName: string
+    lines: { name: string; amount: number }[]; tax: number; credit: number
+  }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.syncStatementInvoice(input, changedBy); return }
+    const contract = await findOrCreateContract(input.caseId, input.locationId)
+    const { error: delErr } = await supabase!.from('contract_line_items').delete().eq('contract_id', contract.id).eq('source', 'statement')
+    if (delErr) throw delErr
+    if (input.lines.length) {
+      const { error } = await supabase!.from('contract_line_items').insert(
+        input.lines.map((l) => ({ contract_id: contract.id, name: l.name || 'Other charge', quantity: 1, unit_price: l.amount, source: 'statement' }))
+      )
+      if (error) throw error
+    }
+    const { error: upErr } = await supabase!.from('contracts').update({ tax_total: input.tax, discount: input.credit }).eq('id', contract.id)
+    if (upErr) throw upErr
+    await recalculateContractTotal(contract.id)
+    const { data: c } = await supabase!.from('contracts').select('total, amount_paid').eq('id', contract.id).single()
+    if (c) await supabase!.from('contracts').update({ paid: Number(c.total) > 0 && Number(c.amount_paid) >= Number(c.total) }).eq('id', contract.id)
+    const total = input.lines.reduce((s, l) => s + l.amount, 0) + input.tax - input.credit
+    logAuditReal({
+      entityType: 'contract', entityId: contract.id, caseId: input.caseId, action: 'update',
+      summary: `Invoice updated from the "${input.sheetName.trim()}" statement — ${input.lines.length} item${input.lines.length === 1 ? '' : 's'} ordered, total $${total.toFixed(2)}`, changedBy: changedBy.id,
+    })
+  },
+
   /** Marks a contract as signed — called after a signature is captured, whether via SignRequest or the in-person pad. */
   async markContractSigned(contractId: string, changedBy: StaffMember): Promise<void> {
     if (USE_MOCK) { mockStore.markContractSigned(contractId); return }

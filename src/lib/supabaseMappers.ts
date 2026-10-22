@@ -257,6 +257,7 @@ function rowToLineItem(row: any): ContractLineItem {
     id: row.id,
     gplItemId: row.gpl_item_id,
     serviceOrderId: row.service_order_id ?? undefined,
+    source: row.source === 'statement' ? 'statement' : undefined,
     name: row.name,
     quantity: Number(row.quantity),
     unitPrice: Number(row.unit_price),
