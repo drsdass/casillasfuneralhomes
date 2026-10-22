@@ -173,6 +173,16 @@ export interface VitalSheetInfo {
   /** @deprecated see spouseName */
   motherName?: string
   placeOfFinalDisposition?: string
+  /** Item 40 in EDRS has its own boxes: the place's name (above), then state, street, city and zip. */
+  dispositionAddress?: string
+  dispositionCity?: string
+  dispositionZip?: string
+  /** Name suffixes (Jr., Sr., II, III…) — EDRS has a separate Suffix box beside items 3, 26, 30, 33 and 37. */
+  decedentSuffix?: string
+  informantSuffix?: string
+  spouseSuffix?: string
+  fatherSuffix?: string
+  motherSuffix?: string
   dispositionDate?: string
   dispositionTypeOther?: string // "CVC / DMP / OTHER:" line
   typeOfDisposition?: string // "41 TYPE OF DISPOSITION" — EMB, etc.

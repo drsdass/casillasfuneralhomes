@@ -10,7 +10,7 @@ import {
   EDRS_MARITAL, EDRS_EDUCATION, EDRS_RACES, EDRS_RELATIONSHIPS, EDRS_DISPOSITIONS, PLACE_OF_DEATH_TYPES,
   normalizeMarital, normalizeEducation, normalizeRace, normalizeDisposition,
 } from '@/lib/edrsFormat'
-import { buildEdrsRows, readiness, type EdrsNote } from '@/lib/edrsFormat'
+import { buildEdrsRows, readiness, splitSuffix, EDRS_SUFFIXES, type EdrsNote } from '@/lib/edrsFormat'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check, ListChecks, Eye } from 'lucide-react'
 import type { VitalSheetInfo, Decedent, FuneralCase } from '@/types'
@@ -36,11 +36,15 @@ function IssueNote({ issue }: { issue?: Issue }) {
   return <div className={`mt-1 text-[11px] ${issue.level === 'error' ? 'text-red-600' : 'text-amber-700'}`}>{issue.messages.join(' · ')}</div>
 }
 
+const ROW_FOR_FIELD: Record<string, string> = { dispositionState: 'disp-value', dispositionAddress: 'disp-name', dispositionCity: 'disp-city', dispositionZip: 'disp-zip5', informantSuffix: 'inf-suffix' }
+
 function L({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   const f = byId[id]
   const ctx = useContext(IssueCtx)
-  const issue = ctx.byKey.get(id) ?? (f.number ? ctx.byNumber.get(f.number) : undefined)
-  const pinned = !!ctx.pinned && (ctx.pinned.has(id) || (!!f.number && ctx.pinned.has('#' + f.number)))
+  // Item 40 and the suffix boxes each have their own EDRS rows — look those up directly instead of by the shared item number.
+  const own = ROW_FOR_FIELD[id]
+  const issue = ctx.byKey.get(id) ?? (own ? ctx.byKey.get(own) : f.number ? ctx.byNumber.get(f.number) : undefined)
+  const pinned = !!ctx.pinned && (ctx.pinned.has(id) || (own ? ctx.pinned.has(own) : false) || (!own && !!f.number && ctx.pinned.has('#' + f.number)))
   return (
     <div className={className} data-field data-issue={issue ? issue.level : undefined} data-pinned={pinned ? '' : undefined}>
       <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
@@ -290,11 +294,21 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>DECEDENT</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="firstName"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></L>
               <L id="middleName"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></L>
               <L id="lastName"><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></L>
+              <L id="suffix"><VocabSelect value={f.decedentSuffix ?? ''} onChange={(v) => set('decedentSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
             </div>
+            {(() => {
+              const s = splitSuffix(lastName, f.decedentSuffix)
+              return s.inferred ? (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 flex flex-wrap items-center gap-2">
+                  The last name ends in “{s.suffix}”. EDRS wants that in its own Suffix box.
+                  <button type="button" onClick={() => { setLastName(s.rest); set('decedentSuffix', s.suffix) }} className="font-medium rounded-md bg-[#3b4a35] text-white px-2.5 py-1">Move {s.suffix} to the Suffix box</button>
+                </div>
+              ) : null
+            })()}
             <div className="grid grid-cols-4 gap-3">
               <L id="aka"><input {...text('alsoKnownAs')} /></L>
               <L id="dob"><input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputClass} /></L>
@@ -388,29 +402,33 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>INFORMANT & FAMILY</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[1fr_110px_1fr] gap-3">
               <L id="informantName"><input {...text('informantName')} /></L>
+              <L id="informantSuffix"><VocabSelect value={f.informantSuffix ?? ''} onChange={(v) => set('informantSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="informantRelationship">
                 <input {...text('informantRelationship')} list="edrs-relationships" />
                 <datalist id="edrs-relationships">{EDRS_RELATIONSHIPS.map((r) => <option key={r} value={r} />)}</datalist>
               </L>
             </div>
             <L id="informantAddress"><input {...text('informantMailingAddress')} /></L>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="spouseFirst"><input {...text('spouseFirstName')} /></L>
               <L id="spouseMiddle"><input {...text('spouseMiddleName')} /></L>
               <L id="spouseLast"><input {...text('spouseLastName')} /></L>
+              <L id="spouseSuffix"><VocabSelect value={f.spouseSuffix ?? ''} onChange={(v) => set('spouseSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="fatherFirst"><input {...text('fatherFirstName')} /></L>
               <L id="fatherMiddle"><input {...text('fatherMiddleName')} /></L>
               <L id="fatherLast"><input {...text('fatherLastName')} /></L>
+              <L id="fatherSuffix"><VocabSelect value={f.fatherSuffix ?? ''} onChange={(v) => set('fatherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="fatherBirthState"><input {...text('fatherBirthState')} /></L>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="motherFirst"><input {...text('motherFirstName')} /></L>
               <L id="motherMiddle"><input {...text('motherMiddleName')} /></L>
               <L id="motherLast"><input {...text('motherLastName')} /></L>
+              <L id="motherSuffix"><VocabSelect value={f.motherSuffix ?? ''} onChange={(v) => set('motherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="motherBirthState"><input {...text('motherBirthState')} /></L>
             </div>
           </div>
@@ -421,8 +439,20 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <L id="dispositionDate"><input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} className={inputClass} /></L>
-              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} /></L>
-              <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA, Mexico, UNK…" /></L>
+              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} placeholder="Name of the place — e.g. cemetery, crematory, or RESIDENCE + family name" /></L>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Item 40 — address of the place (EDRS has a box for each)</span>
+                <button type="button" onClick={() => { set('dispositionAddress', f.residenceAddress ?? ''); set('dispositionCity', f.residenceCity ?? ''); set('dispositionZip', f.residenceZip ?? ''); set('dispositionState', f.residenceState ?? ''); if (!f.placeOfFinalDisposition && f.informantName) set('placeOfFinalDisposition', `RESIDENCE ${f.informantName}`.toUpperCase()) }}
+                  className="text-xs font-medium rounded-md border border-[#3b4a35]/40 text-[#3b4a35] px-2.5 py-1 hover:bg-[#3b4a35]/5">Same as the family's home address</button>
+              </div>
+              <div className="grid grid-cols-[120px_1fr_1fr_110px] gap-3">
+                <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA, Mexico…" /></L>
+                <L id="dispositionAddress"><input {...text('dispositionAddress')} placeholder="32520 Whispering Palms Apt A" /></L>
+                <L id="dispositionCity"><input {...text('dispositionCity')} /></L>
+                <L id="dispositionZip"><input {...text('dispositionZip')} /></L>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <L id="cvcDmpOther"><input {...text('dispositionTypeOther')} /></L>
