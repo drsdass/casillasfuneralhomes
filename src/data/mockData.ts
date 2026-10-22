@@ -166,7 +166,7 @@ export const caseNotes: CaseNote[] = [
   { id: 'n-4', caseId: 'case-6', authorId: 'stf-leticia-casillas', authorName: 'Leticia Casillas', body: 'Son is out of town until Wednesday — arrangement conference set for his return.', createdAt: '2026-07-12T15:30:00Z' },
 ]
 
-// Real General Price List, effective October 1, 2024 (see 1GPL_10012024.pdf).
+// Casillas General Price List — October 1, 2024 list with the hand-marked price increases (updated October 2026; set the new effective date on the printed list).
 // Prices are identical across Cathedral City, Desert Hot Springs, and
 // Coachella per the source document, so one canonical list is generated for
 // all three. Eureka doesn't have a confirmed price list yet — it reuses the
@@ -174,19 +174,19 @@ export const caseNotes: CaseNote[] = [
 // actual GPL.
 const gplCanonical: Omit<GplItem, 'id' | 'orgId' | 'locationId'>[] = [
   // Basic Services
-  { sku: 'SVC-100', name: 'Basic Services of Funeral Director and Staff and Overhead', category: 'service', price: 995, taxable: false, active: true },
+  { sku: 'SVC-100', name: 'Basic Services of Funeral Director and Staff and Overhead', category: 'service', price: 1050, taxable: false, active: true },
   { sku: 'SVC-101', name: 'Staff for Prayer Services', category: 'service', price: 450, taxable: false, active: true },
-  { sku: 'SVC-102', name: 'Staff and Equipment for Off-Site Prayer Services/Mass', category: 'service', price: 185, taxable: false, active: true },
-  { sku: 'SVC-103', name: 'Staff for Graveside Services', category: 'service', price: 150, taxable: false, active: true },
+  { sku: 'SVC-102', name: 'Staff and Equipment for Off-Site Prayer Services/Mass', category: 'service', price: 195, taxable: false, active: true },
+  { sku: 'SVC-103', name: 'Staff for Graveside Services', category: 'service', price: 175, taxable: false, active: true },
   { sku: 'SVC-104', name: 'Staff for Weekend or Holiday Services', category: 'service', price: 400, taxable: false, active: true },
-  { sku: 'SVC-105', name: 'Dressing, Cosmetics, Hair Styling and Casketing of Remains', category: 'service', price: 250, taxable: false, active: true },
-  { sku: 'SVC-106', name: 'Dressing Unembalmed Remains', category: 'service', price: 150, taxable: false, active: true },
-  { sku: 'SVC-107', name: 'Post-Autopsy Care', category: 'service', price: 150, taxable: false, active: true },
+  { sku: 'SVC-105', name: 'Dressing, Cosmetics, Hair Styling and Casketing of Remains', category: 'service', price: 275, taxable: false, active: true },
+  { sku: 'SVC-106', name: 'Dressing Unembalmed Remains', category: 'service', price: 200, taxable: false, active: true },
+  { sku: 'SVC-107', name: 'Post-Autopsy Care', category: 'service', price: 175, taxable: false, active: true },
   { sku: 'SVC-108', name: 'Viewing Unembalmed Body / Sanitary Care', category: 'service', price: 225, taxable: false, active: true },
-  { sku: 'SVC-109', name: 'Embalming', category: 'service', price: 490, taxable: false, active: true },
+  { sku: 'SVC-109', name: 'Embalming', category: 'service', price: 570, taxable: false, active: true },
 
   // Transportation
-  { sku: 'TRN-100', name: 'Transfer of Deceased to Funeral Home (25 mile radius)', category: 'service', price: 475, taxable: false, active: true },
+  { sku: 'TRN-100', name: 'Transfer of Deceased to Funeral Home (25 mile radius)', category: 'service', price: 525, taxable: false, active: true },
   { sku: 'TRN-101', name: 'Second Man Removal', category: 'service', price: 85, taxable: false, active: true },
   { sku: 'TRN-102', name: 'Hearse (25 mile radius)', category: 'service', price: 170, taxable: false, active: true },
   { sku: 'TRN-103', name: 'Service/Utility Vehicle (50 mile radius)', category: 'service', price: 150, taxable: false, active: true },
@@ -207,8 +207,8 @@ const gplCanonical: Omit<GplItem, 'id' | 'orgId' | 'locationId'>[] = [
   { sku: 'MER-103', name: 'Infant / Children\u2019s Casket', category: 'merchandise', price: 370, taxable: true, active: true },
   { sku: 'MER-104', name: 'Rental Casket', category: 'merchandise', price: 1095, taxable: true, active: true },
   { sku: 'MER-105', name: 'Alternate Container for Cremation', category: 'merchandise', price: 105, taxable: true, active: true },
-  { sku: 'MER-106', name: 'Memorial Folders and Prayer Cards (first 100)', category: 'merchandise', price: 45, taxable: true, active: true },
-  { sku: 'MER-107', name: 'Memorial Register Book', category: 'merchandise', price: 45, taxable: true, active: true },
+  { sku: 'MER-106', name: 'Memorial Folders and Prayer Cards (first 100)', category: 'merchandise', price: 50, taxable: true, active: true },
+  { sku: 'MER-107', name: 'Memorial Register Book', category: 'merchandise', price: 50, taxable: true, active: true },
   { sku: 'MER-108', name: 'Urn (starting at)', category: 'merchandise', price: 45, taxable: true, active: true },
   { sku: 'MER-109', name: 'Outside Shipping Container for Airline Transport', category: 'merchandise', price: 185, taxable: true, active: true },
   { sku: 'MER-110', name: 'Combination Shipping Container', category: 'merchandise', price: 295, taxable: true, active: true },
@@ -224,8 +224,8 @@ const gplCanonical: Omit<GplItem, 'id' | 'orgId' | 'locationId'>[] = [
   { sku: 'OTH-104', name: 'Insurance Assignment', category: 'cash_advance', price: 350, taxable: false, active: true },
   { sku: 'OTH-105', name: 'Forwarding Remains to Another Funeral Home', category: 'service', price: 2360, taxable: false, active: true },
   { sku: 'OTH-106', name: 'Receiving Remains from Another Funeral Home', category: 'service', price: 1790, taxable: false, active: true },
-  { sku: 'PKG-100', name: 'Direct Cremation — Container Provided by Purchaser', category: 'service', price: 1620, taxable: false, active: true },
-  { sku: 'PKG-101', name: 'Direct Cremation — Container Purchased from Funeral Home', category: 'service', price: 1720, taxable: false, active: true },
+  { sku: 'PKG-100', name: 'Direct Cremation — Container Provided by Purchaser', category: 'service', price: 1725, taxable: false, active: true },
+  { sku: 'PKG-101', name: 'Direct Cremation — Container Purchased from Funeral Home', category: 'service', price: 1830, taxable: false, active: true },
   { sku: 'PKG-102', name: 'Immediate Burial — Casket Provided by Purchaser', category: 'service', price: 2190, taxable: false, active: true },
   { sku: 'PKG-103', name: 'Immediate Burial — Casket Purchased from Funeral Home', category: 'service', price: 2190, taxable: false, active: true },
 ]
