@@ -99,13 +99,14 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
   const wanted = lines.map((l) => `${l.name}|${l.amount.toFixed(2)}`).sort().join('~')
   const onInvoice = (contract?.lineItems ?? []).filter((i) => i.source === 'statement').map((i) => `${i.name}|${(i.unitPrice * i.quantity).toFixed(2)}`).sort().join('~')
   const inSync = wanted === onInvoice && Math.abs((contract?.taxTotal ?? 0) - tax) < 0.005 && (onInvoice === '' && wanted === '' ? true : Math.abs((contract?.discount ?? 0) - credit) < 0.005)
+  useEffect(() => { if (sync.isError) sync.reset() }, [wanted, tax, credit]) // eslint-disable-line react-hooks/exhaustive-deps
   const syncRef = useRef(sync); syncRef.current = sync
   useEffect(() => {
-    if (!canEdit || savedAll === undefined || !sheets || inSync || sync.isPending) return
+    if (!canEdit || savedAll === undefined || !sheets || inSync || sync.isPending || sync.isError) return
     if (!contract && lines.length === 0) return // nothing ordered and no invoice yet
     const t = window.setTimeout(() => syncRef.current.mutate(), 1200)
     return () => window.clearTimeout(t)
-  }, [canEdit, savedAll, sheets, inSync, sync.isPending, contract, lines.length, wanted, tax, credit])
+  }, [canEdit, savedAll, sheets, inSync, sync.isPending, sync.isError, contract, lines.length, wanted, tax, credit])
 
   const names = (sheets ?? []).map((s) => s.name)
   const sheet = sheets?.find((s) => s.name === view)
@@ -148,6 +149,12 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
               <h3 className="text-sm font-semibold text-slate-800">Invoice for this family</h3>
               <span className="ml-auto text-xs">{ticked.length === 0 && !contract ? <span className="text-slate-500">Nothing on the invoice yet</span> : inSync ? <span className="text-emerald-700">✓ Invoice is up to date</span> : <span className="text-amber-700">Updating the invoice…</span>}</span>
             </div>
+            {sync.isError && (
+              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                The invoice could not be saved, so Financials is still empty. {/source/i.test(String((sync.error as { message?: string })?.message)) ? 'The one-time database step "statement-invoice.sql" has not been run yet.' : 'Technical detail:'} <span className="text-xs text-red-500">{String((sync.error as { message?: string })?.message ?? sync.error)}</span>
+                <button type="button" onClick={() => sync.mutate()} className="ml-3 underline">Try again</button>
+              </div>
+            )}
             {ticked.length === 0 ? (
               <p className="text-sm text-slate-500">Tick the box on one or more tabs above to put those packages on the invoice. They are added together.</p>
             ) : (
