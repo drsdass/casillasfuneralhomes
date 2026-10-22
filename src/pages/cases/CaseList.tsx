@@ -10,6 +10,8 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
 import { FilePlus2 } from 'lucide-react'
 import { shortLocationName } from '@/lib/company'
+import { useWorkflowFor } from '@/lib/useWorkflow'
+import { MiniTrack } from '@/components/workflow/WorkflowTrack'
 
 const statusFilters: { value: CaseStatus | 'all' | 'pre_need'; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -27,6 +29,8 @@ export default function CaseList() {
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all' | 'pre_need'>('all')
   const [search, setSearch] = useState('')
+  const [needsOnly, setNeedsOnly] = useState(false)
+  const workflowFor = useWorkflowFor()
   const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
 
   const { data: cases = [], isLoading } = useQuery({
@@ -41,6 +45,7 @@ export default function CaseList() {
   const filtered = cases.filter((c) => {
     if (statusFilter === 'pre_need') { if (c.type !== 'pre_need') return false }
     else if (statusFilter !== 'all' && (c.status !== statusFilter || c.type === 'pre_need')) return false
+    if (needsOnly && (c.status === 'completed' || workflowFor(c).allDone)) return false
     if (search) {
       const q = search.toLowerCase()
       const name = `${c.decedent.firstName} ${c.decedent.lastName}`.toLowerCase()
@@ -118,6 +123,7 @@ export default function CaseList() {
               {f.label}
             </button>
           ))}
+          <button onClick={() => setNeedsOnly((v) => !v)} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${needsOnly ? 'bg-red-600 text-white border-red-600' : 'border-red-300 text-red-700 hover:bg-red-50'}`}>Needs attention</button>
         </div>
       </div>
 
@@ -146,6 +152,7 @@ export default function CaseList() {
                     {c.familyUnseen && <span title="The family added something in their portal" className="ml-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-full px-2 py-0.5">Family updated</span>}
                     {c.obituaryCompleted && <span title="Obituary completed" className="ml-1.5 text-emerald-600 text-xs">✓ obit</span>}
                   </Link>
+                  <Link to={`/cases/${c.id}`} className="block mt-1.5 ml-4"><MiniTrack wf={workflowFor(c)} /></Link>
                 </td>
                 <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}</td>
                 {isAllLocations && <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{shortLocationName(locationName(c.locationId))}</td>}

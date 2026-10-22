@@ -10,6 +10,8 @@ import { canViewAllLocations } from '@/lib/permissions'
 import { Card, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { FirstDayTour } from '@/components/ui/FirstDayTour'
 import { isCaseDone, isPreNeed } from '@/lib/caseDone'
+import { useWorkflowFor } from '@/lib/useWorkflow'
+import { StatusLight } from '@/components/workflow/WorkflowTrack'
 
 /** The Easy view home: a few big buttons and what needs attention today — nothing else. */
 export default function TodayHome() {
@@ -23,6 +25,7 @@ export default function TodayHome() {
   const tourKey = `casillas_tour_seen_${currentUser?.id ?? ''}`
   const [tour, setTour] = useState(() => { try { return !!currentUser && localStorage.getItem(tourKey) !== '1' } catch { return false } })
   const closeTour = () => { setTour(false); try { localStorage.setItem(tourKey, '1') } catch { /* ignore */ } }
+  const workflowFor = useWorkflowFor()
   const all = currentUser ? canViewAllLocations(currentUser.role) : false
 
   const { data: cases = [] } = useQuery({ queryKey: ['cases', all ? 'all' : activeLocationId], queryFn: () => api.getCases(all ? undefined : activeLocationId) })
@@ -54,6 +57,8 @@ export default function TodayHome() {
   const open = cases.filter((c) => !isCaseDone(c) && !isPreNeed(c))
   const mine = open.filter((c) => c.assignedDirectorId === currentUser.id || c.assignedEmbalmerId === currentUser.id)
   const list = (mine.length ? mine : open).slice(0, 8)
+  const needs = open.map((c) => ({ c, wf: workflowFor(c) })).filter((x) => !x.wf.allDone && !x.c.caseNumber.startsWith('PRACTICE-'))
+    .sort((a, b) => b.wf.urgentCount - a.wf.urgentCount || b.wf.missing.length - a.wf.missing.length).slice(0, 6)
   const today = events.filter((e) => isToday(parseISO(e.start))).sort((a, b) => a.start.localeCompare(b.start))
   const big = 'flex flex-col items-center justify-center gap-2 rounded-xl border-2 px-4 py-6 text-center text-lg font-semibold transition'
 
@@ -76,6 +81,26 @@ export default function TodayHome() {
           <Truck size={30} /> {tx('Chain of Custody', 'Cadena de custodia')}
         </Link>
       </div>
+
+      {needs.length > 0 && (
+        <Card className="p-5 border-2 border-red-200">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-3"><span className="inline-block h-3 w-3 rounded-full bg-red-600 wf-flash wf-blink" /> {tx('Needs attention', 'Necesita atención')}</h2>
+          <div className="space-y-2">
+            {needs.map(({ c, wf }) => {
+              const first = wf.missing.find((m) => m.urgent) ?? wf.missing[0]
+              return (
+                <Link key={c.id} to={`/cases/${c.id}`} className={`flex items-center gap-3 rounded-lg border px-4 py-3 hover:bg-slate-50 ${wf.urgentCount ? 'border-red-300 bg-red-50/50' : 'border-slate-200'}`}>
+                  <StatusLight item={first} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName} <span className="text-sm font-normal text-slate-500">· {wf.missing.length} {tx('missing', 'faltan')}</span></div>
+                    <div className="text-sm text-slate-600 truncate">{first.label}</div>
+                  </div>
+                  <span className="shrink-0 text-[#3b4a35] font-medium">{tx('Open', 'Abrir')} →</span>
+                </Link>)
+            })}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-3"><CalendarClock size={20} /> {tx("Today's services", 'Servicios de hoy')}</h2>

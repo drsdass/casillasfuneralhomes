@@ -18,6 +18,8 @@ import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
 import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
 import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
+import { WorkflowTrack } from '@/components/workflow/WorkflowTrack'
+import { computeWorkflow } from '@/lib/workflow'
 import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
 import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
@@ -461,6 +463,8 @@ export default function CaseDetail() {
           </div>
         )
       })()}
+
+      <WorkflowTrack wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents }, language)} onTab={(t) => { setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language} />
 
       <div className="mt-4"><FamilyActivityCard c={c} currentUser={currentUser!} /></div>
 

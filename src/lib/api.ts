@@ -562,6 +562,21 @@ export const api = {
   // Tasks
   // -------------------------------------------------------------------
 
+  /** Every task on every case — what the Cases list and Today screen use to show what is missing. */
+  async getAllCaseTasks(): Promise<CaseTask[]> {
+    if (USE_MOCK) return delay(mockStore.getAllTasks())
+    const { data, error } = await supabase!.from('case_tasks').select('*')
+    if (error) throw error
+    return (data ?? []).map(rowToTask)
+  },
+
+  async getAllCaseDocuments(): Promise<CaseDocument[]> {
+    if (USE_MOCK) return delay(mockStore.getAllDocuments())
+    const { data, error } = await supabase!.from('case_documents').select('*')
+    if (error) throw error
+    return (data ?? []).map(rowToDocument)
+  },
+
   async getCaseTasks(caseId: string): Promise<CaseTask[]> {
     if (USE_MOCK) return delay(mockStore.getCaseTasks(caseId))
     const { data, error } = await supabase!.from('case_tasks').select('*').eq('case_id', caseId)

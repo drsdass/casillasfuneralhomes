@@ -265,6 +265,8 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Tasks
   // -----------------------------------------------------------------
+  getAllTasks: (): CaseTask[] => taskStore,
+  getAllDocuments: (): CaseDocument[] => documentStore,
   getCaseTasks: (caseId: string): CaseTask[] => taskStore.filter((t) => t.caseId === caseId),
 
   getOverdueTasks(): Array<CaseTask & { decedentName: string; caseNumber: string }> {
