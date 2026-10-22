@@ -1,3 +1,4 @@
+import { MEXICAN_STATES, CANADIAN_PROVINCES, matchPlace } from './places'
 import type { FuneralCase } from '@/types'
 import { withFirstCallDefaults } from './firstCallPlace'
 import { VITAL_FIELDS, resolveName, splitName, computeAge, type VitalContext, type VitalSection } from './vitalFields'
@@ -79,7 +80,7 @@ export const PLACE_OF_DEATH_TYPES: Record<NonNullable<NonNullable<FuneralCase['v
   other: 'OTHER',
 }
 
-const US_STATES: Record<string, string> = {
+export const US_STATES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
   FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana',
   ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska',
@@ -87,7 +88,7 @@ const US_STATES: Record<string, string> = {
   OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
   VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
 }
-const US_TERRITORIES: Record<string, string> = { PR: 'Puerto Rico', GU: 'Guam', VI: 'Virgin Islands', AS: 'American Samoa', MP: 'Northern Mariana Islands' }
+export const US_TERRITORIES: Record<string, string> = { PR: 'Puerto Rico', GU: 'Guam', VI: 'Virgin Islands', AS: 'American Samoa', MP: 'Northern Mariana Islands' }
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -235,8 +236,10 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
   let state = (stateRaw ?? '').trim()
   let country = (countryRaw ?? '').trim()
   // "SAN LUIS POTOSI, Mexico" typed into the one box → state + country
-  const combo = !country && state.match(/^(.+?),\s*(mexico|m[eé]xico|canada)\s*$/i)
-  if (combo) { state = combo[1].trim(); country = combo[2] }
+  const combo = !country && state.match(/^(.+?),\s*(mexico|m[eé]xico|mx|canada|ca-?n)\s*$/i)
+  if (combo) { state = combo[1].trim(); country = /^(mx|m)/i.test(combo[2]) ? 'Mexico' : 'Canada' }
+  const other = !country && state.match(/^other:\s*(.+)$/i)
+  if (other) { country = other[1].trim(); state = '' }
   const us = !country || /^(us|usa|u\.?s\.?a?\.?|united states( of america)?)$/i.test(country)
   if (us) {
     if (!state) return { type: '', value: '', notes: [note('warn', 'Missing — type UNK if it truly is not known')] }
@@ -248,10 +251,18 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
     const terr = US_TERRITORIES[abbr] ?? Object.values(US_TERRITORIES).find((n) => n.toLowerCase() === state.toLowerCase())
     if (terr) return { type: 'US Territory', value: terr, notes: [] }
     if (/^mexico$/i.test(state)) return { type: 'Mexican State', value: 'Unknown', notes: [] }
+    const mx = matchPlace(state, MEXICAN_STATES)
+    if (mx) return { type: 'Mexican State', value: mx.name, notes: [note('info', `"${state}" is a Mexican state — read as "${mx.name}"; confirm`)] }
     return { type: 'US State', value: state, notes: [note('warn', `"${state}" isn't a recognised US state — check the type and spelling`)] }
   }
-  if (/^m[eé]xico$/i.test(country)) return { type: 'Mexican State', value: state || 'Unknown', notes: [] }
-  if (/^canada$/i.test(country)) return { type: 'Canadian Province', value: state || 'Unknown', notes: [] }
+  const listed = (list: readonly string[], type: string) => {
+    if (!state || /^unk/i.test(state)) return { type, value: 'Unknown', notes: [] as EdrsNote[] }
+    const m = matchPlace(state, list)
+    if (!m) return { type, value: state, notes: [note('warn', `"${state}" isn't on EDRS's ${type} list — check the spelling`)] }
+    return { type, value: m.name, notes: m.exact ? [] : [note('info', `Read "${state}" as "${m.name}" — confirm`)] }
+  }
+  if (/^m[eé]xico$/i.test(country)) return listed(MEXICAN_STATES, 'Mexican State')
+  if (/^canada$/i.test(country)) return listed(CANADIAN_PROVINCES, 'Canadian Province')
   return { type: 'Other Country', value: country, notes: [note('info', 'Pick the country with the magnifying-glass browser in EDRS')] }
 }
 

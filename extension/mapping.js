@@ -86,11 +86,14 @@ self.CASILLAS_EDRS_MAPPING = {
         { key: 'fatherMiddle', cap: '32. Middle Name:' },
         { key: 'fatherLast', cap: '33. Last (Birth) Name:', unkIfEmpty: 'UNK' },
         M("father-birth-type", "personalInfo.fatherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
+        // The state / country list appears once the type above is chosen (the fill runs several passes, so it is picked right after).
+        M("father-birth-value", "personalInfo.fatherBirthPlace.placeOther"),
         M("mother-rel", "personalInfo.parent2Kind", { literal: "Mother", always: true }),
         { key: 'motherFirst', cap: '35. First Name:', unkIfEmpty: 'UNK' },
         { key: 'motherMiddle', cap: '36. Middle Name:' },
         { key: 'motherLast', cap: '37. Last (Birth) Name:', unkIfEmpty: 'UNK' },
         M("mother-birth-type", "personalInfo.motherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
+        M("mother-birth-value", "personalInfo.motherBirthPlace.placeOther"),
         // Address "types" and the pieces of the place-of-death address (from the real certificate capture).
         M("age", "personalInfo.age.years"),
         M("birth-value", "personalInfo.decedentBirthPlace.placeOther"),

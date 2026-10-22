@@ -1,3 +1,4 @@
+import { PlacePicker } from '../../components/ui/PlacePicker'
 import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
 import { withFirstCallDefaults } from '@/lib/firstCallPlace'
@@ -423,14 +424,14 @@ export default function VitalSheetIntake() {
               <L id="fatherMiddle"><input {...text('fatherMiddleName')} /></L>
               <L id="fatherLast"><input {...text('fatherLastName')} /></L>
               <L id="fatherSuffix"><VocabSelect value={f.fatherSuffix ?? ''} onChange={(v) => set('fatherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
-              <L id="fatherBirthState"><input {...text('fatherBirthState')} /></L>
+              <L id="fatherBirthState"><PlacePicker value={f.fatherBirthState ?? ''} onChange={(v) => set('fatherBirthState', v)} className={inputClass} /></L>
             </div>
             <div className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="motherFirst"><input {...text('motherFirstName')} /></L>
               <L id="motherMiddle"><input {...text('motherMiddleName')} /></L>
               <L id="motherLast"><input {...text('motherLastName')} /></L>
               <L id="motherSuffix"><VocabSelect value={f.motherSuffix ?? ''} onChange={(v) => set('motherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
-              <L id="motherBirthState"><input {...text('motherBirthState')} /></L>
+              <L id="motherBirthState"><PlacePicker value={f.motherBirthState ?? ''} onChange={(v) => set('motherBirthState', v)} className={inputClass} /></L>
             </div>
           </div>
         </Card>
