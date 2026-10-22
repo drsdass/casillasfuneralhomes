@@ -70,8 +70,8 @@ export default function CaseList() {
   })
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
-    <div>
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
+    <div className="min-w-0">
       <SectionHeading
         title="Cases"
         subtitle={`${filtered.length} case${filtered.length !== 1 ? 's' : ''}`}
@@ -127,16 +127,16 @@ export default function CaseList() {
         </div>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-              <th className="px-4 py-3 font-medium">Decedent</th>
-              <th className="px-4 py-3 font-medium">Case #</th>
-              {isAllLocations && <th className="px-4 py-3 font-medium">Location</th>}
-              <th className="px-4 py-3 font-medium">Disposition</th>
-              <th className="px-4 py-3 font-medium">Service Date</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-3 py-3 font-medium">Decedent</th>
+              <th className="px-3 py-3 font-medium">Case #{isAllLocations ? ' / Location' : ''}</th>
+              <th className="px-3 py-3 font-medium">Disposition</th>
+              <th className="px-3 py-3 font-medium">Service Date</th>
+              <th className="px-3 py-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -145,7 +145,7 @@ export default function CaseList() {
                 key={c.id}
                 className="border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer"
               >
-                <td className="px-4 py-3">
+                <td className="px-3 py-3">
                   <Link to={`/cases/${c.id}`} className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
                     <span className="font-medium text-slate-900">{c.decedent.firstName} {c.decedent.lastName}</span>
@@ -154,13 +154,12 @@ export default function CaseList() {
                   </Link>
                   <Link to={`/cases/${c.id}`} className="block mt-1.5 ml-4"><MiniTrack wf={workflowFor(c)} /></Link>
                 </td>
-                <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}</td>
-                {isAllLocations && <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{shortLocationName(locationName(c.locationId))}</td>}
-                <td className="px-4 py-3 text-slate-500 capitalize">{c.disposition}</td>
-                <td className="px-4 py-3 text-slate-500">
+                <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{c.caseNumber}{isAllLocations && <div className="text-xs text-slate-400">{shortLocationName(locationName(c.locationId))}</div>}</td>
+                <td className="px-3 py-3 text-slate-500 capitalize">{c.disposition}</td>
+                <td className="px-3 py-3 text-slate-500">
                   {c.serviceDate ? new Date(c.serviceDate).toLocaleDateString() : '—'}
                 </td>
-                <td className="px-4 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></td>
+                <td className="px-3 py-3"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></td>
               </tr>
             ))}
             {!isLoading && filtered.length === 0 && (
@@ -168,6 +167,7 @@ export default function CaseList() {
             )}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
     <ActivityPanel entityType="case" title="Recent Case Activity" />
