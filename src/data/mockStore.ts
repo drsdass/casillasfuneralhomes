@@ -219,6 +219,7 @@ export const mockStore = {
   },
 
   getCase: (id: string): FuneralCase | undefined => caseStore.find((c) => c.id === id),
+  deleteCase(id: string): void { caseStore = caseStore.filter((c) => c.id !== id) },
 
   createCase(input: Omit<FuneralCase, 'id' | 'createdAt' | 'updatedAt'>, changedBy: StaffMember): FuneralCase {
     const now = new Date().toISOString()

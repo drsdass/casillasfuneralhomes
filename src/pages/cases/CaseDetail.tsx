@@ -11,7 +11,8 @@ import { Card, CaseStatusBadge, CustodyChip, formatCurrency } from '@/components
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useState, useRef } from 'react'
-import { canEditCases } from '@/lib/permissions'
+import { canEditCases, canDeleteCases } from '@/lib/permissions'
+import { DeleteCaseDialog } from '@/components/cases/DeleteCaseDialog'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
@@ -127,8 +128,15 @@ export default function CaseDetail() {
   })
   const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
   const [confirmPassed, setConfirmPassed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [qFirst, setQFirst] = useState('')
+  const [qLast, setQLast] = useState('')
   const passedMutation = useMutation({
-    mutationFn: () => api.markPassedAway(caseId!, currentUser!),
+    mutationFn: async () => {
+      // A quote started without the patient's name gets the real name now.
+      if (c?.decedent.firstName === 'Quote' && qFirst.trim() && qLast.trim()) await api.updateCase(caseId!, { decedent: { ...c.decedent, firstName: qFirst.trim(), lastName: qLast.trim() } }, currentUser!)
+      await api.markPassedAway(caseId!, currentUser!)
+    },
     onSuccess: () => { setConfirmPassed(false); navigate(`/cases/${caseId}/first-call`) },
   })
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
@@ -389,6 +397,12 @@ export default function CaseDetail() {
               >
                 <Pencil size={12} /> Edit
               </Link>
+              {currentUser && canDeleteCases(currentUser.role) && (
+                <button type="button" onClick={() => setDeleting(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md px-2.5 py-1.5 hover:bg-red-50">
+                  <Trash2 size={12} /> Delete
+                </button>
+              )}
+              {deleting && <DeleteCaseDialog c={c} onClose={() => setDeleting(false)} onDeleted={() => navigate('/cases')} />}
             </>
           )}
         </div>
@@ -430,12 +444,18 @@ export default function CaseDetail() {
 
       {c.type === 'pre_need' && (
         <div className="no-print mt-4 rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3">
-          <div className="text-sm font-semibold text-violet-900">Pre-Need plan — {c.decedent.firstName} has not passed away</div>
+          <div className="text-sm font-semibold text-violet-900">{c.decedent.firstName === 'Quote' ? `Quote for the ${c.decedent.lastName} family — nobody has passed away` : `Pre-Need plan — ${c.decedent.firstName} has not passed away`}</div>
           <p className="text-sm text-violet-900/80 mt-0.5">This plan stays off the Chain of Custody, TV board and Driver screens. When the family calls to say they have passed, tap the button to start the First Call — everything already planned stays on the file.</p>
           {canEdit && (confirmPassed ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-800">Start the First Call for {c.decedent.firstName} now?</span>
-              <button type="button" disabled={passedMutation.isPending} onClick={() => passedMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">{passedMutation.isPending ? 'Starting…' : 'Yes, start First Call'}</button>
+              {c.decedent.firstName === 'Quote' ? (
+                <>
+                  <span className="text-sm font-medium text-slate-800">Who passed away?</span>
+                  <input value={qFirst} onChange={(e) => setQFirst(e.target.value)} placeholder="First name" className="border border-slate-300 rounded-md px-2.5 py-1.5 text-sm w-36" />
+                  <input value={qLast} onChange={(e) => setQLast(e.target.value)} placeholder="Last name" className="border border-slate-300 rounded-md px-2.5 py-1.5 text-sm w-36" />
+                </>
+              ) : <span className="text-sm font-medium text-slate-800">Start the First Call for {c.decedent.firstName} now?</span>}
+              <button type="button" disabled={passedMutation.isPending || (c.decedent.firstName === 'Quote' && !(qFirst.trim() && qLast.trim()))} onClick={() => passedMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">{passedMutation.isPending ? 'Starting…' : 'Yes, start First Call'}</button>
               <button type="button" onClick={() => setConfirmPassed(false)} className="text-sm rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-600">Not yet</button>
             </div>
           ) : (

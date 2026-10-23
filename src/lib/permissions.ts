@@ -97,3 +97,8 @@ export const TOGGLEABLE_FEATURES: { key: string; label: string }[] = [
 export function canEditPriceList(role: UserRole): boolean {
   return role === 'super_admin'
 }
+
+/** Permanently deleting a case is admin-only (matches the database rule). */
+export function canDeleteCases(role: UserRole): boolean {
+  return atLeast(role, 'admin')
+}
