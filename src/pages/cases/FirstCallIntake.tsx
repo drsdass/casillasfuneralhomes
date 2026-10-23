@@ -10,7 +10,6 @@ import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check } from 'lucide-react'
 import type { FirstCallInfo } from '@/types'
 import { getCompanyName } from '@/lib/company'
-import { DuplicateWarning, useDuplicates } from '@/components/cases/DuplicateWarning'
 
 const sectionLabel = 'bg-slate-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-t-md'
 const inputClass = 'w-full border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
@@ -58,8 +57,6 @@ export default function FirstCallIntake() {
   const [timeOfRemoval, setTimeOfRemoval] = useState('')
   const [callerInstructions, setCallerInstructions] = useState('')
 
-  const dupes = useDuplicates({ id: caseId, firstName, lastName, phone: nokPhone })
-  const [dupAck, setDupAck] = useState(false)
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null)
   const [sendMethod, setSendMethod] = useState<'text' | 'email' | null>(null)
   const [sendTarget, setSendTarget] = useState('')
@@ -197,7 +194,6 @@ export default function FirstCallIntake() {
                 <div><label className={labelClass}>Middle Name</label><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></div>
                 <div><label className={labelClass}>Last Name</label><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></div>
               </div>
-              {!existing && <DuplicateWarning hits={dupes} ack={dupAck} onAck={setDupAck} />}
               <div className="grid grid-cols-3 gap-3">
                 <div><label className={labelClass}>Date of Death</label><input type="date" value={dateOfDeath} onChange={(e) => setDateOfDeath(e.target.value)} className={inputClass} /></div>
                 <div><label className={labelClass}>Time</label><Time24 fine label="Time" value={timeOfDeath} onChange={setTimeOfDeath} /></div>
@@ -287,7 +283,7 @@ export default function FirstCallIntake() {
           <div className="flex justify-end">
             <button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !locId || (!existing && dupes.length > 0 && !dupAck)}
+              disabled={saveMutation.isPending || !locId}
               title={locId ? undefined : 'Please choose a location first'}
               className="bg-[#3b4a35] text-white text-sm font-medium px-5 py-2.5 rounded-md hover:bg-[#4d5f45] disabled:opacity-60"
             >

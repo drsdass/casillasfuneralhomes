@@ -8,8 +8,7 @@ import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components
 import { Search, Upload, Phone } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
-import { FilePlus2, Copy } from 'lucide-react'
-import { findDuplicateGroups } from '@/lib/duplicates'
+import { FilePlus2 } from 'lucide-react'
 import { shortLocationName } from '@/lib/company'
 import { useWorkflowFor } from '@/lib/useWorkflow'
 import { MiniTrack } from '@/components/workflow/WorkflowTrack'
@@ -35,7 +34,6 @@ export default function CaseList() {
   // Everyone sees the cases of every location of their company — each one labelled with its location.
   const isAllLocations = true
   const [locFilter, setLocFilter] = useState<string>('all')
-  const [showDupes, setShowDupes] = useState(false)
 
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ['cases', 'all'],
@@ -51,7 +49,6 @@ export default function CaseList() {
   const locColor = (id: string) => LOC_COLORS[Math.max(0, accessibleLocations.findIndex((l) => l.id === id)) % LOC_COLORS.length]
   const inCompany = cases.filter((c) => companyLocIds.has(c.locationId))
 
-  const dupGroups = findDuplicateGroups(inCompany)
   const filtered = inCompany.filter((c) => {
     if (locFilter !== 'all' && c.locationId !== locFilter) return false
     if (statusFilter === 'pre_need') { if (c.type !== 'pre_need') return false }
@@ -95,12 +92,6 @@ export default function CaseList() {
               <Upload size={16} /> Upload Document
             </button>
             <button
-              onClick={() => navigate('/cases/new?type=pre_need&quote=1')}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 border border-amber-300 bg-amber-50 rounded-md px-3.5 py-2 hover:bg-amber-100 transition"
-            >
-              <FilePlus2 size={16} /> New Quote
-            </button>
-            <button
               onClick={() => navigate('/cases/new?type=pre_need')}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-800 border border-violet-300 bg-violet-50 rounded-md px-3.5 py-2 hover:bg-violet-100 transition"
             >
@@ -126,7 +117,6 @@ export default function CaseList() {
             className="pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-[#b3925a]"
           />
         </div>
-        <button onClick={() => setShowDupes((v) => !v)} className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border ${showDupes ? 'bg-amber-100 border-amber-300 text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}><Copy size={12} /> Check for duplicates{dupGroups.length ? ` (${dupGroups.length})` : ''}</button>
         {accessibleLocations.length > 1 && (
           <div className="flex gap-1 flex-wrap" aria-label="Location">
             <button onClick={() => setLocFilter('all')} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${locFilter === 'all' ? 'bg-[#3b4a35] text-white border-[#3b4a35]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>All locations ({inCompany.length})</button>
@@ -152,30 +142,6 @@ export default function CaseList() {
           <button onClick={() => setNeedsOnly((v) => !v)} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${needsOnly ? 'bg-red-600 text-white border-red-600' : 'border-red-300 text-red-700 hover:bg-red-50'}`}>Needs attention</button>
         </div>
       </div>
-
-      {showDupes && (
-        <Card className="p-4 mb-4 border-amber-200 bg-amber-50/50">
-          <div className="text-sm font-semibold text-slate-800">Possible duplicates</div>
-          {dupGroups.length === 0 ? <p className="text-sm text-slate-600 mt-1">None found — no two cases share a name (in either order).</p> : (
-            <div className="mt-2 space-y-2.5">
-              {dupGroups.map((g) => (
-                <div key={g.cases[0].id} className="text-sm">
-                  <div className="text-xs text-amber-800">{g.reasons.join(', ')}</div>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {g.cases.map((c) => (
-                      <Link key={c.id} to={`/cases/${c.id}`} className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 hover:bg-slate-50">
-                        <span className="font-medium">{c.decedent.firstName} {c.decedent.lastName}</span>
-                        <span className="text-slate-500"> · {c.caseNumber} · {c.status.replace(/_/g, ' ')}</span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <p className="text-xs text-slate-500">Open the copy you don't want, then use Delete (admins only). It asks three times.</p>
-            </div>
-          )}
-        </Card>
-      )}
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">

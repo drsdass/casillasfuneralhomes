@@ -8,7 +8,6 @@ import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Sparkles } from 'lucide-react'
-import { DuplicateWarning, useDuplicates } from '@/components/cases/DuplicateWarning'
 import type { CaseType, DispositionType, CaseStatus, ExtractedCaseData } from '@/types'
 
 const typeOptions: { value: CaseType; label: string }[] = [
@@ -56,8 +55,6 @@ export default function CaseForm() {
   const { activeLocationId, currentUser } = useSession()
   const queryClient = useQueryClient()
   const preNeedStart = !isEdit && new URLSearchParams(location.search).get('type') === 'pre_need'
-  // A quote is a pre-need plan started before anyone has passed — the patient's name may not be known yet.
-  const quoteStart = !isEdit && new URLSearchParams(location.search).get('quote') === '1'
   const extracted = (location.state as { extracted?: ExtractedCaseData } | null)?.extracted
 
   const { data: existing } = useQuery({
@@ -137,7 +134,6 @@ export default function CaseForm() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (quoteStart && !firstName.trim() && !lastName.trim() && !contactName.trim()) throw new Error('Enter the name of the person asking for the quote (or the patient\'s name).')
       if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time.')
       const colorPalette = ['#3d4f3a', '#8b5e34', '#6b7f4f', '#a8763e', '#2f4a3f']
       const contacts = contactName
@@ -163,7 +159,7 @@ export default function CaseForm() {
         locationId: locId,
         caseNumber: `NEW-${Date.now().toString().slice(-6)}`,
         type, status, disposition,
-        decedent: { firstName: firstName.trim() || (quoteStart ? 'Quote' : firstName), middleName: middleName || undefined, lastName: lastName.trim() || (quoteStart ? (contactName.trim() || 'Family') : lastName), dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
+        decedent: { firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
         contacts,
         familyId,
         visitationDate: localInputToIso(visitationDate),
@@ -181,12 +177,9 @@ export default function CaseForm() {
     },
   })
 
-  const dupes = useDuplicates({ id: caseId, firstName, lastName, phone: contactPhone })
-  const [dupAck, setDupAck] = useState(false)
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!currentUser) return
-    if (!isEdit && dupes.length && !dupAck) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     saveMutation.mutate()
   }
 
@@ -196,7 +189,7 @@ export default function CaseForm() {
         <ArrowLeft size={15} /> {isEdit ? 'Back to case' : 'Back to cases'}
       </Link>
 
-      <SectionHeading title={isEdit ? 'Edit Case' : quoteStart ? 'New Quote' : type === 'pre_need' ? 'New Pre-Need Plan' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : quoteStart ? 'A family wants prices before a first call. Nothing is sent to the Chain of Custody, TV board or Driver screens. When the time comes, tap "Passed away — start First Call" on the quote and everything chosen stays on the file.' : type === 'pre_need' ? 'Planning ahead — the person has not passed away. There is no first call or pickup until they do.' : 'Enter decedent and case details'} />
+      <SectionHeading title={isEdit ? 'Edit Case' : type === 'pre_need' ? 'New Pre-Need Plan' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : type === 'pre_need' ? 'Planning ahead — the person has not passed away. There is no first call or pickup until they do.' : 'Enter decedent and case details'} />
 
       {extracted && (
         <Card className="max-w-2xl p-4 mb-5 border-[#b3925a]/40 bg-[#b3925a]/5">
@@ -219,11 +212,11 @@ export default function CaseForm() {
 
       <form onSubmit={handleSubmit} className="max-w-2xl">
         <Card className="p-5 mb-5">
-          <h3 className="text-sm font-medium text-slate-800 mb-3">{quoteStart ? 'Patient (leave blank if the family has not said yet)' : 'Decedent'}</h3>
+          <h3 className="text-sm font-medium text-slate-800 mb-3">Decedent</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
               <label className={labelClass}>First Name</label>
-              <input required={!quoteStart} value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
+              <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Middle Name</label>
@@ -231,10 +224,9 @@ export default function CaseForm() {
             </div>
             <div>
               <label className={labelClass}>Last Name</label>
-              <input required={!quoteStart} value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
+              <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
             </div>
           </div>
-          {!isEdit && <DuplicateWarning hits={dupes} ack={dupAck} onAck={setDupAck} />}
           {type !== 'pre_need' && <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Date of Death</label>
@@ -403,7 +395,7 @@ export default function CaseForm() {
           </Link>
           <button
             type="submit"
-            disabled={saveMutation.isPending || !locId || (!isEdit && dupes.length > 0 && !dupAck)}
+            disabled={saveMutation.isPending || !locId}
             title={locId ? undefined : 'Please choose a location first'}
             className="text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
           >

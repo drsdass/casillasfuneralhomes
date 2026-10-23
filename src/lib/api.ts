@@ -493,22 +493,6 @@ export const api = {
     return this.getCase(caseRow.id) as Promise<FuneralCase>
   },
 
-  /**
-   * Permanently removes a case and everything on it (notes, documents, tasks, contract, statements). Admin only — the database enforces this too.
-   * The audit log records who removed which case, with its name and number, before it goes.
-   */
-  async deleteCase(id: string, changedBy: StaffMember): Promise<void> {
-    if (USE_MOCK) { mockStore.deleteCase(id); return }
-    const { data } = await supabase!.from('cases').select('case_number, decedent_first_name, decedent_last_name').eq('id', id).single()
-    await logAuditReal({
-      entityType: 'case', entityId: id, caseId: undefined, action: 'delete',
-      summary: `Deleted case ${data?.case_number ?? id} (${data?.decedent_first_name ?? ''} ${data?.decedent_last_name ?? ''})`.trim(), changedBy: changedBy.id,
-    })
-    await supabase!.from('calendar_events').delete().eq('case_id', id)
-    const { error } = await supabase!.from('cases').delete().eq('id', id)
-    if (error) throw error
-  },
-
   /** Practice cases (case number starts with PRACTICE-) can be removed by anyone with access to the location — real cases cannot. */
   async deletePracticeCase(id: string): Promise<void> {
     if (USE_MOCK) throw new Error('Practice cases can only be removed on the live site.')
