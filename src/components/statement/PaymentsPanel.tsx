@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { Contract, FuneralCase, PaymentMethod, StaffMember } from '@/types'
@@ -11,7 +11,7 @@ const METHODS: { v: PaymentMethod; label: string }[] = [
 const methodLabel = (m: string) => METHODS.find((x) => x.v === m)?.label ?? m
 
 /** What the family owes, what they have paid so far (one payment or many), what is left — and a way to record the next payment. */
-export function PaymentsPanel({ caseObj, contract, canEdit, currentUser }: { caseObj: FuneralCase; contract?: Contract; canEdit: boolean; currentUser: StaffMember }) {
+export function PaymentsPanel({ caseObj, contract, canEdit, currentUser, autoOpen = 0 }: { caseObj: FuneralCase; contract?: Contract; canEdit: boolean; currentUser: StaffMember; autoOpen?: number }) {
   const qc = useQueryClient()
   const { data: payments = [] } = useQuery({ queryKey: ['payments', caseObj.id], queryFn: () => api.getPayments(caseObj.id), enabled: !!contract })
   const [open, setOpen] = useState(false)
@@ -23,6 +23,7 @@ export function PaymentsPanel({ caseObj, contract, canEdit, currentUser }: { cas
   const total = contract?.total ?? 0
   const paid = payments.reduce((s, p) => s + p.amount, 0)
   const balance = Math.max(0, Math.round((total - paid) * 100) / 100)
+  useEffect(() => { if (autoOpen > 0 && canEdit) { setAmount(balance > 0 ? balance.toFixed(2) : ''); setOpen(true) } }, [autoOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pay = useMutation({
     mutationFn: (v: { amount: number; method: PaymentMethod; reference?: string }) => api.recordPayment({ contractId: contract!.id, caseId: caseObj.id, ...v }, currentUser),

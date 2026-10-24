@@ -130,6 +130,12 @@ export default function CaseDetail() {
   const [confirmPassed, setConfirmPassed] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [choosingDisp, setChoosingDisp] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const [payTick, setPayTick] = useState(0)
+  const closeMutation = useMutation({
+    mutationFn: () => api.updateCase(caseId!, { status: 'completed' }, currentUser!),
+    onSuccess: () => { setConfirmClose(false); queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
+  })
   const [qFirst, setQFirst] = useState('')
   const [qLast, setQLast] = useState('')
   const passedMutation = useMutation({
@@ -490,6 +496,19 @@ export default function CaseDetail() {
         )
       })()}
 
+      {confirmClose && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onClick={() => setConfirmClose(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="font-semibold text-slate-900">{language === 'es' ? '¿Marcar este caso como completo?' : 'Mark this case complete?'}</div>
+            <p className="text-sm text-slate-600 mt-2">{language === 'es' ? 'Úselo cuando todo esté terminado y cobrado.' : 'Use this when everything is finished and paid.'}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setConfirmClose(false)} className="text-sm rounded-md border border-slate-300 px-3.5 py-2">{language === 'es' ? 'Cancelar' : 'Cancel'}</button>
+              <button disabled={closeMutation.isPending} onClick={() => closeMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3.5 py-2">{language === 'es' ? 'Sí, completo' : 'Yes, complete'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {choosingDisp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onClick={() => setChoosingDisp(false)}>
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -506,7 +525,7 @@ export default function CaseDetail() {
 
       <WorkflowTrack
         wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents, signoffs: caseStatements?.['_signoffs'] }, language)}
-        onTab={(t, key) => { if (key === 'disp') { setChoosingDisp(true); return } setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language}
+        onTab={(t, key) => { if (key === 'disp') { setChoosingDisp(true); return } if (key === 'closed') { setConfirmClose(true); return } if (key === 'paid' || key === 'dep' || key === 'bal') setPayTick((n) => n + 1); setTab(t); setPreviewTemplate(null); setTimeout(() => document.getElementById('case-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }} canEdit={canEdit} lang={language}
         signoff={{
           lang: language, busy: signoffMutation.isPending,
           blocked: c.assignedDirectorId && c.assignedDirectorId === currentUser!.id ? (language === 'es' ? 'Otra persona debe hacer esta revisión (usted es el director de este caso).' : 'Someone else has to do this check — you are the director on this case.') : undefined,
@@ -516,7 +535,7 @@ export default function CaseDetail() {
       <div className="mt-4"><FamilyActivityCard c={c} currentUser={currentUser!} /></div>
 
       {/* Tabs */}
-      <div className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5">
+      <div id="case-tabs" className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5 scroll-mt-16">
         {tabs.map((t) => (
           <button
             key={t}
@@ -1281,11 +1300,11 @@ export default function CaseDetail() {
               </div>
               <div className="border-t border-slate-100 mt-5 pt-4">
                 <h4 className="text-sm font-medium text-slate-800 mb-2">Payments</h4>
-                <PaymentsPanel caseObj={c} contract={caseContract} canEdit={canEdit} currentUser={currentUser!} />
+                <PaymentsPanel caseObj={c} contract={caseContract} canEdit={canEdit} currentUser={currentUser!} autoOpen={payTick} />
               </div>
             </div>
           ) : (
-            <div className="text-sm text-slate-400 text-center py-10">No contract created yet for this case.</div>
+            <div className="text-sm text-slate-500 text-center py-10">No contract yet — it is created when items are chosen on the Orders tab.<div><button type="button" onClick={() => setTab('Orders')} className="mt-3 text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2">Go to Orders and choose items</button></div></div>
           )}
         </Card>
       )}
