@@ -25,6 +25,7 @@ const noteClass: Record<EdrsNote['level'], string> = {
 export default function EdrsEntry() {
   const { caseId } = useParams<{ caseId: string }>()
   const { accessibleLocations } = useSession()
+  const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -50,7 +51,8 @@ export default function EdrsEntry() {
   if (!c) return null
 
   const location = accessibleLocations.find((l) => l.id === c.locationId)
-  const rows = buildEdrsRows(c, { ssn, location: location && { name: location.name, licenseNumber: location.licenseNumber } })
+  const embalmerName = allStaff.find((s) => s.id === c.assignedEmbalmerId)?.name
+  const rows = buildEdrsRows(c, { ssn, embalmerName, location: location && { name: location.name, licenseNumber: location.licenseNumber } })
   const { blockers, toCheck, ready } = readiness(rows)
   const needsAttention = (r: EdrsRow) => r.notes.some((n) => n.level === 'error' || n.level === 'warn')
 

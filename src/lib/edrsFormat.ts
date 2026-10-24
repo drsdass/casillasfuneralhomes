@@ -36,6 +36,8 @@ export interface EdrsRow {
 
 export interface EdrsContext extends VitalContext {
   location?: { name: string; licenseNumber?: string }
+  /** The embalmer assigned to the case — used when no embalmer is typed on the Vital Sheet. */
+  embalmerName?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -608,7 +610,8 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         const emb = vs.embalmed
         add('embalmed', '42', 'EMBALMED?', 'office', emb === 'yes' ? 'Yes' : emb === 'no' ? 'No' : '', emb ? [emb === 'no' ? note('info', 'EDRS fills in NOT EMBALMED and a dash for item 43') : undefined] : [note('error', 'Required')])
         if (emb === 'yes') {
-          add('embalmer-name', '42', 'EMBALMER', 'office', vs.embalmerName ?? '', vs.embalmerName ? [] : [note('error', 'Required — search the embalmer in EDRS by name or license')], { hint: 'name' })
+          const embName = vs.embalmerName?.trim() || ctx.embalmerName || ''
+          add('embalmer-name', '42', 'EMBALMER', 'office', embName, embName ? (vs.embalmerName?.trim() ? [] : [note('info', 'Taken from the embalmer assigned to this case — after it is typed, press the magnifying glass in EDRS to pick them and fill the license')]) : [note('error', 'Required — search the embalmer in EDRS by name or license')], { hint: 'name' })
           const lic = edrsLicense(vs.embalmerLicense, 'EMB')
           add('embalmer-license', '43', "EMBALMER'S LICENSE NUMBER", 'office', lic.value, lic.value ? [lic.note] : [note('error', 'Required')])
         }

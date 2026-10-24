@@ -164,7 +164,7 @@
       }
       let el
       if (f.after) el = nextField(doc, found.get(f.after), !f.any)
-      else if (f.next) { const base = resolve(doc, { cap: f.cap, section: f.section, nth: f.nth }); el = nextField(doc, base, false) }
+      else if (f.next || f.nextNext) { const base = resolve(doc, { cap: f.cap, section: f.section, nth: f.nth }); el = nextField(doc, base, false); if (f.nextNext) el = nextField(doc, el, false) }
       else el = resolve(doc, f)
       if (el) found.set(f.key, el)
       // literal: a fixed choice made only when the case has a value for this row (e.g. age type "Years")
@@ -173,6 +173,8 @@
       let value = row && row.value !== '' ? (f.literal !== undefined ? f.literal : row.value) : ''
       if (!value && f.always && f.literal !== undefined) value = f.literal
       if (!value && row && f.unkIfEmpty) value = f.unkIfEmpty
+      // splitName: one full name goes into first / middle / last boxes
+      if (value && f.splitName) { const w = String(value).trim().split(/\s+/); const nm = w.length === 1 ? { first: w[0], middle: '', last: '' } : w.length === 2 ? { first: w[0], middle: '', last: w[1] } : { first: w[0], middle: w.slice(1, -1).join(' '), last: w[w.length - 1] }; value = nm[f.splitName] }
       // part: a zip row "92240-1234" goes in two boxes
       if (value && f.part) { const m = /^\s*(\d{5})(?:\D*(\d{4}))?/.exec(String(value)); value = m ? (f.part === 'zip5' ? m[1] : m[2] || '') : (f.part === 'zip5' ? value : '') }
       const status = row || f.always ? fillElement(el, value, { fuzzy: !!f.fuzzy, replaceZero: !!f.replaceZero }) : 'skipped-empty'

@@ -91,6 +91,15 @@ ok(x.getElementById('z5').value === '92240' && x.getElementById('z4').value === 
 const rows4 = [{ key: 'hispanicSpecify', value: 'Other — Salvadoran' }, { key: 'father-birth-type', value: 'Mexican State' }, { key: 'father-birth-value', value: 'Ciudad de Mexico' }]
 core.fillScreen(x, { fields: [scr3.fields[2], { key: 'father-birth-value', after: 'father-birth-type', fuzzy: true, }, scr3.fields[5]] }, rows4)
 ok(x.getElementById('ot').checked && x.getElementById('ottxt').value === 'Salvadoran', 'Other origin ticks Other and types the origin')
+const d5 = new JSDOM(`<body><table><tr><td>Signature of Embalmer: First Name:</td><td><input id=ef></td></tr><tr><td>Middle Name:</td><td><input id=em></td></tr><tr><td>Last Name:</td><td><input id=el></td><td>Suffix: <select id=es><option value="">--</select></td></tr><tr><td>43. License #: EMB:</td><td><input id=lic></td></tr></table></body>`).window
+globalThis.HTMLInputElement = d5.HTMLInputElement; globalThis.HTMLSelectElement = d5.HTMLSelectElement; globalThis.HTMLTextAreaElement = d5.HTMLTextAreaElement
+core.fillScreen(d5.document, { fields: [
+  { key: 'embalmer-name', cap: 'Signature of Embalmer: First Name:', splitName: 'first' },
+  { key: 'embalmer-name', cap: 'Signature of Embalmer: First Name:', next: true, splitName: 'middle' },
+  { key: 'embalmer-name', cap: 'Signature of Embalmer: First Name:', nextNext: true, splitName: 'last' },
+  { key: 'embalmer-license', cap: '43. License #: EMB:' }] }, [{ key: 'embalmer-name', value: 'David Espinoza' }, { key: 'embalmer-license', value: 'EMB1234' }])
+const g = (id) => d5.document.getElementById(id).value
+ok(g('ef') === 'David' && g('em') === '' && g('el') === 'Espinoza' && g('lic') === 'EMB1234', 'embalmer name split into first / last, license filled')
 const mp = {}; globalThis.self = mp; ;(0, eval)(rd('mapping.js'))
 ok(Math.max(...mp.CASILLAS_EDRS_MAPPING.screens.map((s) => s.fields.length)) > 30 && mp.CASILLAS_EDRS_MAPPING.screens.some((s) => s.match.urlIncludes === '#!/dc/new/'), 'EDRS mapping loaded')
 console.log(fail ? `\n${fail} FAILED` : '\nall extension checks passed'); process.exit(fail ? 1 : 0)

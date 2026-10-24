@@ -93,6 +93,7 @@ export default function VitalSheetIntake() {
   const { caseId } = useParams<{ caseId: string }>()
   const navigate = useNavigate()
   const { currentUser, accessibleLocations } = useSession()
+  const { data: staffAll = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
 
   // Vital Sheet fields proper
@@ -226,7 +227,7 @@ export default function VitalSheetIntake() {
     vitalSheet: f,
   } as FuneralCase
   const loc = accessibleLocations.find((l) => l.id === c.locationId)
-  const liveRows = buildEdrsRows(live, { location: loc && { name: loc.name, licenseNumber: loc.licenseNumber } })
+  const liveRows = buildEdrsRows(live, { embalmerName: staffAll.find((s) => s.id === c.assignedEmbalmerId)?.name, location: loc && { name: loc.name, licenseNumber: loc.licenseNumber } })
   const issueByKey = new Map<string, Issue>()
   const issueByNumber = new Map<string, Issue>()
   for (const r of liveRows) {

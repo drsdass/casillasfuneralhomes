@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Casillas EDRS Assist",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Helps a licensed funeral director copy case data from Casillas OS into the EDRS screen they are already logged into. Does nothing until clicked. Never submits, saves or navigates.",
   "permissions": ["storage"],
   "background": { "service_worker": "background.js" },

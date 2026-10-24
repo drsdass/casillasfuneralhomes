@@ -82,6 +82,11 @@ self.CASILLAS_EDRS_MAPPING = {
         M("finalDisposition", "funeralDirectorInfo.dispositionPlaceName"),
         M("typeOfDisposition", "funeralDirectorInfo.dispositionTypeId"),
         M("embalmed", "funeralDirectorInfo.embalmerInfo.embalmed"),
+        // Item 42-43 boxes appear once Embalmed = YES: first, middle and last name boxes in a row, then the license.
+        { key: "embalmer-name", cap: "Signature of Embalmer: First Name:", splitName: "first" },
+        { key: "embalmer-name", cap: "Signature of Embalmer: First Name:", next: true, splitName: "middle" },
+        { key: "embalmer-name", cap: "Signature of Embalmer: First Name:", nextNext: true, splitName: "last" },
+        { key: "embalmer-license", cap: "43. License #: EMB:" },
         M("fd-name", "funeralDirectorInfo.funeralEstName"),
         M("fd-license", "funeralDirectorInfo.funeralDirLicense"),
         M("deathCounty", "personalMedicalInfo.registrationDistrictId"),
