@@ -9,6 +9,8 @@ import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Sparkles } from 'lucide-react'
 import { DuplicateWarning, useDuplicates } from '@/components/cases/DuplicateWarning'
+import { findVenueConflicts } from '@/lib/venue'
+import { format, parseISO } from 'date-fns'
 import type { CaseType, DispositionType, CaseStatus, ExtractedCaseData } from '@/types'
 
 const typeOptions: { value: CaseType; label: string }[] = [
@@ -181,11 +183,23 @@ export default function CaseForm() {
     },
   })
 
+  const { data: allEvents = [] } = useQuery({ queryKey: ['events', 'venue-check'], queryFn: () => api.getCalendarEvents() })
+  const [venueAck, setVenueAck] = useState(false)
+  const visIso = localInputToIso(visitationDate)
+  const svcIso = localInputToIso(serviceDate)
+  const visEnd = visitationEndIso && visIso && visitationEndIso > visIso ? visitationEndIso : visIso ? new Date(new Date(visIso).getTime() + 2 * 3600e3).toISOString() : undefined
+  const svcEnd = svcIso ? new Date(new Date(svcIso).getTime() + 3600e3).toISOString() : undefined
+  const venueLoc = chosenLocationId || existing?.locationId
+  const venueClashes = [
+    ...findVenueConflicts(allEvents, { start: visIso, end: visEnd, venue: visitationLocation, locationId: venueLoc, caseId }).map((c) => ({ what: 'Visitation', ...c })),
+    ...findVenueConflicts(allEvents, { start: svcIso, end: svcEnd, venue: serviceLocation, locationId: venueLoc, caseId }).map((c) => ({ what: 'Service', ...c })),
+  ]
   const dupes = useDuplicates({ id: caseId, firstName, lastName, phone: contactPhone })
   const [dupAck, setDupAck] = useState(false)
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!currentUser) return
+    if (venueClashes.length && !venueAck) return
     if (!isEdit && dupes.length && !dupAck) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     saveMutation.mutate()
   }
@@ -359,6 +373,17 @@ export default function CaseForm() {
               <input value={serviceLocation} onChange={(e) => setServiceLocation(e.target.value)} className={inputClass} placeholder="Main Chapel, cemetery, etc." />
             </div>
           </div>
+          {venueClashes.length > 0 && (
+            <div className="mt-4 rounded-md border-2 border-amber-300 bg-amber-50 p-3 text-sm">
+              <div className="font-semibold text-amber-900">That place is already booked at this time</div>
+              <ul className="mt-1 list-disc ml-5 text-amber-950">
+                {venueClashes.map((c, i) => (
+                  <li key={i}>{c.what}: “{c.event.title}” {format(parseISO(c.event.start), 'MMM d, HH:mm')}–{format(parseISO(c.event.end), 'HH:mm')}{c.event.location ? ` at ${c.event.location}` : ''}</li>
+                ))}
+              </ul>
+              <label className="mt-2 flex items-center gap-2 text-amber-950"><input type="checkbox" checked={venueAck} onChange={(e) => setVenueAck(e.target.checked)} /> Book it anyway (a different room, or the family agreed)</label>
+            </div>
+          )}
         </Card>
 
         <Card className="p-5 mb-5">
@@ -403,7 +428,7 @@ export default function CaseForm() {
           </Link>
           <button
             type="submit"
-            disabled={saveMutation.isPending || !locId || (!isEdit && dupes.length > 0 && !dupAck)}
+            disabled={saveMutation.isPending || !locId || (!isEdit && dupes.length > 0 && !dupAck) || (venueClashes.length > 0 && !venueAck)}
             title={locId ? undefined : 'Please choose a location first'}
             className="text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
           >

@@ -129,6 +129,7 @@ export default function CaseDetail() {
   const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
   const [confirmPassed, setConfirmPassed] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [choosingDisp, setChoosingDisp] = useState(false)
   const [qFirst, setQFirst] = useState('')
   const [qLast, setQLast] = useState('')
   const passedMutation = useMutation({
@@ -489,9 +490,23 @@ export default function CaseDetail() {
         )
       })()}
 
+      {choosingDisp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onClick={() => setChoosingDisp(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="font-semibold text-slate-900">{language === 'es' ? '¿Entierro o cremación?' : 'Burial or cremation?'}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {([['burial', 'Burial', 'Entierro'], ['cremation', 'Cremation', 'Cremación'], ['entombment', 'Entombment', 'Mausoleo'], ['donation', 'Donation', 'Donación']] as const).map(([v, en, es]) => (
+                <button key={v} disabled={setDispositionMutation.isPending} onClick={() => setDispositionMutation.mutate(v, { onSuccess: () => setChoosingDisp(false) })} className="rounded-md border border-slate-300 py-3 text-sm font-medium hover:bg-[#3b4a35] hover:text-white">{language === 'es' ? es : en}</button>
+              ))}
+            </div>
+            <button onClick={() => setChoosingDisp(false)} className="mt-3 text-sm text-slate-500 w-full">{language === 'es' ? 'Cancelar' : 'Cancel'}</button>
+          </div>
+        </div>
+      )}
+
       <WorkflowTrack
         wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents, signoffs: caseStatements?.['_signoffs'] }, language)}
-        onTab={(t) => { setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language}
+        onTab={(t, key) => { if (key === 'disp') { setChoosingDisp(true); return } setTab(t); setPreviewTemplate(null) }} canEdit={canEdit} lang={language}
         signoff={{
           lang: language, busy: signoffMutation.isPending,
           blocked: c.assignedDirectorId && c.assignedDirectorId === currentUser!.id ? (language === 'es' ? 'Otra persona debe hacer esta revisión (usted es el director de este caso).' : 'Someone else has to do this check — you are the director on this case.') : undefined,

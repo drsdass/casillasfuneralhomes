@@ -15,10 +15,10 @@ export function StatusLight({ item, size = 28 }: { item: Pick<WorkItem, 'done' |
 
 export interface SignoffCtl { onSign: (item: WorkItem) => void; busy: boolean; blocked?: string; lang: 'en' | 'es' }
 
-function FixButton({ item, onTab, canEdit, ctl }: { item: WorkItem; onTab: (t: CaseTab) => void; canEdit: boolean; ctl?: SignoffCtl }) {
+function FixButton({ item, onTab, canEdit, ctl }: { item: WorkItem; onTab: (t: CaseTab, key?: string) => void; canEdit: boolean; ctl?: SignoffCtl }) {
   if (!canEdit) return null
   const cls = 'shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]'
-  const look = item.button ? (item.to ? <Link to={item.to} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</Link> : <button type="button" onClick={() => item.tab && onTab(item.tab)} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</button>) : null
+  const look = item.button ? (item.to ? <Link to={item.to} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</Link> : <button type="button" onClick={() => item.tab && onTab(item.tab, item.key)} className={item.signoff ? 'shrink-0 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-medium px-3 py-2 hover:bg-slate-50' : cls}>{item.button}</button>) : null
   if (!item.signoff || !ctl) return look
   const es = ctl.lang === 'es'
   return (
@@ -31,7 +31,7 @@ function FixButton({ item, onTab, canEdit, ctl }: { item: WorkItem; onTab: (t: C
 }
 
 /** The big picture on a case: six blocks like a progress bar, then exactly what is still missing, each with a button to fix it. */
-export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en', signoff }: { wf: Workflow; onTab: (t: CaseTab) => void; canEdit: boolean; lang?: 'en' | 'es'; signoff?: SignoffCtl }) {
+export function WorkflowTrack({ wf, onTab, canEdit, lang = 'en', signoff }: { wf: Workflow; onTab: (t: CaseTab, key?: string) => void; canEdit: boolean; lang?: 'en' | 'es'; signoff?: SignoffCtl }) {
   const tx = (en: string, es: string) => (lang === 'es' ? es : en)
   const [showAll, setShowAll] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
