@@ -59,6 +59,38 @@ const scr = { fields: [{ key: 'age', model: 'm.age', literal: 'Years' }, { key: 
 const res2 = core.fillScreen(dd, scr, rows2)
 ok(dd.getElementById('ag').value === 'Years' && dd.getElementById('dob').value === '03/02/1940', 'fillScreen fills by locator, literal applied')
 ok(dd.getElementById('typed').value === 'KEEP' && res2[2].status === 'skipped-has-value', 'fillScreen never overwrites typed value')
+// ---- the cases that failed on a real certificate: age 0, second state list, origin tick boxes, zip + county
+const d3 = new JSDOM(`<body><fieldset><legend>Name</legend></fieldset>
+ <table><tr><td>5. Age:</td><td><select id=at ng-model="m.agetype"><option value="">--<option>Years<option>Months</select><input id=ageN value="0"></td></tr></table>
+ <table><tr><td>34. Birth State/Foreign Country:</td><td><select id=bt ng-model="m.bt"><option value="">--<option>US State<option>Mexican State</select> ? : <select id=bv><option value="">--<option>AGUASCALIENTES<option>MICHOACAN DE OCAMPO<option>MEXICO<option>DISTRITO FEDERAL</select></td></tr></table>
+ <div>14/15. Was Decedent HISPANIC: <select id=hs ng-model="m.h"><option value="">--<option>YES<option>NO</select></div>
+ <div>Cuban: <input type=checkbox id=cu><br>Mexican: <input type=checkbox id=mx><br>Puerto Rican: <input type=checkbox id=pr><br>Other: <input type=checkbox id=ot><input id=ottxt></div>
+ <table><tr><td>22. County:</td><td><select id=co><option value="">--<option>RIVERSIDE<option>IMPERIAL</select></td></tr></table>
+ <div>23. Zip Code: <input id=z5> - <input id=z4></div></body>`).window
+globalThis.HTMLInputElement = d3.HTMLInputElement; globalThis.HTMLSelectElement = d3.HTMLSelectElement; globalThis.HTMLTextAreaElement = d3.HTMLTextAreaElement
+globalThis.MouseEvent = d3.MouseEvent
+const x = d3.document
+const rows3 = [
+  { key: 'age-type', value: 'Years' }, { key: 'age', value: '61' }, { key: 'father-birth-type', value: 'Mexican State' }, { key: 'father-birth-value', value: 'Michoacán' },
+  { key: 'hispanic', value: 'Yes' }, { key: 'hispanicSpecify', value: 'Mexican' }, { key: 'res-county', value: 'Riverside' }, { key: 'res-zip', value: '92240-1234' },
+]
+const scr3 = { fields: [
+  { key: 'age-type', model: 'm.agetype' }, { key: 'age', after: 'age-type', any: true, replaceZero: true },
+  { key: 'father-birth-type', model: 'm.bt' }, { key: 'father-birth-value', after: 'father-birth-type', fuzzy: true },
+  { key: 'hispanic', model: 'm.h' },
+  { key: 'hispanicSpecify', checks: { Mexican: 'Mexican:', Cuban: 'Cuban:', 'Puerto Rican': 'Puerto Rican:', Other: 'Other:' } },
+  { key: 'res-county', cap: '22. County:', fuzzy: true },
+  { key: 'res-zip', cap: '23. Zip Code:', part: 'zip5' }, { key: 'res-zip', cap: '23. Zip Code:', next: true, part: 'zip4' },
+] }
+core.fillScreen(x, scr3, rows3)
+ok(x.getElementById('ageN').value === '61', 'age: the 0 that EDRS puts in is replaced by the real age')
+ok(x.getElementById('bv').selectedOptions[0].text === 'MICHOACAN DE OCAMPO', 'Mexican state with accent matches the EDRS spelling (second list)')
+ok(x.getElementById('mx').checked && !x.getElementById('cu').checked && !x.getElementById('ot').checked, 'Hispanic origin: Mexican ticked, others left')
+ok(x.getElementById('co').value === 'RIVERSIDE', 'county picked')
+ok(x.getElementById('z5').value === '92240' && x.getElementById('z4').value === '1234', 'zip split into the two boxes')
+const rows4 = [{ key: 'hispanicSpecify', value: 'Other — Salvadoran' }, { key: 'father-birth-type', value: 'Mexican State' }, { key: 'father-birth-value', value: 'Ciudad de Mexico' }]
+core.fillScreen(x, { fields: [scr3.fields[2], { key: 'father-birth-value', after: 'father-birth-type', fuzzy: true, }, scr3.fields[5]] }, rows4)
+ok(x.getElementById('ot').checked && x.getElementById('ottxt').value === 'Salvadoran', 'Other origin ticks Other and types the origin')
 const mp = {}; globalThis.self = mp; ;(0, eval)(rd('mapping.js'))
 ok(Math.max(...mp.CASILLAS_EDRS_MAPPING.screens.map((s) => s.fields.length)) > 30 && mp.CASILLAS_EDRS_MAPPING.screens.some((s) => s.match.urlIncludes === '#!/dc/new/'), 'EDRS mapping loaded')
 console.log(fail ? `\n${fail} FAILED` : '\nall extension checks passed'); process.exit(fail ? 1 : 0)

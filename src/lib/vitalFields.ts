@@ -56,15 +56,23 @@ export function formatDate(iso: string | undefined): string {
   return `${m}/${d}/${y}`
 }
 
+/** Age at death in the unit EDRS wants: years, or months for under a year, or days for under a month. Works on the date text (no time zones). */
+export function computeAgeParts(c: FuneralCase): { unit: 'Years' | 'Months' | 'Days'; value: string } | null {
+  const p = (s?: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s ?? ''); return m ? { y: +m[1], m: +m[2], d: +m[3], t: Date.UTC(+m[1], +m[2] - 1, +m[3]) } : null }
+  const b = p(c.decedent.dateOfBirth), d = p(c.decedent.dateOfDeath)
+  if (!b || !d || d.t < b.t) return null
+  let years = d.y - b.y
+  if (d.m < b.m || (d.m === b.m && d.d < b.d)) years--
+  if (years >= 1) return { unit: 'Years', value: String(years) }
+  let months = (d.y - b.y) * 12 + (d.m - b.m)
+  if (d.d < b.d) months--
+  if (months >= 1) return { unit: 'Months', value: String(months) }
+  return { unit: 'Days', value: String(Math.round((d.t - b.t) / 86400000)) }
+}
+
 export function computeAge(c: FuneralCase): string {
-  const { dateOfBirth, dateOfDeath } = c.decedent
-  if (!dateOfBirth || !dateOfDeath) return ''
-  const dob = new Date(dateOfBirth)
-  const dod = new Date(dateOfDeath)
-  let years = dod.getFullYear() - dob.getFullYear()
-  const m = dod.getMonth() - dob.getMonth()
-  if (m < 0 || (m === 0 && dod.getDate() < dob.getDate())) years--
-  return years >= 0 ? String(years) : ''
+  const a = computeAgeParts(c)
+  return a && a.unit === 'Years' ? a.value : a ? '0' : ''
 }
 
 const yesNo = (v: boolean | undefined) => (v ? 'Yes' : 'No')

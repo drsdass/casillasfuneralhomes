@@ -39,7 +39,9 @@ self.CASILLAS_EDRS_MAPPING = {
       match: { urlIncludes: '#!/dc/cert/' },
       fields: [
         M("dob", "personalInfo.birthDate"),
-        M("age", "personalInfo.age.type", {"literal": "Years"}),
+        M("age-type", "personalInfo.age.type"),
+        // The age number appears beside the unit; EDRS puts a 0 in it by itself, which is replaced.
+        { key: "age", after: "age-type", any: true, replaceZero: true },
         M("sex", "personalMedicalInfo.gender"),
         M("dod", "personalMedicalInfo.deathDateTime.date"),
         M("timeOfDeath", "personalMedicalInfo.deathDateTime.hour"),
@@ -49,6 +51,8 @@ self.CASILLAS_EDRS_MAPPING = {
         M("maritalStatus", "personalInfo.maritalStatusId"),
         M("education", "personalInfo.educationId"),
         M("hispanic", "personalInfo.hispanic"),
+        // 14/15: the origin tick boxes appear once the answer is Yes.
+        { key: "hispanicSpecify", checks: { Mexican: "Mexican:", Cuban: "Cuban:", "Puerto Rican": "Puerto Rican:", Other: "Other:" } },
         M("race", "personalInfo.race1CombinedCode"),
         M("occupation", "personalInfo.occupation"),
         M("kindOfBusiness", "personalInfo.industryKind"),
@@ -58,7 +62,11 @@ self.CASILLAS_EDRS_MAPPING = {
         M("res-name", "personalInfo.decedentAddress.streetName"),
         M("res-unit", "personalInfo.decedentAddress.aptSte"),
         M("res-city", "personalInfo.decedentAddress.city"),
-        M("res-zip", "personalInfo.decedentAddress.zip9"),
+        // State first (it fills the county list), then county, then the two zip boxes (5 digits, dash, 4 digits).
+        { key: "res-state-value", cap: "25. State/Foreign Country (Address Type):", fuzzy: true },
+        { key: "res-county", cap: "22. County:", fuzzy: true },
+        { key: "res-zip", cap: "23. Zip Code:", part: "zip5" },
+        { key: "res-zip", cap: "23. Zip Code:", next: true, part: "zip4" },
         M("res-years", "personalInfo.yearsInCounty"),
         {"key": "aka-first", "cap": "First Name:", "section": "AKA"},
         {"key": "aka-middle", "cap": "Middle Name:", "section": "AKA"},
@@ -87,16 +95,15 @@ self.CASILLAS_EDRS_MAPPING = {
         { key: 'fatherLast', cap: '33. Last (Birth) Name:', unkIfEmpty: 'UNK' },
         M("father-birth-type", "personalInfo.fatherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
         // The state / country list appears once the type above is chosen (the fill runs several passes, so it is picked right after).
-        M("father-birth-value", "personalInfo.fatherBirthPlace.placeOther"),
+        { key: "father-birth-value", after: "father-birth-type", fuzzy: true },
         M("mother-rel", "personalInfo.parent2Kind", { literal: "Mother", always: true }),
         { key: 'motherFirst', cap: '35. First Name:', unkIfEmpty: 'UNK' },
         { key: 'motherMiddle', cap: '36. Middle Name:' },
         { key: 'motherLast', cap: '37. Last (Birth) Name:', unkIfEmpty: 'UNK' },
         M("mother-birth-type", "personalInfo.motherBirthPlace.kind", { unkIfEmpty: 'Unknown' }),
-        M("mother-birth-value", "personalInfo.motherBirthPlace.placeOther"),
+        { key: "mother-birth-value", after: "mother-birth-type", fuzzy: true },
         // Address "types" and the pieces of the place-of-death address (from the real certificate capture).
-        M("age", "personalInfo.age.years"),
-        M("birth-value", "personalInfo.decedentBirthPlace.placeOther"),
+        { key: "birth-value", after: "birth-type", fuzzy: true },
         M("res-kindAlt", "personalInfo.decedentAddress.kindAlt"),
         M("inf-type", "personalInfo.informantMailingAddress.kind"),
         M("disp-type", "funeralDirectorInfo.dispositionPlaceAddress.kind"),

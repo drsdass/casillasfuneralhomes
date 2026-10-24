@@ -1,7 +1,7 @@
 import { MEXICAN_STATES, CANADIAN_PROVINCES, matchPlace } from './places'
 import type { FuneralCase } from '@/types'
 import { withFirstCallDefaults } from './firstCallPlace'
-import { VITAL_FIELDS, resolveName, splitName, computeAge, type VitalContext, type VitalSection } from './vitalFields'
+import { VITAL_FIELDS, resolveName, splitName, computeAge, computeAgeParts, type VitalContext, type VitalSection } from './vitalFields'
 
 /**
  * Turns a case into what California's EDRS actually wants typed or selected.
@@ -328,10 +328,13 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         break
       }
       case 'aka': {
-        const a = splitName(vs.alsoKnownAs)
+        // No AKA typed: a two-surname name (PERALTA GARCIA) is usually also known by the first name and first surname.
+        const surnames = splitSuffix(c.decedent.lastName, vs.decedentSuffix).rest.trim().split(/\s+/).filter(Boolean)
+        const guess = !vs.alsoKnownAs?.trim() && surnames.length >= 2 && !/^unknown$/i.test(c.decedent.firstName) ? `${c.decedent.firstName.trim().split(/\s+/)[0]} ${surnames[0]}` : ''
+        const a = splitName(vs.alsoKnownAs || guess)
         for (const [part, label] of [['first', 'AKA FIRST NAME'], ['middle', 'AKA MIDDLE NAME'], ['last', 'AKA LAST NAME']] as const) {
           const r = edrsName(a[part])
-          add(`aka-${part}`, '', label, 'decedent', r.value, [r.note, part === 'first' && vs.alsoKnownAs ? note('info', 'Only one AKA fits on the certificate; more need an amendment later') : undefined], { hideWhenEmpty: true })
+          add(`aka-${part}`, '', label, 'decedent', r.value, [r.note, part === 'first' && vs.alsoKnownAs ? note('info', 'Only one AKA fits on the certificate; more need an amendment later') : undefined, part === 'first' && guess ? note('warn', `Filled in as "${guess}" (first name + first surname). Delete it in EDRS, or type the real AKA in the Vital Sheet, if that is wrong`) : undefined], { hideWhenEmpty: true })
         }
         break
       }
@@ -339,7 +342,11 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         add('dob', '4', 'DATE OF BIRTH', 'decedent', plain, plain ? [] : [note('error', 'Required — use -- for an unknown day or month, UNK if nothing is known')])
         break
       case 'age':
-        add('age', '5', 'AGE', 'decedent', computeAge(c), [note('info', 'EDRS works this out from items 4 and 7 — only type it if the age is under a day or the birth date is partial')])
+      {
+        const ap = computeAgeParts(c)
+        add('age-type', '5', 'AGE UNIT', 'decedent', ap?.unit ?? '', [], { hint: 'years / months / days', hideWhenEmpty: true })
+        add('age', '5', 'AGE', 'decedent', ap?.value ?? computeAge(c), ap ? [] : [note('info', 'Needs the birth date and the date of death to work out the age')])
+      }
         break
       case 'ageHours':
       case 'ageDays':

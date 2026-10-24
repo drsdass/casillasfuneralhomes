@@ -1,6 +1,8 @@
 // Pure DOM helpers (no chrome.* APIs) so they can be tested in jsdom.
 ;(function (root) {
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  // Spellings EDRS may use for the same Mexican state / city.
+  const ALIASES = [['ciudad de mexico', 'distrito federal', 'mexico city', 'cdmx', 'df'], ['estado de mexico', 'mexico state', 'edomex'], ['michoacan', 'michoacan de ocampo'], ['veracruz', 'veracruz de ignacio de la llave'], ['coahuila', 'coahuila de zaragoza'], ['nuevo leon', 'nuevo leon']]
 
   function setNative(el, value) {
     const w = el.ownerDocument.defaultView
@@ -13,20 +15,40 @@
   }
 
   // status: filled | skipped-has-value | skipped-empty | skipped-locked | missing | no-option
-  function fillElement(el, value) {
+  // Picks the option for a wanted text: exact first; with `fuzzy`, then "starts with", then "contains" (only when one option fits).
+  function pickOption(el, value, fuzzy) {
+    const opts = Array.from(el.options).filter((o) => o.value !== '' && norm(o.text) !== '' && !/^-+$/.test(o.text.trim()))
+    const want = norm(value)
+    const wants = [want]
+    for (const g of ALIASES) if (g.includes(want)) wants.push(...g)
+    for (const w of wants) { const o = opts.find((x) => norm(x.text) === w || norm(x.value) === w); if (o) return o }
+    if (!fuzzy) return null
+    for (const w of wants) {
+      const starts = opts.filter((x) => w.length >= 3 && (norm(x.text).startsWith(w + ' ') || (norm(x.text).length >= 3 && w.startsWith(norm(x.text) + ' '))))
+      if (starts.length === 1) return starts[0]
+    }
+    for (const w of wants) {
+      const has = opts.filter((x) => w.length >= 4 && (' ' + norm(x.text) + ' ').includes(' ' + w + ' '))
+      if (has.length === 1) return has[0]
+    }
+    return null
+  }
+
+  function fillElement(el, value, o) {
+    o = o || {}
     if (!el) return 'missing'
     if (value === '' || value == null) return 'skipped-empty'
     if (el.disabled || el.readOnly) return 'skipped-locked'
     if (el instanceof el.ownerDocument.defaultView.HTMLSelectElement) {
       if (el.value && el.selectedIndex > 0) return 'skipped-has-value'
-      const want = norm(value)
-      const opt = Array.from(el.options).find((o) => norm(o.text) === want || norm(o.value) === want)
+      const opt = pickOption(el, value, o.fuzzy)
       if (!opt) return 'no-option'
       setNative(el, opt.value)
       return 'filled'
     }
     if (el.type === 'checkbox' || el.type === 'radio' || el.type === 'file' || el.type === 'submit' || el.type === 'button') return 'skipped-locked'
-    if (el.value && el.value.trim() !== '') return 'skipped-has-value'   // never overwrite typed data
+    // never overwrite typed data (EDRS itself puts a 0 in the age box once the unit is chosen - that one is replaced)
+    if (el.value && el.value.trim() !== '' && !(o.replaceZero && /^0+$/.test(el.value.trim()))) return 'skipped-has-value'
     setNative(el, String(value))
     return 'filled'
   }
@@ -81,19 +103,79 @@
     return null
   }
 
+  // The next visible box after `base` in page order (the list that appears beside a "type" box, the second zip box, ...).
+  function nextField(doc, base, onlySelect) {
+    if (!base) return null
+    const all = Array.from(doc.querySelectorAll('input, select, textarea')).filter((el) => isVisible(doc, el) && el.type !== 'hidden')
+    const i = all.indexOf(base)
+    if (i < 0) return null
+    for (let j = i + 1; j < all.length; j++) {
+      if (onlySelect && all[j].tagName !== 'SELECT') continue
+      if (all[j].type === 'checkbox' || all[j].type === 'radio') continue
+      return all[j]
+    }
+    return null
+  }
+
+  // A tick box found by the caption printed beside it ("Mexican:"), or by a <label>.
+  function resolveCheck(doc, text) {
+    const want = norm(text)
+    const boxes = Array.from(doc.querySelectorAll('input[type=checkbox]')).filter((el) => isVisible(doc, el))
+    const direct = boxes.find((el) => norm(captionOf(el)) === want)
+    if (direct) return direct
+    for (const l of Array.from(doc.querySelectorAll('label'))) {
+      if (norm(l.textContent) !== want) continue
+      const c = l.control || (l.htmlFor && doc.getElementById(l.htmlFor)) || l.querySelector('input[type=checkbox]')
+      if (c && c.type === 'checkbox') return c
+    }
+    return null
+  }
+
+  function tick(el) {
+    if (el.disabled) return 'skipped-locked'
+    if (el.checked) return 'skipped-has-value'
+    const w = el.ownerDocument.defaultView
+    el.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }))   // lets the page's own scripts see the tick
+    if (!el.checked) { el.checked = true; el.dispatchEvent(new w.Event('change', { bubbles: true })) }
+    return 'filled'
+  }
+
   function fillScreen(doc, screen, rows) {
     const byKey = new Map(rows.map((r) => [r.key, r]))
+    const found = new Map()   // key -> the box found for it (so a later field can say "the box after that one")
     const results = []
     for (const f of screen.fields || []) {
       const row = byKey.get(f.key)
-      const el = resolve(doc, f)
+      // A group of tick boxes (Hispanic origin): the row says which ("Mexican, Cuban" or "Other — text").
+      if (f.checks) {
+        const raw = row ? String(row.value || '') : ''
+        const other = /^other\s*[—-]\s*(.*)$/i.exec(raw)
+        const wanted = other ? ['Other'] : raw.split(',').map((x) => x.trim()).filter(Boolean)
+        let status = wanted.length ? 'skipped-empty' : 'skipped-empty'
+        for (const name of wanted) {
+          const box = resolveCheck(doc, f.checks[name] || name + ':')
+          if (!box) { status = 'missing'; continue }
+          const st = tick(box)
+          if (name === 'Other' && other) { const t = nextField(doc, box); if (t && t.type !== 'checkbox') fillElement(t, other[1].trim() || 'UNKNOWN') }
+          if (status !== 'missing') status = st
+        }
+        results.push({ key: f.key, number: row?.number || '', label: row?.label || f.key, status })
+        continue
+      }
+      let el
+      if (f.after) el = nextField(doc, found.get(f.after), !f.any)
+      else if (f.next) { const base = resolve(doc, { cap: f.cap, section: f.section, nth: f.nth }); el = nextField(doc, base, false) }
+      else el = resolve(doc, f)
+      if (el) found.set(f.key, el)
       // literal: a fixed choice made only when the case has a value for this row (e.g. age type "Years")
       // always: a fixed choice made even with no matching row (e.g. parent relationship Father/Mother).
       // unkIfEmpty: the person said unknown parts are entered as UNK, so an empty row becomes that text.
       let value = row && row.value !== '' ? (f.literal !== undefined ? f.literal : row.value) : ''
       if (!value && f.always && f.literal !== undefined) value = f.literal
       if (!value && row && f.unkIfEmpty) value = f.unkIfEmpty
-      const status = row || f.always ? fillElement(el, value) : 'skipped-empty'
+      // part: a zip row "92240-1234" goes in two boxes
+      if (value && f.part) { const m = /^\s*(\d{5})(?:\D*(\d{4}))?/.exec(String(value)); value = m ? (f.part === 'zip5' ? m[1] : m[2] || '') : (f.part === 'zip5' ? value : '') }
+      const status = row || f.always ? fillElement(el, value, { fuzzy: !!f.fuzzy, replaceZero: !!f.replaceZero }) : 'skipped-empty'
       results.push({ key: f.key, number: row?.number || '', label: row?.label || f.key, status })
     }
     return results
