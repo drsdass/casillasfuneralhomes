@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
-import { canViewAllLocations, canEditCases, canAssignStaff } from '@/lib/permissions'
+import { canEditCases, canAssignStaff } from '@/lib/permissions'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { format, parseISO } from 'date-fns'
 import { Plus, Car, X, GripVertical, AlertTriangle, ChevronLeft, ChevronRight, List, CalendarDays } from 'lucide-react'
@@ -79,7 +79,7 @@ export default function CalendarPage() {
   const { activeLocationId, currentUser } = useSession()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  const isAllLocations = !!currentUser // every location of the company is shown to everyone
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
   const canDragAssign = currentUser ? canAssignStaff(currentUser.role) : false
 
