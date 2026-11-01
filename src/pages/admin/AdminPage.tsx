@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
+import { TvScreensPanel } from '@/components/admin/TvScreensPanel'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES } from '@/lib/permissions'
 import { ROLE_LABELS, type UserRole, type VendorCategory, type CaseTask } from '@/types'
@@ -26,7 +27,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient()
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [accessPanelId, setAccessPanelId] = useState<string | null>(null)
-  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'audit'>('staff')
+  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'screens' | 'audit'>('staff')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const canAssign = currentUser ? canAssignRoles(currentUser.role) : false
   const canManage = currentUser ? canManageAccess(currentUser.role) : false
@@ -159,6 +160,14 @@ export default function AdminPage() {
         >
           Task Templates
         </button>
+        {canManage && (
+          <button
+            onClick={() => setSubTab('screens')}
+            className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${subTab === 'screens' ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            TV Screens
+          </button>
+        )}
         {canViewAudit && (
           <button
             onClick={() => setSubTab('audit')}
@@ -168,6 +177,8 @@ export default function AdminPage() {
           </button>
         )}
       </div>
+
+      {subTab === 'screens' && canManage && <TvScreensPanel />}
 
       {subTab === 'staff' && (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">

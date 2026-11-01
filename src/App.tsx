@@ -32,6 +32,7 @@ import InvoicesPage from '@/pages/financials/InvoicesPage'
 import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
+import TvScreenPage from '@/pages/board/TvScreenPage'
 import ServiceRoom from '@/pages/service/ServiceRoom'
 import WatchPage from '@/pages/service/WatchPage'
 import RemotePage from '@/pages/service/RemotePage'
@@ -72,6 +73,7 @@ export default function App() {
 
             <Route path="/watch/:token" element={<WatchPage />} />
             <Route path="/remote/:token" element={<RemotePage />} />
+            <Route path="/tv/:token" element={<TvScreenPage />} />
 
             {/* Staff-facing app, behind auth */}
             <Route element={<RequireAuth />}>

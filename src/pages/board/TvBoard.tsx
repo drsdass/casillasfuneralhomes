@@ -2,21 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useSession } from '@/context/SessionContext'
-import { api } from '@/lib/api'
-import { canViewAllLocations } from '@/lib/permissions'
+import { loadBoardData, type BoardData, type BoardRowData, type OrderState } from '@/lib/tvBoard'
 import { format, parseISO } from 'date-fns'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
-import type { FuneralCase, CalendarEvent, Contract, StaffMember } from '@/types'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
-import { isCaseDone, isPreNeed } from '@/lib/caseDone'
+import { shortLocationName } from '@/lib/company'
 
 /**
  * Keeps everything on one screen: no scrolling down or sideways, however many cases or notes there are.
  * It shrinks the whole board just enough to fit (and lets text re-wrap wider as it shrinks), and re-checks
  * whenever something on the board changes, the TV is resized, or the list loads.
  */
-function FitToScreen({ children }: { children: ReactNode }) {
+export function FitToScreen({ children }: { children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
@@ -53,53 +51,43 @@ function FitToScreen({ children }: { children: ReactNode }) {
   )
 }
 
-export default function TvBoard() {
-  const { activeLocationId, currentUser } = useSession()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
-  const [now, setNow] = useState(new Date())
+const LOC_COLORS = ['#34d399', '#fbbf24', '#38bdf8', '#c084fc', '#fb7185']
+export const boardLocColors = (locations: { id: string; name: string }[]) => {
+  const sorted = [...locations].sort((a, b) => a.name.localeCompare(b.name))
+  return new Map(sorted.map((l, i) => [l.id, LOC_COLORS[i % LOC_COLORS.length]]))
+}
 
+/** The board itself. Used by the logged-in /board page and by a wall monitor's private /tv/<link> page. */
+export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }) {
+  const [now, setNow] = useState(new Date())
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
     return () => clearInterval(t)
   }, [])
-
-  // Auto-refresh every 20s so a TV/monitor stays current without anyone touching it.
-  const { data: cases = [] } = useQuery({
-    queryKey: ['cases', isAllLocations ? 'all' : activeLocationId],
-    queryFn: () => api.getCases(isAllLocations ? undefined : activeLocationId),
-    refetchInterval: 20_000,
-  })
-  const { data: events = [] } = useQuery({
-    queryKey: ['events', isAllLocations ? 'all' : activeLocationId],
-    queryFn: () => api.getCalendarEvents(isAllLocations ? undefined : activeLocationId),
-    refetchInterval: 20_000,
-  })
-  const { data: contracts = [] } = useQuery({
-    queryKey: ['contracts'],
-    queryFn: api.getContracts,
-    refetchInterval: 20_000,
-  })
-  const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff, refetchInterval: 20_000 })
-
-  if (!currentUser) return null
-
-  const activeCases = cases
-    // Done is done: either marked completed, or moved to the Completed column on Chain of Custody.
-    .filter((c) => !isCaseDone(c) && !isPreNeed(c))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const colors = boardLocColors(data.locations)
+  const locName = (id: string) => shortLocationName(data.locations.find((l) => l.id === id)?.name ?? '')
+  const used = data.locations.filter((l) => data.rows.some((r) => r.locationId === l.id))
+  const here = data.screen?.locationId ? shortLocationName(data.locations.find((l) => l.id === data.screen!.locationId)?.name ?? '') : ''
 
   return (
     <div className="h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
-      <div className="no-print flex items-center justify-between px-6 py-3 bg-black/20">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white">
-          <ArrowLeft size={15} /> Back
-        </Link>
+      <div className="no-print flex items-center justify-between px-6 py-3 bg-black/20 gap-4">
+        {backTo ? (
+          <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white"><ArrowLeft size={15} /> Back</Link>
+        ) : <div className="text-sm text-slate-300 w-24">{here}</div>}
         <div className="flex items-center gap-3">
           <BrandLogo on="dark" className="h-8 w-auto" />
           <span className="font-display text-lg font-semibold tracking-wide">{getCompanyName()}</span>
         </div>
-        <div className="text-sm text-slate-300 tabular-nums">
-          {format(now, 'EEEE, MMMM d')} · {format(now, 'HH:mm')}
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3 text-sm">
+            {used.map((l) => (
+              <span key={l.id} className="inline-flex items-center gap-1.5 text-slate-200">
+                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.get(l.id) }} />{shortLocationName(l.name)}
+              </span>
+            ))}
+          </div>
+          <div className="text-sm text-slate-300 tabular-nums">{format(now, 'EEEE, MMMM d')} · {format(now, 'HH:mm')}</div>
         </div>
       </div>
 
@@ -119,12 +107,12 @@ export default function TvBoard() {
             </tr>
           </thead>
           <tbody className="text-base">
-            {activeCases.map((c) => (
-              <BoardRow key={c.id} c={c} events={events} contracts={contracts} allStaff={allStaff} />
+            {data.rows.map((r) => (
+              <BoardRow key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
           </tbody>
         </table>
-        {activeCases.length === 0 && (
+        {data.rows.length === 0 && (
           <div className="text-center text-slate-400 py-20">No active cases right now.</div>
         )}
       </FitToScreen>
@@ -132,72 +120,55 @@ export default function TvBoard() {
   )
 }
 
-function OrderCell({ status }: { status: 'confirmed' | 'ordered' | 'pending' | null }) {
+/** The logged-in /board page. Refreshes by itself every 20 seconds. */
+export default function TvBoard() {
+  const { currentUser } = useSession()
+  const { data } = useQuery({ queryKey: ['board-data'], queryFn: loadBoardData, refetchInterval: 20_000 })
+  if (!currentUser || !data) return null
+  return <BoardView data={data} backTo="/" />
+}
+
+function OrderCell({ status }: { status: OrderState }) {
   if (status === 'confirmed') return <Check size={16} className="text-emerald-400" />
   if (status === 'ordered') return <Clock size={16} className="text-amber-400" />
   if (status === 'pending') return <span className="text-slate-400 text-xs">pending</span>
   return <span className="text-slate-500">—</span>
 }
 
-function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: CalendarEvent[]; contracts: Contract[]; allStaff: StaffMember[] }) {
-  const { data: orders = [] } = useQuery({
-    queryKey: ['case-orders', c.id],
-    queryFn: () => api.getOrders(c.id),
-    refetchInterval: 20_000,
-  })
-  const { data: notes = [] } = useQuery({
-    queryKey: ['case-notes', c.id],
-    queryFn: () => api.getCaseNotes(c.id),
-    refetchInterval: 20_000,
-  })
-
-  const visitation = events.find((e) => e.caseId === c.id && e.type === 'visitation')
-  const service = events.find((e) => e.caseId === c.id && e.type === 'service')
-  const contract = contracts.find((ct) => ct.caseId === c.id)
-  const casketLine = contract?.lineItems.find((li) => /casket/i.test(li.name))
-
-  const flowers = orders.find((o) => /flower/i.test(o.item))?.status ?? null
-  const birds = orders.find((o) => /dove|bird/i.test(o.item))?.status ?? null
-  const escort = orders.find((o) => /escort|carriage/i.test(o.item))?.status ?? null
-
-  // Kept separate per event on purpose — the visitation team and service
-  // team are often genuinely different people, and staff glancing at the
-  // board want to know who's on which, not a merged list.
-  const visitationStaff = (visitation?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
-  const serviceStaff = (service?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
-
-  const specialNotes = notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-
+function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
+  const { visitation, service } = r
+  const specialNotes = r.specials
   return (
-    <tr className="border-b border-white/10 hover:bg-white/5 [&>td]:!py-1.5">
-      <td className="py-3 px-3 font-semibold whitespace-nowrap">
-        <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: c.color }} />
-        {c.decedent.lastName}, {c.decedent.firstName}
+    <tr className="border-b border-white/10 hover:bg-white/5 [&>td]:!py-1.5" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
+      <td className="py-3 px-3 pl-5 font-semibold whitespace-nowrap">
+        <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
+        {r.lastName}, {r.firstName}
+        <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
       </td>
       <td className="py-3 px-3 text-slate-200">
         {visitation ? (
           <>
             <div>{format(parseISO(visitation.start), 'M/d')} {format(parseISO(visitation.start), 'HH:mm')}–{format(parseISO(visitation.end), 'HH:mm')}</div>
-            {visitationStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{visitationStaff.join(', ')}</div>}
+            {visitation.staff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{visitation.staff.join(', ')}</div>}
           </>
         ) : '—'}
       </td>
       <td className="py-3 px-3 text-slate-200">
-        {c.serviceDate || service ? (
+        {r.serviceDate || service ? (
           <>
-            <div>{c.serviceDate ? format(parseISO(c.serviceDate), 'M/d HH:mm') : format(parseISO(service!.start), 'M/d HH:mm')}</div>
-            {serviceStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{serviceStaff.join(', ')}</div>}
+            <div>{r.serviceDate ? format(parseISO(r.serviceDate), 'M/d HH:mm') : format(parseISO(service!.start), 'M/d HH:mm')}</div>
+            {service && service.staff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{service.staff.join(', ')}</div>}
           </>
         ) : '—'}
       </td>
-      <td className="py-3 px-3 text-slate-200 capitalize">{c.disposition.replace('_', ' ')}</td>
-      <td className="py-3 px-3"><OrderCell status={flowers as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3"><OrderCell status={birds as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3"><OrderCell status={escort as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3 text-slate-200">{casketLine?.name.replace(/^Adult Casket\s*—\s*/i, '') ?? '—'}</td>
+      <td className="py-3 px-3 text-slate-200 capitalize">{r.disposition.replace('_', ' ')}</td>
+      <td className="py-3 px-3"><OrderCell status={r.flowers} /></td>
+      <td className="py-3 px-3"><OrderCell status={r.birds} /></td>
+      <td className="py-3 px-3"><OrderCell status={r.escort} /></td>
+      <td className="py-3 px-3 text-slate-200">{r.casket?.replace(/^Adult Casket\s*—\s*/i, '') ?? '—'}</td>
       <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
         {specialNotes.length > 0
-          ? <ul className="space-y-1">{specialNotes.map((n) => <li key={n.id} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n.body}</li>)}</ul>
+          ? <ul className="space-y-1">{specialNotes.map((n, i) => <li key={i} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n}</li>)}</ul>
           : <span className="text-slate-500">—</span>}
       </td>
     </tr>
