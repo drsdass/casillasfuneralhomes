@@ -1,9 +1,10 @@
+import { deriveServicePatch } from '@/lib/vitalToCase'
 import { PlacePicker } from '../../components/ui/PlacePicker'
 import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
 import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
@@ -174,10 +175,13 @@ export default function VitalSheetIntake() {
     }
   }
 
+  const queryClient = useQueryClient()
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!c) return
+      const fromSheet = deriveServicePatch(c, f).patch // puts the service times on the Calendar and TV Board
       await api.updateCase(caseId!, {
+        ...fromSheet,
         vitalSheet: f,
         decedent: {
           ...c.decedent,
@@ -195,6 +199,7 @@ export default function VitalSheetIntake() {
       }, currentUser!)
       if (ssnDirty && ssn.trim()) await api.setDecedentSsn(caseId!, ssn, currentUser!)
     },
+    onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
   })
 
   const linkMutation = useMutation({
@@ -541,10 +546,14 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className={labelClass}>Visitation — Hours (24-hour)</label>
-                <input {...text('visitationHours')} placeholder="14:00–16:00" />
+                <label className={labelClass}>Visitation — Date</label>
+                <input type="date" value={f.visitationDate ?? (c.visitationDate ? c.visitationDate.slice(0, 10) : '')} onChange={(e) => set('visitationDate', e.target.value)} className={inputClass} />
               </div>
-              <div className="col-span-2 text-xs text-slate-400 self-end pb-2">Visitation and service dates and places are set under Edit on the case, so they stay in sync with the Calendar.</div>
+              <div>
+                <label className={labelClass}>Visitation — Hours and place</label>
+                <input {...text('visitationHours')} placeholder="12:00 PM–5:00 PM · DHS" />
+              </div>
+              <div className="text-xs text-slate-400 self-end pb-2">When you save, the visitation (date, hours, place) and the Mass or Graveside date and time are put on the Calendar and the TV Board automatically.</div>
             </div>
             <div className="grid grid-cols-5 gap-2 items-end">
               <div><label className={labelClass}>Rosary — Date</label><input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} /></div>

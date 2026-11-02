@@ -207,6 +207,7 @@ export interface VitalSheetInfo {
   obituary?: boolean
   pacemaker?: boolean
   visitationHours?: string
+  visitationDate?: string // yyyy-mm-dd — with the hours, this puts the visitation on the Calendar and TV Board
   rosaryDate?: string
   rosaryTime?: string
   rosaryLanguage?: 'english' | 'spanish'

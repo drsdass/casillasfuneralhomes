@@ -139,7 +139,9 @@ function OrderCell({ status }: { status: OrderState }) {
 }
 
 function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
-  const { visitation, service } = r
+  const { service } = r
+  // The calendar event when there is one; otherwise the visitation saved on the case itself.
+  const visitation = r.visitation ?? (r.visitationDate ? { start: r.visitationDate, end: r.visitationEnd ?? r.visitationDate, staff: [] as string[] } : undefined)
   const specialNotes = r.specials
   const serviceStart = r.serviceDate ?? service?.start
   return (
