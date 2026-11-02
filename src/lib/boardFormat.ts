@@ -22,7 +22,13 @@ export function casketType(name?: string | null): string | undefined {
   if (!name) return undefined
   const s = name.trim()
   const after = s.split(/\s[—–-]\s/).slice(1).join(' — ').trim()
-  const t = (after || s).replace(/\bcasket\b/gi, '').replace(/\s{2,}/g, ' ').replace(/^[\s—–-]+|[\s—–-]+$/g, '').trim()
+  // Price-list wording like "Casket or other Receptacle MONTGOMERY SELECT" -> "MONTGOMERY SELECT"
+  const t = (after || s)
+    .replace(/\b(or|and|,)?\s*(other|alternative|alternate)\s+(container|receptacle)s?\b/gi, ' ')
+    .replace(/\bcaskets?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s,;:—–-]+|[\s,;:—–-]+$/g, '')
+    .trim()
   return t || s
 }
 
