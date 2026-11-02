@@ -9,7 +9,7 @@ export interface BoardRowData {
   disposition: string; boardDisp?: string; serviceDate?: string
   visitation?: BoardEvent; service?: BoardEvent
   flowers: OrderState; birds: OrderState; escort: OrderState
-  casket?: string; specials: string[]
+  casket?: string; casketLines?: string[]; specials: string[]
 }
 export interface BoardData {
   screen?: { name: string; locationId?: string | null }
@@ -29,11 +29,11 @@ export async function loadBoardData(): Promise<BoardData> {
       return e ? { start: e.start, end: e.end, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] } : undefined
     }
     const st = (re: RegExp) => (orders.find((o) => re.test(o.item))?.status ?? null) as OrderState
-    const casket = contracts.find((k) => k.caseId === c.id)?.lineItems.find((li) => /casket/i.test(li.name))?.name
+    const casketLines = contracts.filter((k) => k.caseId === c.id).flatMap((k) => k.lineItems.map((li) => li.name))
     return {
       id: c.id, locationId: c.locationId, caseNumber: c.caseNumber, firstName: c.decedent.firstName, lastName: c.decedent.lastName, color: c.color,
       disposition: c.disposition, boardDisp: c.boardDisp, serviceDate: c.serviceDate, visitation: ev('visitation'), service: ev('service'),
-      flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casket,
+      flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casketLines,
       specials: notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((n) => n.body),
     }
   }))

@@ -4,7 +4,7 @@ import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 're
 import { useSession } from '@/context/SessionContext'
 import { loadBoardData, type BoardData, type BoardRowData, type OrderState } from '@/lib/tvBoard'
 import { format } from 'date-fns'
-import { boardDay, boardRange, boardClock, casketType } from '@/lib/boardFormat'
+import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -161,7 +161,7 @@ function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: stri
       <td className="py-3 px-3"><OrderCell status={r.flowers} /></td>
       <td className="py-3 px-3"><OrderCell status={r.birds} /></td>
       <td className="py-3 px-3"><OrderCell status={r.escort} /></td>
-      <td className="py-3 px-3 text-slate-200">{casketType(r.casket) ?? '—'}</td>
+      <td className="py-3 px-3 text-slate-200">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
       <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
         {specialNotes.length > 0
           ? <ul className="space-y-1">{specialNotes.map((n, i) => <li key={i} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n}</li>)}</ul>

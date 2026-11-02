@@ -25,3 +25,16 @@ export function casketType(name?: string | null): string | undefined {
   const t = (after || s).replace(/\bcasket\b/gi, '').replace(/\s{2,}/g, ' ').replace(/^[\s—–-]+|[\s—–-]+$/g, '').trim()
   return t || s
 }
+
+// Lines on a contract that mention "casket" but are services or packages, not the casket itself
+// (for example "Dressing, Cosmetics, Hair Styling and Casketing of Remains").
+const NOT_THE_CASKET = /dressing|cosmet|casketing|embalm|hair|viewing|visitation|shipping|outer burial|vault|urn\b|package|direct cremation|immediate|purchaser|transfer|service|equipment|staff/i
+
+/** Looks through every line of a case's contract and returns the type of casket (or "Cremation container"). */
+export function casketTypeFromLines(names: string[] | undefined): string | undefined {
+  const ok = (names ?? []).filter((n) => !NOT_THE_CASKET.test(n))
+  const casket = ok.find((n) => /casket/i.test(n))
+  if (casket) return casketType(casket)
+  if (ok.some((n) => /container|receptacle/i.test(n))) return 'Cremation container'
+  return undefined
+}

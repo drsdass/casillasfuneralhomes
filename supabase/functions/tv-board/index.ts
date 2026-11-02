@@ -57,14 +57,14 @@ Deno.serve(async (req) => {
       return o ? o.status : null
     }
     const rows = active.map((c: any) => {
-      const casket = (contracts ?? []).filter((k: any) => k.case_id === c.id).flatMap((k: any) => k.contract_line_items ?? []).find((li: any) => /casket/i.test(li.name))
+      const casketLines = (contracts ?? []).filter((k: any) => k.case_id === c.id).flatMap((k: any) => k.contract_line_items ?? []).map((li: any) => li.name)
       return {
         id: c.id, locationId: c.location_id, caseNumber: c.case_number,
         firstName: c.decedent_first_name, lastName: c.decedent_last_name, color: c.color ?? undefined,
         disposition: c.disposition, boardDisp: c.board_disp ?? undefined, serviceDate: c.service_date ?? undefined,
         visitation: evFor(c.id, 'visitation'), service: evFor(c.id, 'service'),
         flowers: status(c.id, /flower/i), birds: status(c.id, /dove|bird/i), escort: status(c.id, /escort|carriage/i),
-        casket: casket?.name, 
+        casketLines,
         specials: (notes ?? []).filter((n: any) => n.case_id === c.id).sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at))).map((n: any) => n.body),
       }
     })
