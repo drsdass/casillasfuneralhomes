@@ -1,0 +1,27 @@
+import { format, parseISO } from 'date-fns'
+
+/** "Mon 11/2" */
+export const boardDay = (iso: string) => format(parseISO(iso), 'EEE M/d')
+
+/** "2:00 PM" (normal time, never 14:00) */
+export const boardClock = (iso: string) => format(parseISO(iso), 'h:mm a')
+
+/** "2:00–3:00 PM" when both ends are PM (or AM); "11:00 AM–1:00 PM" when they straddle noon. */
+export function boardRange(startIso: string, endIso?: string): string {
+  if (!endIso || endIso === startIso) return boardClock(startIso)
+  const a = parseISO(startIso), b = parseISO(endIso)
+  const sameHalf = format(a, 'a') === format(b, 'a')
+  return sameHalf ? `${format(a, 'h:mm')}–${format(b, 'h:mm a')}` : `${format(a, 'h:mm a')}–${format(b, 'h:mm a')}`
+}
+
+/**
+ * The kind of casket, taken from the contract line ("Casket — Monarch Bronze" -> "Monarch Bronze",
+ * "Adult Casket — Economy" -> "Economy", "Rental Casket" -> "Rental").
+ */
+export function casketType(name?: string | null): string | undefined {
+  if (!name) return undefined
+  const s = name.trim()
+  const after = s.split(/\s[—–-]\s/).slice(1).join(' — ').trim()
+  const t = (after || s).replace(/\bcasket\b/gi, '').replace(/\s{2,}/g, ' ').replace(/^[\s—–-]+|[\s—–-]+$/g, '').trim()
+  return t || s
+}

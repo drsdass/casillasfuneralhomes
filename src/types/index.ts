@@ -348,6 +348,7 @@ export interface FuneralCase {
   visitationLocation?: string
   serviceDate?: string
   serviceLocation?: string
+  boardDisp?: string // DISP code shown on the TV Board (CVC, DMP, RNC, SHIP-OUT, ...)
   color?: string // whiteboard color coding
   custodyStage: CustodyStage
   /** Set when the family changes something in their portal; cleared when staff tap "Got it". */

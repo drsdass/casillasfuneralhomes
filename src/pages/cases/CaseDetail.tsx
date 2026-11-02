@@ -1,3 +1,4 @@
+import { BOARD_DISP_OPTIONS } from '@/lib/boardDisp'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
@@ -88,6 +89,10 @@ export default function CaseDetail() {
   const setDispositionMutation = useMutation({
     mutationFn: (disposition: import('@/types').DispositionType) => api.updateCase(caseId!, { disposition }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
+  })
+  const setBoardDispMutation = useMutation({
+    mutationFn: (boardDisp: string) => api.updateCase(caseId!, { boardDisp }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
   })
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
 
@@ -354,6 +359,15 @@ export default function CaseDetail() {
           <div className="text-sm text-slate-500 mt-1">
             {c.caseNumber} · {c.type.replace('_', '-')} · {c.disposition}
           </div>
+          {canEdit && (
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+              DISP (TV Board)
+              <select value={c.boardDisp ?? ''} onChange={(e) => setBoardDispMutation.mutate(e.target.value)} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                <option value="">— not set —</option>
+                {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+          )}
           <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">

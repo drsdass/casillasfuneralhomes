@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useSession } from '@/context/SessionContext'
 import { loadBoardData, type BoardData, type BoardRowData, type OrderState } from '@/lib/tvBoard'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { boardDay, boardRange, boardClock, casketType } from '@/lib/boardFormat'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -87,7 +88,7 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
               </span>
             ))}
           </div>
-          <div className="text-sm text-slate-300 tabular-nums">{format(now, 'EEEE, MMMM d')} · {format(now, 'HH:mm')}</div>
+          <div className="text-sm text-slate-300 tabular-nums">{format(now, 'EEEE, MMMM d')} · {format(now, 'h:mm a')}</div>
         </div>
       </div>
 
@@ -97,7 +98,9 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
             <tr className="text-sm uppercase tracking-wide text-[#d9c78f] border-b-2 border-[#4d5f45]">
               <th className="py-3 px-3">Name</th>
               <th className="py-3 px-3">Visitation</th>
+              <th className="py-3 px-3">Funeral Attendant</th>
               <th className="py-3 px-3">Service</th>
+              <th className="py-3 px-3">Funeral Attendant</th>
               <th className="py-3 px-3">Disp.</th>
               <th className="py-3 px-3">Flowers</th>
               <th className="py-3 px-3">Birds</th>
@@ -138,6 +141,7 @@ function OrderCell({ status }: { status: OrderState }) {
 function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
   const { visitation, service } = r
   const specialNotes = r.specials
+  const serviceStart = r.serviceDate ?? service?.start
   return (
     <tr className="border-b border-white/10 hover:bg-white/5 [&>td]:!py-1.5" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
       <td className="py-3 px-3 pl-5 font-semibold whitespace-nowrap">
@@ -145,27 +149,19 @@ function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: stri
         {r.lastName}, {r.firstName}
         <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
       </td>
-      <td className="py-3 px-3 text-slate-200">
-        {visitation ? (
-          <>
-            <div>{format(parseISO(visitation.start), 'M/d')} {format(parseISO(visitation.start), 'HH:mm')}–{format(parseISO(visitation.end), 'HH:mm')}</div>
-            {visitation.staff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{visitation.staff.join(', ')}</div>}
-          </>
-        ) : '—'}
+      <td className="py-3 px-3 text-slate-200 whitespace-nowrap">
+        {visitation ? <>{boardDay(visitation.start)} · {boardRange(visitation.start, visitation.end)}</> : '—'}
       </td>
-      <td className="py-3 px-3 text-slate-200">
-        {r.serviceDate || service ? (
-          <>
-            <div>{r.serviceDate ? format(parseISO(r.serviceDate), 'M/d HH:mm') : format(parseISO(service!.start), 'M/d HH:mm')}</div>
-            {service && service.staff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{service.staff.join(', ')}</div>}
-          </>
-        ) : '—'}
+      <td className="py-3 px-3 text-slate-200 text-sm">{visitation && visitation.staff.length > 0 ? visitation.staff.join(', ') : <span className="text-slate-500">—</span>}</td>
+      <td className="py-3 px-3 text-slate-200 whitespace-nowrap">
+        {serviceStart ? <>{boardDay(serviceStart)} · {boardClock(serviceStart)}</> : '—'}
       </td>
-      <td className="py-3 px-3 text-slate-200 capitalize">{r.disposition.replace('_', ' ')}</td>
+      <td className="py-3 px-3 text-slate-200 text-sm">{service && service.staff.length > 0 ? service.staff.join(', ') : <span className="text-slate-500">—</span>}</td>
+      <td className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
       <td className="py-3 px-3"><OrderCell status={r.flowers} /></td>
       <td className="py-3 px-3"><OrderCell status={r.birds} /></td>
       <td className="py-3 px-3"><OrderCell status={r.escort} /></td>
-      <td className="py-3 px-3 text-slate-200">{r.casket?.replace(/^Adult Casket\s*—\s*/i, '') ?? '—'}</td>
+      <td className="py-3 px-3 text-slate-200">{casketType(r.casket) ?? '—'}</td>
       <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
         {specialNotes.length > 0
           ? <ul className="space-y-1">{specialNotes.map((n, i) => <li key={i} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n}</li>)}</ul>

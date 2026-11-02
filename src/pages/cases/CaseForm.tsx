@@ -1,3 +1,4 @@
+import { BOARD_DISP_OPTIONS } from '@/lib/boardDisp'
 import { DateTime24, Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
@@ -85,6 +86,7 @@ export default function CaseForm() {
   const [type, setType] = useState<CaseType>(existing?.type ?? (preNeedStart ? 'pre_need' : extracted?.type) ?? 'at_need')
   const [status, setStatus] = useState<CaseStatus>(existing?.status ?? (preNeedStart ? 'arrangement_pending' : 'first_call'))
   const [disposition, setDisposition] = useState<DispositionType>(existing?.disposition ?? extracted?.disposition ?? 'undetermined')
+  const [boardDisp, setBoardDisp] = useState<string>(existing?.boardDisp ?? '')
   const [familyId, setFamilyId] = useState<string | undefined>(existing?.familyId)
   const [familySearch, setFamilySearch] = useState('')
   const [familySearchResults, setFamilySearchResults] = useState<Awaited<ReturnType<typeof api.searchFamilies>>>([])
@@ -123,6 +125,7 @@ export default function CaseForm() {
     setType(existing.type)
     setStatus(existing.status)
     setDisposition(existing.disposition)
+    setBoardDisp(existing.boardDisp ?? '')
     setVisitationDate(isoToLocalInput(existing.visitationDate))
     setVisitationLocation(existing.visitationLocation ?? '')
     setVisitationEndTime(isoToLocalInput(existing.visitationEnd).slice(11, 16))
@@ -149,7 +152,7 @@ export default function CaseForm() {
       if (isEdit && caseId) {
         return api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
-          type, status, disposition, locationId: locId,
+          type, status, disposition, boardDisp, locationId: locId,
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
           contacts,
           familyId,
@@ -164,7 +167,7 @@ export default function CaseForm() {
         orgId: currentUser!.orgId,
         locationId: locId,
         caseNumber: `NEW-${Date.now().toString().slice(-6)}`,
-        type, status, disposition,
+        type, status, disposition, boardDisp: boardDisp || undefined,
         decedent: { firstName: firstName.trim() || (quoteStart ? 'Quote' : firstName), middleName: middleName || undefined, lastName: lastName.trim() || (quoteStart ? (contactName.trim() || 'Family') : lastName), dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
         contacts,
         familyId,
@@ -286,6 +289,13 @@ export default function CaseForm() {
               <label className={labelClass}>Disposition</label>
               <select value={disposition} onChange={(e) => setDisposition(e.target.value as DispositionType)} className={inputClass}>
                 {dispositionOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>DISP (shown on the TV Board)</label>
+              <select value={boardDisp} onChange={(e) => setBoardDisp(e.target.value)} className={inputClass}>
+                <option value="">— not set —</option>
+                {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
           </div>

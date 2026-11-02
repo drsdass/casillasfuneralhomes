@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
-import { Mail, Paperclip, ChevronDown, ChevronRight, Save, Check, FileSearch, Loader2, Send, Reply, Forward } from 'lucide-react'
+import { Mail, Paperclip, ExternalLink, X, Save, Check, FileSearch, Loader2, Send, Reply, Forward } from 'lucide-react'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { quotedOriginal, replySubject, forwardSubject } from '@/lib/emailJunk'
 import { api } from '@/lib/api'
@@ -54,6 +54,13 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
   const [labelText, setLabelText] = useState('')
   const [labelCat, setLabelCat] = useState<CaseDocument['category']>('other')
 
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !compose) setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, compose])
+
   const attachmentMutation = useMutation({
     mutationFn: async (p: { att: InboundEmail['attachments'][number]; action: 'extract' | 'save'; label?: string; category?: CaseDocument['category'] }) => {
       setPending(p.att.id); setError('')
@@ -89,18 +96,31 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
             )}
           </div>
           <div className="text-slate-800">{email.subject}</div>
-          {!open && <div className="text-slate-500 text-xs truncate">{email.preview}</div>}
+          <div className="text-slate-500 text-xs truncate">{email.preview}</div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-xs text-slate-400 whitespace-nowrap">{format(parseISO(email.receivedAt), 'MMM d, HH:mm')}</div>
-          <div className="mt-1 inline-flex items-center gap-0.5 text-xs font-medium text-slate-600">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {open ? 'Hide' : 'Open'}</div>
+          <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700"><ExternalLink size={12} /> Open</div>
         </div>
       </button>
 
       {compose && <ComposeEmail {...compose} caseId={caseId} onClose={() => setCompose(null)} />}
       {open && (
-        <div className="px-2 pb-3 pl-9 space-y-3">
-          <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md bg-slate-50 border border-slate-100 p-3 text-sm text-slate-700 max-h-96 overflow-y-auto">
+        <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:p-6" onClick={() => setOpen(false)}>
+        <div className="w-full max-w-3xl my-4 rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-900 break-words">{email.subject || '(no subject)'}</h3>
+            <div className="mt-1 text-xs text-slate-500 space-y-0.5">
+              <div><span className="font-medium text-slate-600">From:</span> {out ? (email.sentByName ?? 'Staff') : `${email.fromName ? email.fromName + ' ' : ''}<${email.from}>`}</div>
+              {email.to && <div><span className="font-medium text-slate-600">To:</span> {email.to}</div>}
+              <div><span className="font-medium text-slate-600">Date:</span> {format(parseISO(email.receivedAt), 'EEE, MMM d, yyyy h:mm a')}</div>
+            </div>
+          </div>
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-md bg-slate-50 border border-slate-100 p-4 text-sm text-slate-800 max-h-[55vh] overflow-y-auto">
             {email.body?.trim() || email.preview || '(This email has no text.)'}
           </div>
 
@@ -177,6 +197,8 @@ export function CaseEmailRow({ email, caseId, canEdit, currentUser }: { email: I
             )
           })}
           {isErr(error) && <div className="text-xs text-red-600">{error}</div>}
+        </div>
+        </div>
         </div>
       )}
     </div>

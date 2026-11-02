@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const orgId = screen.org_id
     const [{ data: locs }, { data: caseRows }, { data: staffRows }] = await Promise.all([
       supabase.from('locations').select('id, name').eq('org_id', orgId).eq('active', true),
-      supabase.from('cases').select('id, location_id, case_number, decedent_first_name, decedent_last_name, disposition, service_date, color, type, status, custody_stage, updated_at').eq('org_id', orgId),
+      supabase.from('cases').select('*').eq('org_id', orgId),
       supabase.from('staff_members').select('id, name').eq('org_id', orgId),
     ])
     const active = (caseRows ?? []).filter((c: any) =>
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       return {
         id: c.id, locationId: c.location_id, caseNumber: c.case_number,
         firstName: c.decedent_first_name, lastName: c.decedent_last_name, color: c.color ?? undefined,
-        disposition: c.disposition, serviceDate: c.service_date ?? undefined,
+        disposition: c.disposition, boardDisp: c.board_disp ?? undefined, serviceDate: c.service_date ?? undefined,
         visitation: evFor(c.id, 'visitation'), service: evFor(c.id, 'service'),
         flowers: status(c.id, /flower/i), birds: status(c.id, /dove|bird/i), escort: status(c.id, /escort|carriage/i),
         casket: casket?.name, 

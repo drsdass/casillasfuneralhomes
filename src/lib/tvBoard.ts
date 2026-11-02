@@ -6,7 +6,7 @@ export type OrderState = 'confirmed' | 'ordered' | 'pending' | 'delivered' | nul
 export interface BoardEvent { start: string; end: string; staff: string[] }
 export interface BoardRowData {
   id: string; locationId: string; caseNumber: string; firstName: string; lastName: string; color?: string
-  disposition: string; serviceDate?: string
+  disposition: string; boardDisp?: string; serviceDate?: string
   visitation?: BoardEvent; service?: BoardEvent
   flowers: OrderState; birds: OrderState; escort: OrderState
   casket?: string; specials: string[]
@@ -32,7 +32,7 @@ export async function loadBoardData(): Promise<BoardData> {
     const casket = contracts.find((k) => k.caseId === c.id)?.lineItems.find((li) => /casket/i.test(li.name))?.name
     return {
       id: c.id, locationId: c.locationId, caseNumber: c.caseNumber, firstName: c.decedent.firstName, lastName: c.decedent.lastName, color: c.color,
-      disposition: c.disposition, serviceDate: c.serviceDate, visitation: ev('visitation'), service: ev('service'),
+      disposition: c.disposition, boardDisp: c.boardDisp, serviceDate: c.serviceDate, visitation: ev('visitation'), service: ev('service'),
       flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casket,
       specials: notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((n) => n.body),
     }
