@@ -17,8 +17,9 @@ export const BIRDS_RE = /dove|bird/i
 export const ESCORT_RE = /escort|carriage|motorcycle|procession/i
 
 /** Soonest visitation first (then service); cases with no date yet go last. */
-export function boardOrder<T extends { visitation?: { start: string }; visitationDate?: string; serviceDate?: string; service?: { start: string }; lastName: string }>(rows: T[]): T[] {
-  const when = (r: T) => r.visitation?.start ?? r.visitationDate ?? r.serviceDate ?? r.service?.start
+export function boardOrder<T extends { visits: { start: string }[]; services: { start: string }[]; visitationDate?: string; serviceDate?: string; lastName: string }>(rows: T[]): T[] {
+  const first = (xs: { start: string }[]) => xs.map((e) => e.start).sort()[0]
+  const when = (r: T) => first(r.visits) ?? r.visitationDate ?? first(r.services) ?? r.serviceDate
   return [...rows].sort((a, b) => {
     const x = when(a), y = when(b)
     if (x && y) return x.localeCompare(y) || a.lastName.localeCompare(b.lastName)

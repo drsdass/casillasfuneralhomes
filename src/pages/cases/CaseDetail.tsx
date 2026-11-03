@@ -1,4 +1,5 @@
-import { deriveServicePatch } from '@/lib/vitalToCase'
+import { deriveServicePatch, deriveVitalEvents } from '@/lib/vitalToCase'
+import { CaseEventsPanel } from '@/components/cases/CaseEventsPanel'
 import { BOARD_DISP_OPTIONS, BOARD_EXTRA_OPTIONS } from '@/lib/boardDisp'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
@@ -94,9 +95,13 @@ export default function CaseDetail() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
   })
   const copyServiceMutation = useMutation({
-    mutationFn: (patch: import('@/lib/vitalToCase').ServicePatch) => api.updateCase(caseId!, patch, currentUser!),
+    mutationFn: async ({ patch, extras }: { patch: import('@/lib/vitalToCase').ServicePatch; extras: boolean }) => {
+      if (Object.keys(patch).length > 0) await api.updateCase(caseId!, patch, currentUser!)
+      if (extras && c?.vitalSheet) await api.syncVitalEvents(c, deriveVitalEvents(c.vitalSheet), currentUser!)
+    },
     onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
   })
+  const { data: caseEvents } = useQuery({ queryKey: ['events'], queryFn: () => api.getCalendarEvents() })
   const setBoardDispMutation = useMutation({
     mutationFn: (boardDisp: string) => api.updateCase(caseId!, { boardDisp }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
@@ -723,7 +728,10 @@ export default function CaseDetail() {
               <div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Services</div>
                 {(() => {
-                  const d = c.vitalSheet ? deriveServicePatch(c, c.vitalSheet, true) : null
+                  const d0 = c.vitalSheet ? deriveServicePatch(c, c.vitalSheet, true) : null
+                  const have = (caseEvents ?? []).filter((e) => e.caseId === c.id && e.source === 'vital')
+                  const wantExtra = c.vitalSheet ? deriveVitalEvents(c.vitalSheet).filter((it) => !have.some((e) => e.label === it.label && new Date(e.start).getTime() === new Date(it.start).getTime())) : []
+                  const d = d0 && { ...d0, summary: [...d0.summary, ...wantExtra.map((it) => `${it.label} ${format(parseISO(it.start), 'MM/dd h:mm a')}${it.place ? ` · ${it.place}` : ''}`)] }
                   if (!d || (d.summary.length === 0 && !d.needsVisitationDate)) return null
                   return (
                     <div className="no-print mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
@@ -731,13 +739,14 @@ export default function CaseDetail() {
                         <>
                           <div className="font-semibold">These are on the Vital Sheet but not on the Calendar and TV Board yet:</div>
                           <ul className="mt-1 list-disc pl-4">{d.summary.map((x) => <li key={x}>{x}</li>)}</ul>
-                          {canEdit && <button onClick={() => copyServiceMutation.mutate(d.patch)} disabled={copyServiceMutation.isPending} className="mt-2 rounded-md bg-[#3b4a35] px-3 py-1.5 font-semibold text-white hover:bg-[#4d5f45] disabled:opacity-50">{copyServiceMutation.isPending ? 'Adding…' : 'Add them to the Calendar and TV Board'}</button>}
+                          {canEdit && <button onClick={() => copyServiceMutation.mutate({ patch: d.patch, extras: wantExtra.length > 0 })} disabled={copyServiceMutation.isPending} className="mt-2 rounded-md bg-[#3b4a35] px-3 py-1.5 font-semibold text-white hover:bg-[#4d5f45] disabled:opacity-50">{copyServiceMutation.isPending ? 'Adding…' : 'Add them to the Calendar and TV Board'}</button>}
                         </>
                       )}
                       {d.needsVisitationDate && <div className={d.summary.length ? 'mt-2' : ''}>Visitation hours are on the Vital Sheet but there is no visitation date, so it cannot go on the Calendar yet. Add the date in <Link to={`/cases/${c.id}/vital-sheet`} className="underline font-medium">Edit Vital Sheet</Link>.</div>}
                     </div>
                   )
                 })()}
+                <CaseEventsPanel caseObj={c} canEdit={canEdit} currentUser={currentUser!} />
                 <dl className="space-y-2">
                   <Field label="Visitation" value={[c.visitationDate && format(parseISO(c.visitationDate), 'MM/dd/yyyy'), c.vitalSheet?.visitationHours, c.visitationLocation].filter(Boolean).join(' · ') || '—'} />
                   <Field label="Rosary / Service" value={[c.vitalSheet?.rosaryDate && format(parseISO(c.vitalSheet.rosaryDate), 'MM/dd/yyyy'), c.vitalSheet?.rosaryTime, c.vitalSheet?.rosaryLanguage && (c.vitalSheet.rosaryLanguage === 'spanish' ? 'SPAN' : 'ENG'), c.vitalSheet?.rosaryPlace, c.vitalSheet?.rosaryBy && `by ${c.vitalSheet.rosaryBy}`].filter(Boolean).join(' · ') || '—'} />

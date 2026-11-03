@@ -559,6 +559,10 @@ export interface CalendarEvent {
   participantIds: string[] // staffIds
   vehicleId?: string
   notes?: string
+  /** What this visitation/service is: Private, Public, Rosary, Mass, Graveside ... */
+  label?: string
+  /** null/'case' = the case's main one, 'vital' = from the Vital Sheet, 'extra' = added by hand */
+  source?: 'case' | 'vital' | 'extra'
 }
 
 /** A scheduling conflict detected for a staff member or vehicle over an overlapping time window. */

@@ -3,11 +3,12 @@ import { api } from './api'
 import { isCaseDone, isPreNeed } from './caseDone'
 
 export type OrderState = 'confirmed' | 'ordered' | 'pending' | 'delivered' | null
-export interface BoardEvent { start: string; end: string; staff: string[] }
+export interface BoardEvent { start: string; end: string; staff: string[]; label?: string; place?: string }
 export interface BoardRowData {
   id: string; locationId: string; caseNumber: string; firstName: string; lastName: string; color?: string
-  disposition: string; boardDisp?: string; boardFlowers?: string; boardBirds?: string; boardEscort?: string; serviceDate?: string; visitationDate?: string; visitationEnd?: string
-  visitation?: BoardEvent; service?: BoardEvent
+  disposition: string; visitationLocation?: string; serviceLocation?: string; boardDisp?: string; boardFlowers?: string; boardBirds?: string; boardEscort?: string; serviceDate?: string; visitationDate?: string; visitationEnd?: string
+  /** Every visitation and every service on the case, soonest first. */
+  visits: BoardEvent[]; services: BoardEvent[]
   flowers: OrderState; birds: OrderState; escort: OrderState
   casket?: string; casketLines?: string[]; specials: string[]
 }
@@ -24,15 +25,13 @@ export async function loadBoardData(): Promise<BoardData> {
   const names = new Map(staff.map((s) => [s.id, s.name]))
   const rows: BoardRowData[] = await Promise.all(active.map(async (c) => {
     const [orders, notes] = await Promise.all([api.getOrders(c.id), api.getCaseNotes(c.id)])
-    const ev = (type: string): BoardEvent | undefined => {
-      const e = events.find((x) => x.caseId === c.id && x.type === type)
-      return e ? { start: e.start, end: e.end, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] } : undefined
-    }
+    const evs = (type: string): BoardEvent[] => events.filter((x) => x.caseId === c.id && x.type === type).sort((a, b) => a.start.localeCompare(b.start))
+      .map((e) => ({ start: e.start, end: e.end, label: e.label, place: e.location, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] }))
     const st = (re: RegExp) => (orders.find((o) => re.test(o.item))?.status ?? null) as OrderState
     const casketLines = contracts.filter((k) => k.caseId === c.id).flatMap((k) => k.lineItems.map((li) => li.name))
     return {
       id: c.id, locationId: c.locationId, caseNumber: c.caseNumber, firstName: c.decedent.firstName, lastName: c.decedent.lastName, color: c.color,
-      disposition: c.disposition, boardDisp: c.boardDisp, boardFlowers: c.boardFlowers, boardBirds: c.boardBirds, boardEscort: c.boardEscort, serviceDate: c.serviceDate, visitationDate: c.visitationDate, visitationEnd: c.visitationEnd, visitation: ev('visitation'), service: ev('service'),
+      disposition: c.disposition, boardDisp: c.boardDisp, boardFlowers: c.boardFlowers, boardBirds: c.boardBirds, boardEscort: c.boardEscort, serviceDate: c.serviceDate, serviceLocation: c.serviceLocation, visitationLocation: c.visitationLocation, visitationDate: c.visitationDate, visitationEnd: c.visitationEnd, visits: evs('visitation'), services: evs('service'),
       flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casketLines,
       specials: notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((n) => n.body),
     }

@@ -1,4 +1,4 @@
-import { deriveServicePatch } from '@/lib/vitalToCase'
+import { deriveServicePatch, deriveVitalEvents, VITAL_EVENT_KEYS } from '@/lib/vitalToCase'
 import { PlacePicker } from '../../components/ui/PlacePicker'
 import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
@@ -197,6 +197,9 @@ export default function VitalSheetIntake() {
           coronerCaseNumber: coronerNumber || undefined,
         },
       }, currentUser!)
+      // Rosary and graveside become events of their own (several can sit on one case); only when their boxes changed, so hand edits survive.
+      const prev = c.vitalSheet ?? {}
+      if (VITAL_EVENT_KEYS.some((k) => (prev[k] ?? '') !== (f[k] ?? ''))) { try { await api.syncVitalEvents(c, deriveVitalEvents(f), currentUser!) } catch { /* the database step case-events.sql has not been run yet */ } }
       if (ssnDirty && ssn.trim()) await api.setDecedentSsn(caseId!, ssn, currentUser!)
     },
     onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },

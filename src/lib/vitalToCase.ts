@@ -99,3 +99,28 @@ export function deriveServicePatch(c: FuneralCase, vs: VitalSheetInfo, force = f
   }
   return { patch, summary, needsVisitationDate }
 }
+
+/** An extra visitation or service that comes from the Vital Sheet (it becomes its own event on the Calendar and TV Board). */
+export interface VitalEventItem { label: string; type: 'visitation' | 'service'; start: string; end: string; place?: string }
+
+const addHour = (iso: string) => new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString()
+
+/**
+ * The rosary and (when there is also a mass) the graveside, as events of their own. The case's main visitation and service
+ * are handled by deriveServicePatch; these are the "also" ones that sit under them on the board.
+ */
+export function deriveVitalEvents(vs: VitalSheetInfo): VitalEventItem[] {
+  const out: VitalEventItem[] = []
+  const rt = hhmm(vs.rosaryTime)
+  if (vs.rosaryDate && rt) {
+    const start = toIso(vs.rosaryDate, rt)
+    if (start) out.push({ label: 'Rosary', type: 'visitation', start, end: addHour(start), place: vs.rosaryPlace || undefined })
+  }
+  const gt = hhmm(vs.gravesideTime)
+  if (vs.massDate && vs.gravesideDate && gt) {
+    const start = toIso(vs.gravesideDate, gt)
+    if (start) out.push({ label: 'Graveside', type: 'service', start, end: addHour(start), place: vs.gravesidePlace || undefined })
+  }
+  return out
+}
+export const VITAL_EVENT_KEYS: (keyof VitalSheetInfo)[] = ['rosaryDate', 'rosaryTime', 'rosaryPlace', 'massDate', 'gravesideDate', 'gravesideTime', 'gravesidePlace']

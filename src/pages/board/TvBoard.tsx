@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useSession } from '@/context/SessionContext'
-import { loadBoardData, type BoardData, type BoardRowData, type OrderState } from '@/lib/tvBoard'
+import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } from '@/lib/tvBoard'
 import { format } from 'date-fns'
 import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
 import { boardOrder, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
@@ -138,37 +138,57 @@ function ExtraCell({ state }: { state: BoardExtra }) {
   return <span className="text-slate-500">No</span>
 }
 
-function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
-  const { service } = r
-  // The calendar event when there is one; otherwise the visitation saved on the case itself.
-  const visitation = r.visitation ?? (r.visitationDate ? { start: r.visitationDate, end: r.visitationEnd ?? r.visitationDate, staff: [] as string[] } : undefined)
-  const specialNotes = r.specials
-  const serviceStart = r.serviceDate ?? service?.start
+function EventLine({ e, range }: { e: BoardEvent; range: boolean }) {
+  const sub = [e.label, e.place].filter(Boolean).join(' · ')
   return (
-    <tr className="border-b border-white/10 hover:bg-white/5 [&>td]:!py-1.5" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
-      <td className="py-3 px-3 pl-5 font-semibold whitespace-nowrap">
-        <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
-        {r.lastName}, {r.firstName}
-        <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
-      </td>
-      <td className="py-3 px-3 text-slate-200 whitespace-nowrap">
-        {visitation ? <>{boardDay(visitation.start)} · {boardRange(visitation.start, visitation.end)}</> : '—'}
-      </td>
-      <td className="py-3 px-3 text-slate-200 text-sm">{visitation && visitation.staff.length > 0 ? visitation.staff.join(', ') : <span className="text-slate-500">—</span>}</td>
-      <td className="py-3 px-3 text-slate-200 whitespace-nowrap">
-        {serviceStart ? <>{boardDay(serviceStart)} · {boardClock(serviceStart)}</> : '—'}
-      </td>
-      <td className="py-3 px-3 text-slate-200 text-sm">{service && service.staff.length > 0 ? service.staff.join(', ') : <span className="text-slate-500">—</span>}</td>
-      <td className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
-      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)} /></td>
-      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)} /></td>
-      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)} /></td>
-      <td className="py-3 px-3 text-slate-200">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
-      <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
-        {specialNotes.length > 0
-          ? <ul className="space-y-1">{specialNotes.map((n, i) => <li key={i} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{n}</li>)}</ul>
-          : <span className="text-slate-500">—</span>}
-      </td>
-    </tr>
+    <div className="whitespace-nowrap">
+      <div>{boardDay(e.start)} · {range ? boardRange(e.start, e.end) : boardClock(e.start)}</div>
+      {sub && <div className="text-xs text-slate-400">{sub}</div>}
+    </div>
+  )
+}
+const Staff = ({ e }: { e?: BoardEvent }) => (e && e.staff.length > 0 ? <>{e.staff.join(', ')}</> : <span className="text-slate-500">—</span>)
+
+/** One case. Several visitations / services stack as lines under each other; the name, DISP, flowers ... span all of them. */
+function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
+  // The calendar events when there are any; otherwise the visitation / service saved on the case itself.
+  const visits: BoardEvent[] = r.visits.length > 0 ? r.visits : r.visitationDate ? [{ start: r.visitationDate, end: r.visitationEnd ?? r.visitationDate, staff: [], place: r.visitationLocation }] : []
+  const services: BoardEvent[] = r.services.length > 0 ? r.services : r.serviceDate ? [{ start: r.serviceDate, end: r.serviceDate, staff: [], place: r.serviceLocation }] : []
+  const n = Math.max(1, visits.length, services.length)
+  const specialNotes = r.specials
+  return (
+    <>
+      {Array.from({ length: n }, (_, i) => {
+        const v = visits[i], sv = services[i]
+        const last = i === n - 1
+        return (
+          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} hover:bg-white/5 [&>td]:!py-1.5`}>
+            {i === 0 && (
+              <td rowSpan={n} className="py-3 px-3 pl-5 font-semibold whitespace-nowrap align-top border-b border-white/10" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
+                <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
+                {r.lastName}, {r.firstName}
+                <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+              </td>
+            )}
+            <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 text-sm align-top">{v || i === 0 ? <Staff e={v} /> : null}</td>
+            <td className="py-3 px-3 text-slate-200 align-top">{sv ? <EventLine e={sv} range={false} /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 text-sm align-top">{sv || i === 0 ? <Staff e={sv} /> : null}</td>
+            {i === 0 && (<>
+              <td rowSpan={n} className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap align-top border-b border-white/10">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 text-slate-200 align-top border-b border-white/10">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
+              <td rowSpan={n} className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere] align-top border-b border-white/10">
+                {specialNotes.length > 0
+                  ? <ul className="space-y-1">{specialNotes.map((x, k) => <li key={k} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{x}</li>)}</ul>
+                  : <span className="text-slate-500">—</span>}
+              </td>
+            </>)}
+          </tr>
+        )
+      })}
+    </>
   )
 }

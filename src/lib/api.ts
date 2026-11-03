@@ -197,6 +197,9 @@ async function syncCaseCalendarEvent(
     .select('id')
     .eq('case_id', caseId)
     .eq('type', type)
+    .or('source.is.null,source.eq.case') // only the case's main one — extra visitations/services are managed on their own
+    .order('start_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   if (!dateIso) {
@@ -219,7 +222,7 @@ async function syncCaseCalendarEvent(
   } else {
     await supabase!.from('calendar_events').insert({
       org_id: orgId, location_id: locationId, case_id: caseId, title, type,
-      start_at: startAt, end_at: endAt, location_text: eventLocation ?? null,
+      start_at: startAt, end_at: endAt, location_text: eventLocation ?? null, source: 'case',
     })
   }
 }
@@ -1204,6 +1207,31 @@ export const api = {
       summary: `Scheduled "${input.title}"`, changedBy: changedBy.id,
     })
     return rowToEvent(full)
+  },
+
+  async deleteEvent(id: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.deleteEvent(id, changedBy); return }
+    const { data: ev } = await supabase!.from('calendar_events').select('title, case_id').eq('id', id).maybeSingle()
+    await supabase!.from('event_participants').delete().eq('event_id', id)
+    const { error } = await supabase!.from('calendar_events').delete().eq('id', id)
+    if (error) throw error
+    logAuditReal({ entityType: 'event', entityId: id, caseId: ev?.case_id ?? undefined, action: 'delete', summary: `Removed "${ev?.title ?? 'event'}"`, changedBy: changedBy.id })
+  },
+
+  /** Puts the Vital Sheet's rosary / graveside (and any other extra) on the Calendar and TV Board, one event each. Matches earlier ones by label so assigned attendants are kept. */
+  async syncVitalEvents(c: FuneralCase, items: import('@/lib/vitalToCase').VitalEventItem[], changedBy: StaffMember): Promise<void> {
+    const name = `${c.decedent.firstName} ${c.decedent.lastName}`
+    if (USE_MOCK) { mockStore.syncVitalEvents(c, items, changedBy); return }
+    const { data: existing, error } = await supabase!.from('calendar_events').select('id, label').eq('case_id', c.id).eq('source', 'vital')
+    if (error) throw error
+    const left = new Map((existing ?? []).map((e: { id: string; label: string | null }) => [e.label ?? '', e.id]))
+    for (const it of items) {
+      const row = { title: `${name} — ${it.label}`, type: it.type, start_at: it.start, end_at: it.end, location_text: it.place ?? null, label: it.label }
+      const id = left.get(it.label)
+      if (id) { await supabase!.from('calendar_events').update(row).eq('id', id); left.delete(it.label) }
+      else await supabase!.from('calendar_events').insert({ ...row, org_id: c.orgId, location_id: c.locationId, case_id: c.id, source: 'vital' })
+    }
+    for (const id of left.values()) { await supabase!.from('event_participants').delete().eq('event_id', id); await supabase!.from('calendar_events').delete().eq('id', id) }
   },
 
   async updateEvent(id: string, patch: Partial<CalendarEvent>, changedBy: StaffMember): Promise<CalendarEvent | undefined> {

@@ -655,6 +655,28 @@ export const mockStore = {
     return event
   },
 
+  deleteEvent(id: string, changedBy: StaffMember): void {
+    const e = eventStore.find((x) => x.id === id)
+    eventStore = eventStore.filter((x) => x.id !== id)
+    if (e) logAudit({ entityType: 'event', entityId: id, caseId: e.caseId, action: 'delete', summary: `Removed "${e.title}"`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
+  syncVitalEvents(c: FuneralCase, items: { label: string; type: 'visitation' | 'service'; start: string; end: string; place?: string }[], changedBy: StaffMember): void {
+    const name = `${c.decedent.firstName} ${c.decedent.lastName}`
+    const mine = eventStore.filter((e) => e.caseId === c.id && e.source === 'vital')
+    const keep = new Set<string>()
+    for (const it of items) {
+      const ex = mine.find((e) => e.label === it.label)
+      if (ex) { keep.add(ex.id); eventStore = eventStore.map((e) => (e.id === ex.id ? { ...e, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place } : e)) }
+      else {
+        const created: CalendarEvent = { id: newId('evt'), orgId: c.orgId, locationId: c.locationId, caseId: c.id, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place, participantIds: [], label: it.label, source: 'vital' }
+        eventStore = [...eventStore, created]; keep.add(created.id)
+      }
+    }
+    eventStore = eventStore.filter((e) => !(e.caseId === c.id && e.source === 'vital' && !keep.has(e.id)))
+    logAudit({ entityType: 'event', entityId: c.id, caseId: c.id, action: 'update', summary: 'Updated visitations/services from the Vital Sheet', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
   updateEvent(id: string, patch: Partial<CalendarEvent>, changedBy: StaffMember): CalendarEvent | undefined {
     let updated: CalendarEvent | undefined
     eventStore = eventStore.map((e) => {
