@@ -28,11 +28,12 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if (c.disposition !== undefined) row.disposition = c.disposition
   if (c.assignedDirectorId !== undefined) row.assigned_director_id = c.assignedDirectorId
   if (c.assignedEmbalmerId !== undefined) row.assigned_embalmer_id = c.assignedEmbalmerId
-  if (c.visitationDate !== undefined) row.visitation_date = c.visitationDate
-  if (c.visitationEnd !== undefined) row.visitation_end = c.visitationEnd
-  if (c.visitationLocation !== undefined) row.visitation_location = c.visitationLocation
-  if (c.serviceDate !== undefined) row.service_date = c.serviceDate
-  if (c.serviceLocation !== undefined) row.service_location = c.serviceLocation
+  // A date/place that is present but empty means "cleared" — save it as null, otherwise the old value stays in the database.
+  if ('visitationDate' in c) row.visitation_date = c.visitationDate ?? null
+  if ('visitationEnd' in c) row.visitation_end = c.visitationEnd ?? null
+  if ('visitationLocation' in c) row.visitation_location = c.visitationLocation ?? null
+  if ('serviceDate' in c) row.service_date = c.serviceDate ?? null
+  if ('serviceLocation' in c) row.service_location = c.serviceLocation ?? null
   if (c.boardDisp !== undefined) row.board_disp = c.boardDisp || null
   if (c.boardFlowers !== undefined) row.board_flowers = c.boardFlowers || null
   if (c.boardBirds !== undefined) row.board_birds = c.boardBirds || null

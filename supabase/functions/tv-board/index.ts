@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     const ids = active.map((c: any) => c.id)
     const none = ids.length === 0
     const [{ data: events }, { data: orders }, { data: contracts }, { data: notes }] = await Promise.all([
-      none ? { data: [] } : supabase.from('calendar_events').select('*, event_participants(staff_id)').in('case_id', ids).in('type', ['visitation', 'service']),
+      none ? { data: [] } : supabase.from('calendar_events').select('*, event_participants(staff_id)').in('case_id', ids).in('type', ['visitation', 'service', 'burial']),
       none ? { data: [] } : supabase.from('service_orders').select('case_id, item, status').in('case_id', ids),
       none ? { data: [] } : supabase.from('contracts').select('case_id, contract_line_items(name)').in('case_id', ids),
       none ? { data: [] } : supabase.from('case_notes').select('case_id, body, created_at').in('case_id', ids).eq('is_special_request', true),
@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const staffName = new Map((staffRows ?? []).map((s: any) => [s.id, s.name]))
     // Every visitation / service of the case (private + public, rosary, mass, graveside ...), soonest first.
     const evsFor = (caseId: string, type: string) => (events ?? [])
-      .filter((x: any) => x.case_id === caseId && x.type === type)
+      .filter((x: any) => x.case_id === caseId && (x.type === type || (type === 'service' && x.type === 'burial'))) // burial times show with the services
       .sort((a: any, b: any) => String(a.start_at).localeCompare(String(b.start_at)))
       .map((e: any) => ({ start: e.start_at, end: e.end_at, label: e.label ?? undefined, place: e.location_text ?? undefined, staff: (e.event_participants ?? []).map((p: any) => staffName.get(p.staff_id)).filter(Boolean) }))
     const status = (caseId: string, re: RegExp) => {

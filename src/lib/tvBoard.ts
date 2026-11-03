@@ -25,7 +25,8 @@ export async function loadBoardData(): Promise<BoardData> {
   const names = new Map(staff.map((s) => [s.id, s.name]))
   const rows: BoardRowData[] = await Promise.all(active.map(async (c) => {
     const [orders, notes] = await Promise.all([api.getOrders(c.id), api.getCaseNotes(c.id)])
-    const evs = (type: string): BoardEvent[] => events.filter((x) => x.caseId === c.id && x.type === type).sort((a, b) => a.start.localeCompare(b.start))
+    // Burial / committal times sit in the Service column with the other services.
+    const evs = (type: string): BoardEvent[] => events.filter((x) => x.caseId === c.id && (x.type === type || (type === 'service' && x.type === 'burial'))).sort((a, b) => a.start.localeCompare(b.start))
       .map((e) => ({ start: e.start, end: e.end, label: e.label, place: e.location, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] }))
     const st = (re: RegExp) => (orders.find((o) => re.test(o.item))?.status ?? null) as OrderState
     const casketLines = contracts.filter((k) => k.caseId === c.id).flatMap((k) => k.lineItems.map((li) => li.name))

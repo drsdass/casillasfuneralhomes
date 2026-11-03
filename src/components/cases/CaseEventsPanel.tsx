@@ -7,20 +7,21 @@ import { Time24 } from '@/components/ui/DateTime24'
 import type { CalendarEvent, FuneralCase, StaffMember } from '@/types'
 
 const LABELS = ['Private', 'Public', 'Rosary', 'Vigil', 'Mass', 'Funeral service', 'Graveside', 'Memorial', 'Committal', 'Disinterment']
+const KIND = { visitation: 'Visitation', service: 'Service', burial: 'Burial' } as const
 const input = 'mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base bg-white'
 const isMain = (e: CalendarEvent) => !e.source || e.source === 'case'
 const localDate = (iso: string) => format(parseISO(iso), 'yyyy-MM-dd')
 const localTime = (iso: string) => format(parseISO(iso), 'HH:mm')
 const toIso = (date: string, time: string) => new Date(`${date}T${time}:00`).toISOString()
 
-interface Draft { id?: string; type: 'visitation' | 'service'; label: string; date: string; start: string; end: string; place: string; staff: string[]; main: boolean }
+interface Draft { id?: string; type: 'visitation' | 'service' | 'burial'; label: string; date: string; start: string; end: string; place: string; staff: string[]; main: boolean }
 
 /** Every visitation and service for this case. Several can be added (private + public, rosary, mass, graveside ...); all of them show on the Calendar and the TV Board. */
 export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj: FuneralCase; canEdit: boolean; currentUser: StaffMember }) {
   const qc = useQueryClient()
   const { data: all = [] } = useQuery({ queryKey: ['events'], queryFn: () => api.getCalendarEvents() })
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
-  const events = all.filter((e) => e.caseId === c.id && (e.type === 'visitation' || e.type === 'service')).sort((a, b) => a.start.localeCompare(b.start))
+  const events = all.filter((e) => e.caseId === c.id && (e.type === 'visitation' || e.type === 'service' || e.type === 'burial')).sort((a, b) => a.start.localeCompare(b.start))
   const [draft, setDraft] = useState<Draft | null>(null)
   const [err, setErr] = useState('')
   const names = new Map(staff.map((s) => [s.id, s.name]))
@@ -33,14 +34,14 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
       const start = toIso(d.date, d.start)
       const end = d.end && new Date(toIso(d.date, d.end)) > new Date(start) ? toIso(d.date, d.end) : new Date(new Date(start).getTime() + (d.type === 'visitation' ? 2 : 1) * 3600_000).toISOString()
       const who = `${c.decedent.firstName} ${c.decedent.lastName}`
-      const title = `${who} — ${d.label.trim() || (d.type === 'visitation' ? 'Visitation' : 'Service')}`
+      const title = `${who} — ${d.label.trim() || KIND[d.type]}`
       const place = d.place.trim() || undefined
       if (d.id) {
         await api.updateEvent(d.id, { type: d.type, title, start, end, location: place ?? '', label: d.label.trim(), participantIds: d.staff }, currentUser)
         // The case's main visitation / service also lives on the case itself; keep the two the same.
         if (d.main) await api.updateCase(c.id, d.type === 'visitation' ? { visitationDate: start, visitationEnd: end, visitationLocation: place } : { serviceDate: start, serviceLocation: place }, currentUser)
       } else {
-        await api.createEvent({ orgId: c.orgId, locationId: c.locationId, caseId: c.id, title, type: d.type, start, end, location: place, label: d.label.trim() || undefined, source: 'extra', participantIds: d.staff }, currentUser)
+        await api.createEvent({ orgId: c.orgId, locationId: c.locationId, caseId: c.id, title, type: d.type, start, end, location: place, label: d.label.trim() || (d.type === 'burial' ? 'Burial' : undefined), source: 'extra', participantIds: d.staff }, currentUser)
       }
     },
     onSuccess: () => { setDraft(null); setErr(''); refresh() },
@@ -57,7 +58,7 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
   const open = (e?: CalendarEvent) => {
     setErr('')
     setDraft(e
-      ? { id: e.id, type: e.type as 'visitation' | 'service', label: e.label ?? '', date: localDate(e.start), start: localTime(e.start), end: localTime(e.end), place: e.location ?? '', staff: e.participantIds, main: isMain(e) }
+      ? { id: e.id, type: e.type as 'visitation' | 'service' | 'burial', label: e.label ?? '', date: localDate(e.start), start: localTime(e.start), end: localTime(e.end), place: e.location ?? '', staff: e.participantIds, main: isMain(e) }
       : { type: 'visitation', label: '', date: '', start: '', end: '', place: '', staff: [], main: false })
   }
 
@@ -65,7 +66,7 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
     <div className="no-print mb-4 rounded-md border border-slate-200 bg-white p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-800">Visitations &amp; services</div>
+          <div className="text-sm font-semibold text-slate-800">Visitations, services &amp; burial</div>
           <div className="text-xs text-slate-500">Everything listed here is on the Calendar and the TV Board. Add as many as the family has.</div>
         </div>
         {canEdit && <button type="button" onClick={() => open()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4d5f45]"><Plus size={14} /> Add one</button>}
@@ -74,7 +75,7 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
         <ul className="divide-y divide-slate-100">
           {events.map((e) => (
             <li key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm">
-              <span className={`w-20 shrink-0 text-xs font-semibold uppercase tracking-wide ${e.type === 'visitation' ? 'text-sky-700' : 'text-amber-700'}`}>{e.type === 'visitation' ? 'Visitation' : 'Service'}</span>
+              <span className={`w-20 shrink-0 text-xs font-semibold uppercase tracking-wide ${e.type === 'visitation' ? 'text-sky-700' : e.type === 'burial' ? 'text-emerald-700' : 'text-amber-700'}`}>{KIND[e.type as keyof typeof KIND]}</span>
               <span className="font-medium text-slate-900">{e.label || (isMain(e) ? 'Main' : '')}</span>
               <span className="text-slate-700">{format(parseISO(e.start), 'EEE M/d · h:mm a')}{e.type === 'visitation' || new Date(e.end) > new Date(e.start) ? ` – ${format(parseISO(e.end), 'h:mm a')}` : ''}</span>
               {e.location && <span className="text-slate-500">{e.location}</span>}
@@ -94,16 +95,16 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDraft(null)}>
           <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">{draft.id ? 'Edit' : 'Add a visitation or service'}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{draft.id ? 'Edit' : 'Add a visitation, service or burial'}</h2>
               <button type="button" onClick={() => setDraft(null)} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
             </div>
             <div className="mb-3 flex gap-2">
-              {(['visitation', 'service'] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setDraft({ ...draft, type: t })} className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${draft.type === t ? 'border-[#3b4a35] bg-[#3b4a35] text-white' : 'border-slate-300 text-slate-700'}`}>{t === 'visitation' ? 'Visitation' : 'Service'}</button>
+              {(['visitation', 'service', 'burial'] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setDraft({ ...draft, type: t })} className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${draft.type === t ? 'border-[#3b4a35] bg-[#3b4a35] text-white' : 'border-slate-300 text-slate-700'}`}>{KIND[t]}</button>
               ))}
             </div>
             <label className="mb-3 block text-sm font-medium text-slate-700">What is it? <span className="font-normal text-slate-400">(shows on the TV Board)</span>
-              <input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} list="event-labels" placeholder="e.g. Private, Public, Rosary, Mass, Graveside" className={input} />
+              <input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} list="event-labels" placeholder="e.g. Private, Public, Rosary, Mass, Graveside, Burial" className={input} />
               <datalist id="event-labels">{LABELS.map((l) => <option key={l} value={l} />)}</datalist>
             </label>
             <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
