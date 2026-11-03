@@ -13,7 +13,8 @@ import { summarize, withTaxRate, DEFAULT_TAX_RATE, type StatementSummary } from 
 import type { Raw, SheetDef } from '@/lib/sheetEngine'
 import { StatementSheet } from '@/components/statement/StatementSheet'
 import { loadSheets } from '@/components/statement/StatementTabs'
-import { QuoteDocument } from '@/components/quote/QuoteDocument'
+import { QuoteView } from '@/components/quote/QuoteView'
+import { freezeDates } from '@/lib/quoteForms'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 
 const badge: Record<QuickQuote['status'], string> = { draft: 'bg-slate-100 text-slate-700', sent: 'bg-emerald-100 text-emerald-800', void: 'bg-red-50 text-red-700' }
@@ -140,8 +141,8 @@ function QuoteList({ onNew }: { onNew: () => void }) {
   )
 }
 
-function Doc({ q, loc }: { q: QuickQuote; loc?: Parameters<typeof QuoteDocument>[0]['location'] }) {
-  return <QuoteDocument quote={q} label={q.label} prepared={{ name: q.forName, phone: q.contactPhone, email: q.contactEmail }} location={loc} />
+function Doc({ q, loc }: { q: QuickQuote; loc?: Parameters<typeof QuoteView>[0]['location'] }) {
+  return <QuoteView quote={q} label={q.label} prepared={{ name: q.forName, phone: q.contactPhone, email: q.contactEmail }} location={loc} />
 }
 
 /** The order forms with no case behind them: type prices, tick the packages, save. */
@@ -161,11 +162,12 @@ function QuoteBuilder({ onDone }: { onDone: () => void }) {
   useEffect(() => { if (sheets && !view) setView(sheets[0]?.name ?? '') }, [sheets, view])
   const taxRate = (() => { const n = Number(rate.replace('%', '')); return rate.trim() !== '' && isFinite(n) && n >= 0 && n < 30 ? n : DEFAULT_TAX_RATE })()
 
+  const defaultsFor = (sh: SheetDef): Record<string, Raw> => (sh.fields.name && forName.trim() ? { [sh.fields.name]: forName.trim().toUpperCase() } : {})
   const perSheet = useMemo(() => {
     const out = new Map<string, StatementSummary>()
-    for (const sh of sheets ?? []) out.set(sh.name, summarize(withTaxRate(sh, taxRate), local[sh.name] ?? {}).summary)
+    for (const sh of sheets ?? []) out.set(sh.name, summarize(withTaxRate(sh, taxRate), { ...defaultsFor(sh), ...(local[sh.name] ?? {}) }).summary)
     return out
-  }, [sheets, local, taxRate])
+  }, [sheets, local, taxRate, forName]) // eslint-disable-line react-hooks/exhaustive-deps
   const sheet: SheetDef | undefined = sheets?.find((s) => s.name === view)
   const chosen = (sheets ?? []).map((s) => s.name).filter((n) => included.includes(n))
   const lines: QuoteLine[] = chosen.flatMap((n) => (perSheet.get(n)?.lines ?? []).filter((l) => l.checked && l.amount !== 0).map((l) => ({ name: l.label || 'Other charge', amount: l.amount, pkg: n })))
@@ -221,7 +223,7 @@ function QuoteBuilder({ onDone }: { onDone: () => void }) {
           <p className="no-print text-xs text-slate-500">Open a package, type the prices, and tick the box on its tab to put it in the quote. Tick or untick single items inside it.</p>
           {sheet && (
             <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-              <StatementSheet sheet={withTaxRate(sheet, taxRate)} saved={local[view] ?? {}} defaults={{}} canEdit onChange={(k, v) => setLocal((l) => ({ ...l, [view]: { ...(l[view] ?? {}), [k]: v } }))} />
+              <StatementSheet sheet={withTaxRate(sheet, taxRate)} saved={local[view] ?? {}} defaults={defaultsFor(sheet)} canEdit onChange={(k, v) => setLocal((l) => ({ ...l, [view]: { ...(l[view] ?? {}), [k]: v } }))} />
             </div>
           )}
           <div className="no-print sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-300 bg-white p-4 shadow-lg">
@@ -240,7 +242,7 @@ function QuoteBuilder({ onDone }: { onDone: () => void }) {
       {saving && currentUser && (
         <SaveDialog lines={lines} total={total} onClose={() => setSaving(false)}
           onSave={async (extra) => {
-            await quickQuotes.create({ locationId, locationName: locName, forName: forName.trim(), contactPhone: phone.trim() || undefined, contactEmail: email.trim() || undefined, taxRate, packages: chosen, lines, tax, credit, ...extra }, currentUser)
+            await quickQuotes.create({ locationId, locationName: locName, forName: forName.trim(), contactPhone: phone.trim() || undefined, contactEmail: email.trim() || undefined, taxRate, packages: chosen, lines, tax, credit, ...extra, forms: Object.fromEntries(chosen.map((n) => { const sh = sheets!.find((x) => x.name === n)!; return [n, freezeDates(sh, { ...defaultsFor(sh), ...(local[n] ?? {}) })] })) }, currentUser)
             qc.invalidateQueries({ queryKey: ['quick-quotes'] })
             onDone()
           }} />

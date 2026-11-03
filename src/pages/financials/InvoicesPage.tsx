@@ -7,6 +7,7 @@ import { Printer, CheckCircle2, Circle, ArrowLeft } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { CaseInvoiceForms } from '@/components/quote/StatementForms'
 
 export default function InvoicesPage() {
   const { currentUser, accessibleLocations } = useSession()
@@ -62,6 +63,7 @@ export default function InvoicesPage() {
         </div>
 
         <div id="invoice-print-area" className="print-target">
+          <CaseInvoiceForms caseObj={selectedCase} fallback={
           <Card className="p-8 max-w-2xl">
             <div className="flex items-start justify-between mb-8 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -127,6 +129,7 @@ export default function InvoicesPage() {
               </div>
             </div>
           </Card>
+        } />
         </div>
       </div>
     )

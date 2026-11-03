@@ -3,6 +3,7 @@ import { USE_MOCK, supabase } from './supabase'
 import { shortLocationName } from './company'
 import { money, type QuoteLine, type QuoteStatus, type NewQuote } from './quotes'
 import type { Location, StaffMember } from '@/types'
+import type { QuoteFormsData } from './quoteForms'
 
 /** An informational quote made without a case. Nothing about the person who passed is kept. */
 export interface QuickQuote {
@@ -13,6 +14,7 @@ export interface QuickQuote {
   validUntil?: string; note?: string
   createdBy?: string; createdByName?: string; createdAt: string
   sentAt?: string; sentTo?: string; convertedCaseId?: string
+  forms?: QuoteFormsData
 }
 export interface NewQuickQuote extends NewQuote { locationId: string; locationName: string; forName: string; contactPhone?: string; contactEmail?: string; taxRate: number }
 
@@ -22,7 +24,7 @@ const rowTo = (r: any): QuickQuote => ({
   name: r.name ?? '', status: r.status, taxRate: Number(r.tax_rate), packages: r.packages ?? [], lines: r.lines ?? [],
   subtotal: Number(r.subtotal), tax: Number(r.tax), credit: Number(r.credit), total: Number(r.total), validUntil: r.valid_until ?? undefined, note: r.note ?? undefined,
   createdBy: r.created_by ?? undefined, createdByName: r.created_by_name ?? undefined, createdAt: r.created_at,
-  sentAt: r.sent_at ?? undefined, sentTo: r.sent_to ?? undefined, convertedCaseId: r.converted_case_id ?? undefined,
+  sentAt: r.sent_at ?? undefined, sentTo: r.sent_to ?? undefined, convertedCaseId: r.converted_case_id ?? undefined, forms: r.forms ?? undefined,
 })
 
 /** "Cathedral City" -> CC, "Desert Hot Springs" -> DHS, "Coachella" -> COA */
@@ -55,7 +57,7 @@ export const quickQuotes = {
       const seq = Math.max(0, ...mock.filter((q) => q.locationId === input.locationId && q.year === year).map((q) => q.seq)) + 1
       const q: QuickQuote = { id: `qq-${Date.now()}`, locationId: input.locationId, year, seq, label: makeLabel(input.locationName, year, seq), forName: input.forName, contactPhone: input.contactPhone, contactEmail: input.contactEmail,
         name: input.name, status: 'draft', taxRate: input.taxRate, packages: input.packages, lines: input.lines, subtotal, tax: input.tax, credit: input.credit, total, validUntil: input.validUntil, note: input.note,
-        createdBy: by.id, createdByName: by.name, createdAt: new Date().toISOString() }
+        forms: input.forms, createdBy: by.id, createdByName: by.name, createdAt: new Date().toISOString() }
       mock = [...mock, q]
       return q
     }
@@ -65,7 +67,7 @@ export const quickQuotes = {
       const { data, error } = await supabase!.from('quick_quotes').insert({
         location_id: input.locationId, year, seq, label: makeLabel(input.locationName, year, seq), for_name: input.forName, contact_phone: input.contactPhone ?? null, contact_email: input.contactEmail ?? null,
         name: input.name, status: 'draft', tax_rate: input.taxRate, packages: input.packages, lines: input.lines, subtotal, tax: input.tax, credit: input.credit, total,
-        valid_until: input.validUntil ?? null, note: input.note ?? null, created_by: by.id, created_by_name: by.name,
+        valid_until: input.validUntil ?? null, note: input.note ?? null, created_by: by.id, created_by_name: by.name, forms: input.forms ?? null,
       }).select().single()
       if (!error) return rowTo(data)
       if (!/duplicate|unique/i.test(error.message)) throw error

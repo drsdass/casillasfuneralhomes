@@ -1,6 +1,7 @@
 import { format, addDays, parseISO } from 'date-fns'
 import { USE_MOCK, supabase } from './supabase'
 import type { FuneralCase, Location, StaffMember } from '@/types'
+import type { QuoteFormsData } from './quoteForms'
 
 export interface QuoteLine { name: string; amount: number; pkg?: string }
 export type QuoteStatus = 'draft' | 'sent' | 'void'
@@ -11,15 +12,17 @@ export interface CaseQuote {
   validUntil?: string; note?: string
   createdBy?: string; createdByName?: string; createdAt: string
   sentAt?: string; sentTo?: string
+  /** The statement form(s) exactly as filled in when the quote was saved. */
+  forms?: QuoteFormsData; taxRate?: number
 }
-export type NewQuote = Pick<CaseQuote, 'name' | 'packages' | 'lines' | 'tax' | 'credit' | 'validUntil' | 'note'>
+export type NewQuote = Pick<CaseQuote, 'name' | 'packages' | 'lines' | 'tax' | 'credit' | 'validUntil' | 'note' | 'forms' | 'taxRate'>
 
 const round = (n: number) => Math.round(n * 100) / 100
 const rowToQuote = (r: any): CaseQuote => ({
   id: r.id, caseId: r.case_id, number: r.number, name: r.name ?? '', status: r.status, packages: r.packages ?? [], lines: r.lines ?? [],
   subtotal: Number(r.subtotal), tax: Number(r.tax), credit: Number(r.credit), total: Number(r.total),
   validUntil: r.valid_until ?? undefined, note: r.note ?? undefined, createdBy: r.created_by ?? undefined, createdByName: r.created_by_name ?? undefined,
-  createdAt: r.created_at, sentAt: r.sent_at ?? undefined, sentTo: r.sent_to ?? undefined,
+  createdAt: r.created_at, sentAt: r.sent_at ?? undefined, sentTo: r.sent_to ?? undefined, forms: r.forms ?? undefined, taxRate: r.tax_rate != null ? Number(r.tax_rate) : undefined,
 })
 
 let mockQuotes: CaseQuote[] = []
@@ -48,7 +51,7 @@ export const quotes = {
       const { data, error } = await supabase!.from('case_quotes').insert({
         case_id: caseId, number, name: input.name, status: 'draft', packages: input.packages, lines: input.lines,
         subtotal, tax: input.tax, credit: input.credit, total, valid_until: input.validUntil ?? null, note: input.note ?? null,
-        created_by: by.id, created_by_name: by.name,
+        created_by: by.id, created_by_name: by.name, forms: input.forms ?? null, tax_rate: input.taxRate ?? null,
       }).select().single()
       if (!error) return rowToQuote(data)
       if (!/duplicate|unique/i.test(error.message)) throw error // two people saving at the same moment: try the next number

@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { quotes, quoteEmailText, quoteLabel, money, type CaseQuote } from '@/lib/quotes'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
-import { QuoteDocument } from './QuoteDocument'
+import { QuoteView } from './QuoteView'
 import type { FuneralCase, StaffMember } from '@/types'
 
 const badge: Record<CaseQuote['status'], string> = {
@@ -98,11 +98,11 @@ export function CaseQuotes({ caseObj: c, canEdit, onGoToOrders }: { caseObj: Fun
                   <button type="button" onClick={() => { setViewId(null); setAutoPrint(false) }} aria-label="Close" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
                 </div>
               </div>
-              <div className="p-3"><QuoteDocument quote={viewing} label={quoteLabel(c, viewing)} caseObj={c} location={location} /></div>
+              <div className="p-3"><QuoteView quote={viewing} label={quoteLabel(c, viewing)} caseObj={c} location={location} /></div>
             </div>
           </div>
           {/* The copy that goes to the printer: hidden on screen, the only thing shown when printing. */}
-          {createPortal(<div className="print-only print-target"><QuoteDocument quote={viewing} label={quoteLabel(c, viewing)} caseObj={c} location={location} /></div>, document.body)}
+          {createPortal(<div className="print-only print-target"><QuoteView quote={viewing} label={quoteLabel(c, viewing)} caseObj={c} location={location} /></div>, document.body)}
         </>
       )}
 

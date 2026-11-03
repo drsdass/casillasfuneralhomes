@@ -7,6 +7,7 @@ import { summarize, withTaxRate, DEFAULT_TAX_RATE, type StatementSummary } from 
 import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
+import { freezeDates } from '@/lib/quoteForms'
 import { quotes, defaultValidUntil, money as fmt, type QuoteLine } from '@/lib/quotes'
 
 let sheetsPromise: Promise<SheetDef[]> | null = null
@@ -16,7 +17,7 @@ export const ORDERS_VIEW = 'Orders & Price List'
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
 /** The person, decedent and date-of-death boxes come from the case until someone types over them. */
-function caseDefaults(sheet: SheetDef, caseObj: FuneralCase): Record<string, Raw> {
+export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase): Record<string, Raw> {
   const f = sheet.fields
   const contact = caseObj.contacts.find((c) => c.isPrimary) ?? caseObj.contacts[0]
   const d = caseObj.decedent
@@ -201,7 +202,7 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
       )}
       {quoting && (
         <SaveQuoteDialog
-          names={names} current={view} perSheet={perSheet} caseObj={caseObj} currentUser={currentUser}
+          names={names} current={view} perSheet={perSheet} sheets={sheets ?? []} taxRate={taxRate} caseObj={caseObj} currentUser={currentUser}
           onClose={() => setQuoting(false)}
           onSaved={() => { setQuoting(false); qc.invalidateQueries({ queryKey: ['case-quotes', caseObj.id] }); onQuoteSaved?.() }}
         />
@@ -211,9 +212,10 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
 }
 
 /** Saves what is priced on one or more tabs as a numbered quote for this family. */
-function SaveQuoteDialog({ names, current, perSheet, caseObj, currentUser, onClose, onSaved }: {
+function SaveQuoteDialog({ names, current, perSheet, sheets, taxRate, caseObj, currentUser, onClose, onSaved }: {
   names: string[]; current: string
-  perSheet: Map<string, { summary: StatementSummary }>
+  perSheet: Map<string, { summary: StatementSummary; defaults: Record<string, Raw>; saved: Record<string, Raw> }>
+  sheets: SheetDef[]; taxRate: number
   caseObj: FuneralCase; currentUser: StaffMember; onClose: () => void; onSaved: () => void
 }) {
   const [picked, setPicked] = useState<string[]>([current])
@@ -230,7 +232,7 @@ function SaveQuoteDialog({ names, current, perSheet, caseObj, currentUser, onClo
     setPicked(next)
   }
   const save = useMutation({
-    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
+    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, taxRate, forms: Object.fromEntries(chosen.map((n) => [n, freezeDates(sheets.find((x) => x.name === n)!, { ...perSheet.get(n)!.defaults, ...perSheet.get(n)!.saved })])), validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
     onSuccess: onSaved,
   })
   return (
