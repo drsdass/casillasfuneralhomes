@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { shortLocationName, getCompanyName } from '@/lib/company'
 import { money, defaultValidUntil, type QuoteLine } from '@/lib/quotes'
 import { quickQuotes, quickQuoteEmailText, type QuickQuote } from '@/lib/quickQuotes'
-import { summarize, withTaxRate, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
+import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
 import type { Raw, SheetDef } from '@/lib/sheetEngine'
 import { StatementSheet } from '@/components/statement/StatementSheet'
 import { loadSheets } from '@/components/statement/StatementTabs'
@@ -162,7 +162,7 @@ function QuoteBuilder({ onDone }: { onDone: () => void }) {
   useEffect(() => { if (sheets && !view) setView(sheets[0]?.name ?? '') }, [sheets, view])
   const taxRate = (() => { const n = Number(rate.replace('%', '')); return rate.trim() !== '' && isFinite(n) && n >= 0 && n < 30 ? n : DEFAULT_TAX_RATE })()
 
-  const defaultsFor = (sh: SheetDef): Record<string, Raw> => (sh.fields.name && forName.trim() ? { [sh.fields.name]: forName.trim().toUpperCase() } : {})
+  const defaultsFor = (sh: SheetDef): Record<string, Raw> => ({ ...(sh.fields.name && forName.trim() ? { [sh.fields.name]: forName.trim().toUpperCase() } : {}), ...(repKey(sh) && currentUser ? { [repKey(sh)!]: currentUser.name.toUpperCase() } : {}) })
   const perSheet = useMemo(() => {
     const out = new Map<string, StatementSummary>()
     for (const sh of sheets ?? []) out.set(sh.name, summarize(withTaxRate(sh, taxRate), { ...defaultsFor(sh), ...(local[sh.name] ?? {}) }).summary)

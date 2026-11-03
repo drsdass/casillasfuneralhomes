@@ -396,15 +396,11 @@ export const api = {
     const { data, error } = await supabase!.functions.invoke('create-staff-member', { body: { ...input, orgId: changedBy.orgId } })
     if (error) {
       const context = (error as { context?: Response }).context
+      let reason: string | undefined
       if (context) {
-        try {
-          const body = await context.clone().json()
-          throw new Error(body?.error ?? error.message)
-        } catch {
-          // fall through
-        }
+        try { reason = (await context.clone().json())?.error } catch { /* no readable reason */ }
       }
-      throw error
+      throw new Error(reason ?? error.message) // show the real reason from the server, not just "non-2xx
     }
     logAuditReal({
       entityType: 'staff', entityId: data.id, action: 'create',

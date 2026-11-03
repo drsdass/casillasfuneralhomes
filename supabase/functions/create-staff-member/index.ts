@@ -82,22 +82,42 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-      email: body.email,
+    let authUser = await supabaseAdmin.auth.admin.createUser({
+      email: body.email.trim(),
       password: DEFAULT_TEMP_PASSWORD,
       email_confirm: true,
     })
-    if (authErr || !authUser.user) {
-      return new Response(JSON.stringify({ error: authErr?.message ?? 'Could not create the login account.' }), {
+    // A login that already exists (for example left behind by an earlier failed attempt): reuse it when it has no staff record yet.
+    if ((authUser.error || !authUser.data.user) && /already|registered|exists/i.test(authUser.error?.message ?? '')) {
+      let found: { id: string } | undefined
+      for (let page = 1; page <= 10 && !found; page++) {
+        const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 })
+        found = list?.users.find((u) => u.email?.toLowerCase() === body.email.trim().toLowerCase())
+        if (!list || list.users.length < 200) break
+      }
+      if (found) {
+        const { data: existingStaff } = await supabaseAdmin.from('staff_members').select('id').eq('id', found.id).maybeSingle()
+        if (existingStaff) {
+          return new Response(JSON.stringify({ error: 'This email already belongs to someone on the staff list. Look for them in the list (they may be marked inactive).' }), {
+            status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' },
+          })
+        }
+        await supabaseAdmin.auth.admin.updateUserById(found.id, { password: DEFAULT_TEMP_PASSWORD, email_confirm: true })
+        authUser = { data: { user: found as any }, error: null } as typeof authUser
+      }
+    }
+    if (authUser.error || !authUser.data.user) {
+      return new Response(JSON.stringify({ error: authUser.error?.message ?? 'Could not create the login account.' }), {
         status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' },
       })
     }
+    const newUser = authUser.data.user
 
     const { error: staffErr } = await supabaseAdmin.from('staff_members').insert({
-      id: authUser.user.id,
+      id: newUser.id,
       org_id: orgId,
       name: body.name,
-      email: body.email,
+      email: body.email.trim(),
       role: body.role,
       title: body.title || null,
       department: body.department || null,
@@ -106,12 +126,12 @@ Deno.serve(async (req) => {
     })
     if (staffErr) {
       // Roll back the auth account so a failed attempt doesn't leave an orphaned login with no staff record.
-      await supabaseAdmin.auth.admin.deleteUser(authUser.user.id)
+      await supabaseAdmin.auth.admin.deleteUser(newUser.id)
       return new Response(JSON.stringify({ error: staffErr.message }), { status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' } })
     }
 
     const { error: locErr } = await supabaseAdmin.from('staff_locations').insert(
-      body.locationIds.map((locationId) => ({ staff_id: authUser.user.id, location_id: locationId }))
+      body.locationIds.map((locationId) => ({ staff_id: newUser.id, location_id: locationId }))
     )
     if (locErr) {
       return new Response(JSON.stringify({ error: `Staff created, but location access failed: ${locErr.message}` }), {
@@ -119,7 +139,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify({ id: authUser.user.id, tempPassword: DEFAULT_TEMP_PASSWORD }), {
+    return new Response(JSON.stringify({ id: newUser.id, tempPassword: DEFAULT_TEMP_PASSWORD }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
     })
   } catch (err) {

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Printer, RotateCcw, Check, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { dateToSerial, type Raw, type SheetDef } from '@/lib/sheetEngine'
-import { summarize, withTaxRate, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
+import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
 import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
@@ -17,7 +17,7 @@ export const ORDERS_VIEW = 'Orders & Price List'
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
 /** The person, decedent and date-of-death boxes come from the case until someone types over them. */
-export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase): Record<string, Raw> {
+export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase, repName?: string): Record<string, Raw> {
   const f = sheet.fields
   const contact = caseObj.contacts.find((c) => c.isPrimary) ?? caseObj.contacts[0]
   const d = caseObj.decedent
@@ -31,6 +31,7 @@ export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase): Record<stri
   if (f.phone) out[f.phone] = phone.length === 10 ? `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}` : (contact?.phone ?? '')
   if (f.dec) out[f.dec] = dec
   if (f.dod) out[f.dod] = dod
+  const rk = repKey(sheet); if (rk && repName) out[rk] = repName.toUpperCase() // whoever is logged in, until the form is printed or sent
   return out
 }
 
@@ -71,12 +72,12 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
   const perSheet = useMemo(() => {
     const out = new Map<string, { defaults: Record<string, Raw>; saved: Record<string, Raw>; summary: StatementSummary }>()
     for (const sh of sheets ?? []) {
-      const defaults = caseDefaults(sh, caseObj)
+      const defaults = caseDefaults(sh, caseObj, currentUser.name)
       const saved = { ...(savedAll?.[sh.name] ?? {}), ...(local[sh.name] ?? {}) }
       out.set(sh.name, { defaults, saved, summary: summarize(withTaxRate(sh, taxRate), { ...defaults, ...saved }).summary })
     }
     return out
-  }, [sheets, savedAll, local, caseObj, taxRate])
+  }, [sheets, savedAll, local, caseObj, taxRate, currentUser.name])
 
   // ---- which tabs are on the invoice ----
   const inv = savedAll?.['_invoice']
@@ -96,6 +97,16 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
   })
   const [rateDraft, setRateDraft] = useState<string | null>(null)
   const commitRate = () => { if (rateDraft === null) return; const n = Number(rateDraft.replace('%', '').trim()); if (rateDraft.trim() !== '' && isFinite(n) && n >= 0 && n < 30) saveRate.mutate(String(n)); setRateDraft(null) }
+  // The funeral home representative's name follows whoever is logged in until the form is printed or sent; then it is locked in.
+  const repLocked = (n: string) => { const sh = sheets?.find((x) => x.name === n); const rk = sh && repKey(sh); return !!rk && rk in { ...(savedAll?.[n] ?? {}), ...(local[n] ?? {}) } }
+  const lockAndPrint = () => {
+    if (canEdit && sheets) for (const n of Array.from(new Set([view, ...ticked]))) {
+      const sh = sheets.find((x) => x.name === n); const rk = sh && repKey(sh)
+      if (sh && rk && !repLocked(n)) save.mutate({ sheet: n, data: { ...(savedAll?.[n] ?? {}), ...(local[n] ?? {}), [rk]: currentUser.name.toUpperCase() } as Record<string, string | number> })
+    }
+    window.setTimeout(() => window.print(), 80)
+  }
+  const useMyName = () => { const sh = sheets?.find((x) => x.name === view); const rk = sh && repKey(sh); if (!rk) return; const { [rk]: _drop, ...rest } = { ...(savedAll?.[view] ?? {}), ...(local[view] ?? {}) }; setLocal((l) => { const { [rk]: _x, ...r2 } = l[view] ?? {}; return { ...l, [view]: r2 } }); save.mutate({ sheet: view, data: rest as Record<string, string | number> }) }
   const several = ticked.length > 1
   const lines = useMemo(() => ticked.flatMap((n) => (perSheet.get(n)?.summary.lines ?? []).filter((l) => l.checked && l.amount !== 0).map((l) => ({ name: several ? `${l.label || 'Other charge'} (${n.trim()})` : (l.label || 'Other charge'), amount: l.amount }))), [ticked, perSheet, several])
   const tax = Math.round(ticked.reduce((s, n) => s + (perSheet.get(n)?.summary.tax ?? 0), 0) * 100) / 100
@@ -145,12 +156,15 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
       {view !== ORDERS_VIEW && sheet && cur && (
         <>
           <div className="no-print flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"><Printer size={15} /> Print this form</button>
+            <button type="button" onClick={lockAndPrint} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"><Printer size={15} /> Print this form</button>
             {canEdit && <button type="button" onClick={() => setQuoting(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#3b4a35] rounded-md px-3 py-1.5 hover:bg-[#4d5f45]"><FileText size={15} /> Save as quote</button>}
             {canEdit && Object.keys(cur.saved).length > 0 && (
               <button type="button" onClick={() => { if (confirm('Clear everything typed on this tab for this case and go back to the blank form?')) { setLocal((l) => ({ ...l, [view]: {} })); save.mutate({ sheet: view, data: {} }) } }}
                 className="inline-flex items-center gap-1.5 text-sm text-slate-500 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"><RotateCcw size={14} /> Start this tab over</button>
             )}
+            {repKey(sheet) && (repLocked(view)
+              ? <span className="text-xs text-slate-500">Prepared by <b>{String(cur.saved[repKey(sheet)!] ?? '')}</b> (locked){String(cur.saved[repKey(sheet)!] ?? '').toUpperCase() !== currentUser.name.toUpperCase() && canEdit && <button type="button" onClick={useMyName} className="ml-1 underline">use my name</button>}</span>
+              : <span className="text-xs text-slate-500">Prepared by <b>{currentUser.name.toUpperCase()}</b> (locks when printed)</span>)}
             <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 ml-2" title="Sales tax differs by city. Set the rate for this case; every form on this case uses it.">
               Sales tax
               <input value={rateDraft ?? String(taxRate)} disabled={!canEdit} inputMode="decimal" aria-label="Sales tax percent"
@@ -232,7 +246,7 @@ function SaveQuoteDialog({ names, current, perSheet, sheets, taxRate, caseObj, c
     setPicked(next)
   }
   const save = useMutation({
-    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, taxRate, forms: Object.fromEntries(chosen.map((n) => [n, freezeDates(sheets.find((x) => x.name === n)!, { ...perSheet.get(n)!.defaults, ...perSheet.get(n)!.saved })])), validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
+    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, taxRate, forms: Object.fromEntries(chosen.map((n) => { const sh = sheets.find((x) => x.name === n)!; const rk = repKey(sh); return [n, freezeDates(sh, { ...perSheet.get(n)!.defaults, ...perSheet.get(n)!.saved, ...(rk ? { [rk]: currentUser.name.toUpperCase() } : {}) })] })), validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
     onSuccess: onSaved,
   })
   return (

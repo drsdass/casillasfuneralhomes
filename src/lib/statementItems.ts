@@ -115,3 +115,11 @@ export function summarize(sheet: SheetDef, over: Record<string, Raw>) {
   const summary: StatementSummary = { lines, tax: round(tax), credit: round(credit), subtotal: round(subtotal), total: round(subtotal + tax - credit) }
   return { ev, ev0, summary }
 }
+
+/** The box above "Funeral Home Representative" — whoever prepared and signs for the funeral home. */
+export function repKey(sheet: SheetDef): string | undefined {
+  for (const [key, c] of Object.entries(sheet.cells)) {
+    if (c.f === undefined && typeof c.v === 'string' && /^funeral home representative/i.test(c.v.trim())) { const [r, col] = key.split(',').map(Number); return `${r - 1},${col}` }
+  }
+  return undefined
+}

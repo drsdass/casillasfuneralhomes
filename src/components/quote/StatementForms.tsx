@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { loadSheets, caseDefaults } from '@/components/statement/StatementTabs'
 import { StatementSheet } from '@/components/statement/StatementSheet'
-import { withTaxRate, DEFAULT_TAX_RATE } from '@/lib/statementItems'
+import { withTaxRate, repKey, DEFAULT_TAX_RATE } from '@/lib/statementItems'
+import { useSession } from '@/context/SessionContext'
+import type { StaffMember } from '@/types'
 import type { QuoteFormsData } from '@/lib/quoteForms'
 import type { Raw } from '@/lib/sheetEngine'
 import type { FuneralCase } from '@/types'
@@ -31,6 +33,7 @@ export function StatementForms({ forms, order, taxRate }: { forms: QuoteFormsDat
 
 /** A case's invoice as the signed statement form(s): every ticked package, filled in as it stands now. Falls back to `fallback` when no forms are on the invoice. */
 export function CaseInvoiceForms({ caseObj, fallback }: { caseObj: FuneralCase; fallback: React.ReactNode }) {
+  const { currentUser } = useSession()
   const { data: sheets } = useQuery({ queryKey: ['statement-sheets'], queryFn: loadSheets, staleTime: Infinity })
   const { data: saved } = useQuery({ queryKey: ['case-statements', caseObj.id], queryFn: () => api.getCaseStatements(caseObj.id) })
   if (!sheets || !saved) return <>{fallback}</>
@@ -39,7 +42,18 @@ export function CaseInvoiceForms({ caseObj, fallback }: { caseObj: FuneralCase; 
   const order = raw.split('|').filter((n) => sheets.some((s) => s.name === n))
   if (order.length === 0) return <>{fallback}</>
   const forms: QuoteFormsData = {}
-  for (const n of order) forms[n] = { ...caseDefaults(sheets.find((s) => s.name === n)!, caseObj), ...(saved[n] ?? {}) }
+  for (const n of order) forms[n] = { ...caseDefaults(sheets.find((s) => s.name === n)!, caseObj, currentUser?.name), ...(saved[n] ?? {}) }
   const rate = Number(inv?.taxRate)
   return <StatementForms forms={forms} order={order} taxRate={inv?.taxRate !== undefined && inv.taxRate !== '' && isFinite(rate) ? rate : undefined} />
+}
+
+/** Printing or sending the invoice locks in the representative's name on every form on it, so a later viewer's name never replaces it. */
+export async function lockInvoiceRep(caseId: string, user: StaffMember): Promise<void> {
+  const [sheets, saved] = await Promise.all([loadSheets(), api.getCaseStatements(caseId)])
+  const inv = saved['_invoice']
+  const order = (typeof inv?.sources === 'string' ? inv.sources : '').split('|')
+  for (const n of order) {
+    const sh = sheets.find((s) => s.name === n); const rk = sh && repKey(sh)
+    if (sh && rk && !(rk in (saved[n] ?? {}))) await api.saveCaseStatement(caseId, n, { ...(saved[n] ?? {}), [rk]: user.name.toUpperCase() }, user)
+  }
 }

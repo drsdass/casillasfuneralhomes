@@ -7,7 +7,7 @@ import { Printer, CheckCircle2, Circle, ArrowLeft } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
-import { CaseInvoiceForms } from '@/components/quote/StatementForms'
+import { CaseInvoiceForms, lockInvoiceRep } from '@/components/quote/StatementForms'
 
 export default function InvoicesPage() {
   const { currentUser, accessibleLocations } = useSession()
@@ -43,7 +43,7 @@ export default function InvoicesPage() {
           <SectionHeading title="Invoice" subtitle={selectedCase ? `${selectedCase.decedent.firstName} ${selectedCase.decedent.lastName}` : ''} />
           <div className="flex gap-2">
             <button
-              onClick={() => window.print()}
+              onClick={() => { lockInvoiceRep(selectedCase.id, currentUser!).catch(() => {}).finally(() => { queryClient.invalidateQueries({ queryKey: ['case-statements', selectedCase.id] }) }); window.setTimeout(() => window.print(), 80) }}
               className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-3.5 py-2 rounded-md hover:bg-[#4d5f45] transition"
             >
               <Printer size={15} /> Print Invoice
