@@ -158,6 +158,12 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
                 <button type="button" onClick={() => sync.mutate()} className="ml-3 underline">Try again</button>
               </div>
             )}
+            {!ticked.includes(view) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                <span>The form you are looking at (<strong>{view.trim()}</strong>, {money(cur.summary.total)}) is <strong>not on the invoice</strong>{ticked.length > 0 ? ' — the invoice below only adds up the ticked tabs.' : '.'}</span>
+                {canEdit && <button type="button" disabled={setTicked.isPending} onClick={() => toggleTab(view)} className="ml-auto text-sm font-semibold text-white bg-[#3b4a35] rounded-md px-3 py-1 hover:bg-[#4d5f45]">Add {view.trim()} to the invoice</button>}
+              </div>
+            )}
             {ticked.length === 0 ? (
               <p className="text-sm text-slate-500">Tick the box on one or more tabs above to put those packages on the invoice. They are added together.</p>
             ) : (
