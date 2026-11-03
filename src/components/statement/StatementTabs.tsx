@@ -10,7 +10,7 @@ import { PaymentsPanel } from './PaymentsPanel'
 import { quotes, defaultValidUntil, money as fmt, type QuoteLine } from '@/lib/quotes'
 
 let sheetsPromise: Promise<SheetDef[]> | null = null
-const loadSheets = () => (sheetsPromise ??= import('@/data/statementSheets.json').then((m) => m.default as unknown as SheetDef[]))
+export const loadSheets = () => (sheetsPromise ??= import('@/data/statementSheets.json').then((m) => m.default as unknown as SheetDef[]))
 
 export const ORDERS_VIEW = 'Orders & Price List'
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })

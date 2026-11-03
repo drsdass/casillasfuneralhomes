@@ -1,12 +1,14 @@
 import { format, parseISO } from 'date-fns'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { getBrand, getCompanyName } from '@/lib/company'
-import { money, quoteLabel, type CaseQuote } from '@/lib/quotes'
+import { money, type CaseQuote } from '@/lib/quotes'
 import type { FuneralCase, Location } from '@/types'
 
 /** The quote as a page the family sees: the same layout on screen, on paper, and (as text) in the email. */
-export function QuoteDocument({ quote: q, caseObj: c, location }: { quote: CaseQuote; caseObj: FuneralCase; location?: Location }) {
-  const contact = c.contacts.find((x) => x.isPrimary) ?? c.contacts[0]
+type DocQuote = Pick<CaseQuote, 'lines' | 'subtotal' | 'tax' | 'credit' | 'total' | 'name' | 'note' | 'validUntil' | 'createdAt'>
+export function QuoteDocument({ quote: q, label, caseObj: c, prepared, location }: { quote: DocQuote; label: string; caseObj?: FuneralCase; prepared?: { name?: string; phone?: string; email?: string }; location?: Location }) {
+  const cc = c?.contacts.find((x) => x.isPrimary) ?? c?.contacts[0]
+  const contact = c ? cc : prepared
   const groups: { pkg?: string; lines: CaseQuote['lines'] }[] = []
   for (const l of q.lines) {
     const g = groups[groups.length - 1]
@@ -27,7 +29,7 @@ export function QuoteDocument({ quote: q, caseObj: c, location }: { quote: CaseQ
         </div>
         <div className="text-right">
           <div className="text-xl font-bold tracking-wide">QUOTE</div>
-          <div className="text-slate-600">{quoteLabel(c, q)}</div>
+          <div className="text-slate-600">{label}</div>
           <div className="text-slate-600">{format(parseISO(q.createdAt), 'MMMM d, yyyy')}</div>
         </div>
       </div>
@@ -35,14 +37,19 @@ export function QuoteDocument({ quote: q, caseObj: c, location }: { quote: CaseQ
       <div className="grid grid-cols-2 gap-6 py-4">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Prepared for</div>
-          <div className="font-medium">{contact?.name || 'The family'}</div>
+          <div className="font-medium">{contact?.name || (c ? 'The family' : 'Your family')}</div>
           {contact?.phone && <div className="text-slate-600">{contact.phone}</div>}
           {contact?.email && <div className="text-slate-600">{contact.email}</div>}
         </div>
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">In loving memory of</div>
-          <div className="font-medium">{c.decedent.firstName} {c.decedent.middleName ? c.decedent.middleName + ' ' : ''}{c.decedent.lastName}</div>
-          {q.name && <div className="text-slate-600">{q.name}</div>}
+          {c ? <>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">In loving memory of</div>
+            <div className="font-medium">{c.decedent.firstName} {c.decedent.middleName ? c.decedent.middleName + ' ' : ''}{c.decedent.lastName}</div>
+          </> : q.name ? <>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quote for</div>
+            <div className="font-medium">{q.name}</div>
+          </> : null}
+          {c && q.name && <div className="text-slate-600">{q.name}</div>}
         </div>
       </div>
 
@@ -72,7 +79,7 @@ export function QuoteDocument({ quote: q, caseObj: c, location }: { quote: CaseQ
       {q.note && <div className="mt-5 whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-3">{q.note}</div>}
       <div className="mt-6 text-[11px] text-slate-500 leading-relaxed">
         {q.validUntil ? `This quote is good through ${format(parseISO(q.validUntil), 'MMMM d, yyyy')}. ` : ''}
-        It is an estimate based on the goods and services listed above. The final charges are those actually selected and provided, as shown on the Statement of Funeral Goods and Services Selected given to you at the time of arrangements.
+        It is an estimate based on the goods and services listed above. The final charges are those actually selected and provided, as shown on the Statement of Funeral Goods and Services Selected given to you at the time of arrangements.{c ? '' : ' This quote is for information only; no arrangements have been made.'}
       </div>
     </div>
   )

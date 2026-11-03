@@ -58,7 +58,7 @@ export function landingRouteFor(role: UserRole): string {
 /** Every nav key a role could see by default, before per-user overrides. */
 function roleDefaultNavKeys(role: UserRole): string[] {
   if (isRestrictedToInvoices(role)) return ['invoices']
-  const keys = ['dashboard', 'cases', 'families', 'custody', 'calendar', 'staff-schedule', 'messages', 'inbox', 'financials', 'board']
+  const keys = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'calendar', 'staff-schedule', 'messages', 'inbox', 'financials', 'board']
   if (atLeast(role, 'supervisor')) keys.push('driver')
   if (canViewReports(role)) keys.push('reports')
   if (atLeast(role, 'admin')) keys.push('admin')
@@ -80,6 +80,7 @@ export function visibleNavKeys(user: Pick<StaffMember, 'role' | 'disabledFeature
 /** All feature keys a super_admin can toggle per-user, with display labels. */
 export const TOGGLEABLE_FEATURES: { key: string; label: string }[] = [
   { key: 'cases', label: 'Cases' },
+  { key: 'quotes', label: 'Quick Quotes' },
   { key: 'families', label: 'Families' },
   { key: 'custody', label: 'Chain of Custody' },
   { key: 'driver', label: 'Driver (phone view)' },

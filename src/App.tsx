@@ -29,6 +29,7 @@ import EventForm from '@/pages/calendar/EventForm'
 import EmailInbox from '@/pages/inbox/EmailInbox'
 import FinancialsPage from '@/pages/financials/FinancialsPage'
 import InvoicesPage from '@/pages/financials/InvoicesPage'
+import QuickQuotes from '@/pages/quotes/QuickQuotes'
 import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
@@ -111,6 +112,7 @@ export default function App() {
                 <Route path="/inbox" element={<EmailInbox />} />
                 <Route path="/financials" element={<FinancialsPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
+                <Route path="/quotes" element={<QuickQuotes />} />
                 <Route
                   path="/reports"
                   element={

@@ -174,6 +174,7 @@ export const es: TranslationKeys = {
     board: 'Pizarra de TV',
     admin: 'Administración',
     invoices: 'Facturas',
+    quotes: 'Cotizaciones rápidas',
     logout: 'Cerrar Sesión',
     locationsAccessible: 'ubicaciones accesibles',
   },

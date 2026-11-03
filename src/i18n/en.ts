@@ -173,6 +173,7 @@ export const en = {
     board: 'TV Board',
     admin: 'Admin',
     invoices: 'Invoices',
+    quotes: 'Quick Quotes',
     logout: 'Log out',
     locationsAccessible: 'locations accessible',
   },

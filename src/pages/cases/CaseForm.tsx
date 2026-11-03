@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { LocationPicker, useDefaultLocation } from '@/components/ui/LocationPicker'
 import { api } from '@/lib/api'
+import { quickQuotes } from '@/lib/quickQuotes'
+import { quotes as caseQuotes } from '@/lib/quotes'
 import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Sparkles } from 'lucide-react'
@@ -74,6 +76,10 @@ export default function CaseForm() {
     enabled: !!existing?.familyId,
   })
 
+  // "Make this a case" from a Quick Quote: start from its location and contact, and carry its prices over as the case's first quote.
+  const fromQuoteId = !isEdit ? new URLSearchParams(location.search).get('fromQuote') : null
+  const { data: fromQuote } = useQuery({ queryKey: ['quick-quote', fromQuoteId], queryFn: () => quickQuotes.get(fromQuoteId!), enabled: !!fromQuoteId })
+
   const defaultLoc = useDefaultLocation()
   const [chosenLocationId, setChosenLocationId] = useState(existing?.locationId ?? '')
   const locId = chosenLocationId || defaultLoc
@@ -112,6 +118,14 @@ export default function CaseForm() {
     }, 250)
     return () => clearTimeout(t)
   }, [familySearch, selectedFamilyName])
+
+  useEffect(() => {
+    if (!fromQuote) return
+    setChosenLocationId((v) => v || fromQuote.locationId)
+    setContactName((v) => v || fromQuote.forName)
+    setContactPhone((v) => v || fromQuote.contactPhone || '')
+    setContactEmail((v) => v || fromQuote.contactEmail || '')
+  }, [fromQuote])
 
   useEffect(() => {
     if (!existing) return
@@ -182,6 +196,12 @@ export default function CaseForm() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['cases'] })
+      if (result && fromQuote && !isEdit && !fromQuote.convertedCaseId) {
+        caseQuotes.create(result.id, { name: fromQuote.name || fromQuote.label, packages: fromQuote.packages, lines: fromQuote.lines, tax: fromQuote.tax, credit: fromQuote.credit, validUntil: fromQuote.validUntil, note: fromQuote.note }, currentUser!)
+          .then(() => quickQuotes.update(fromQuote.id, { convertedCaseId: result.id }))
+          .then(() => { queryClient.invalidateQueries({ queryKey: ['quick-quotes'] }); queryClient.invalidateQueries({ queryKey: ['case-quotes', result.id] }) })
+          .catch(() => {})
+      }
       if (result) navigate(`/cases/${result.id}`)
     },
   })
