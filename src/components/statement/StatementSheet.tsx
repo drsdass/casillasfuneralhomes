@@ -111,7 +111,8 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
       const val = off ? ev0.get(key) : ev.get(key)
       const sp = covered.spans.get(key)
       const shown = show(val, st?.nf)
-      const readOnly = !canEdit || (cell?.f !== undefined && !(key in over))
+      // A priced line whose amount is a formula (e.g. a fixed price, or copies x $26) can be typed over; totals and tax stay locked.
+      const readOnly = !canEdit || (cell?.f !== undefined && !(key in over) && !lineByKey.has(key))
       const isEditing = editing === key
       const rot = st?.rot === 90 || st?.rot === 255
       const css = cellCss(st, typeof val === 'number')
@@ -128,7 +129,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
           className={readOnly ? '' : 'stmt-edit'}
           style={{ ...css, padding: css.paddingLeft ? undefined : '0 2px', position: 'relative', overflow: wrap || rot || rightFilled ? 'hidden' : 'visible', whiteSpace: wrap ? 'normal' : 'nowrap', wordBreak: wrap ? 'break-word' : undefined, lineHeight: 1.15, boxSizing: 'border-box' }}>
           {isEditing ? (
-            <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+            <input autoFocus onFocus={(e) => e.currentTarget.select()} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
               onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(null) }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', font: 'inherit', color: 'inherit', background: '#fffbe0', border: '2px solid #b3925a', padding: '0 2px', textAlign: css.textAlign as CSSProperties['textAlign'], zIndex: 5, outline: 'none' }} />
           ) : rot ? (

@@ -42,7 +42,7 @@ export function makeEvaluator(sheet: SheetDef, over: Record<string, Raw>) {
     }
     const c = sheet.cells[key]
     if (!c) return null
-    if (c.f !== undefined) return { kind: 'f', f: c.f }
+    if (c.f !== undefined) return { kind: 'f', f: c.f.replace(/^\s*=/, '') } // a few template formulas were saved as "=525"
     return c.v === undefined ? null : { kind: 'val', v: c.v }
   }
 
