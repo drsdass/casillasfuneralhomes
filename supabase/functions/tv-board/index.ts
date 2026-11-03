@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       return {
         id: c.id, locationId: c.location_id, caseNumber: c.case_number,
         firstName: c.decedent_first_name, lastName: c.decedent_last_name, color: c.color ?? undefined,
-        disposition: c.disposition, boardDisp: c.board_disp ?? undefined, serviceDate: c.service_date ?? undefined, visitationDate: c.visitation_date ?? undefined, visitationEnd: c.visitation_end ?? undefined,
+        disposition: c.disposition, boardDisp: c.board_disp ?? undefined, boardFlowers: c.board_flowers ?? undefined, boardBirds: c.board_birds ?? undefined, boardEscort: c.board_escort ?? undefined, serviceDate: c.service_date ?? undefined, visitationDate: c.visitation_date ?? undefined, visitationEnd: c.visitation_end ?? undefined,
         visitation: evFor(c.id, 'visitation'), service: evFor(c.id, 'service'),
         flowers: status(c.id, /flower/i), birds: status(c.id, /dove|bird/i), escort: status(c.id, /escort|carriage/i),
         casketLines,

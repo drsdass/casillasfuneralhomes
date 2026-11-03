@@ -1,5 +1,5 @@
 import { deriveServicePatch } from '@/lib/vitalToCase'
-import { BOARD_DISP_OPTIONS } from '@/lib/boardDisp'
+import { BOARD_DISP_OPTIONS, BOARD_EXTRA_OPTIONS } from '@/lib/boardDisp'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
@@ -99,6 +99,10 @@ export default function CaseDetail() {
   })
   const setBoardDispMutation = useMutation({
     mutationFn: (boardDisp: string) => api.updateCase(caseId!, { boardDisp }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
+  })
+  const setBoardExtraMutation = useMutation({
+    mutationFn: (patch: { boardFlowers?: string; boardBirds?: string; boardEscort?: string }) => api.updateCase(caseId!, patch, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
   })
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
@@ -375,6 +379,20 @@ export default function CaseDetail() {
                 {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </label>
+          )}
+          {canEdit && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+              {([['Flowers', 'boardFlowers'], ['Birds', 'boardBirds'], ['Escort', 'boardEscort']] as const).map(([label, key]) => (
+                <label key={key} className="inline-flex items-center gap-1.5">
+                  {label}
+                  <select value={c[key] ?? ''} onChange={(e) => setBoardExtraMutation.mutate({ [key]: e.target.value })} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                    <option value="">Auto (from Orders)</option>
+                    {BOARD_EXTRA_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                  </select>
+                </label>
+              ))}
+              <span className="text-[11px] text-slate-400">shown on the TV Board</span>
+            </div>
           )}
           <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
           {linkedFamily && (

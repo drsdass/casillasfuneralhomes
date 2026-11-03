@@ -75,6 +75,12 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
   })
 
+  const deleteStaffMutation = useMutation({
+    mutationFn: (staffId: string) => api.deleteStaffMember(staffId, currentUser!),
+    onSuccess: (r) => { queryClient.invalidateQueries({ queryKey: ['staff'] }); setAccessPanelId(null); window.alert(r.mode === 'deleted' ? `${r.name} was deleted.` : `${r.name} has work in the system, so they were switched off instead: hidden from the lists and unable to sign in. Everything they did is kept.`) },
+    onError: (e) => window.alert(getErrorMessage(e)),
+  })
+
   const createStaffMutation = useMutation({
     mutationFn: (input: { name: string; email: string; role: UserRole; title?: string; department?: string; phone?: string; locationIds: string[] }) =>
       api.createStaffMember(input, currentUser!),
@@ -327,6 +333,18 @@ export default function AdminPage() {
                               </div>
                               <p className="text-[11px] text-slate-400 mt-2">Unchecking a feature blocks it for this person even though their role would normally allow it.</p>
                             </div>
+                            {canAssign && s.id !== currentUser?.id && (
+                              <div className="col-span-2 border-t border-slate-200 pt-3 flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button" disabled={deleteStaffMutation.isPending}
+                                  onClick={() => { if (window.confirm(`Remove ${s.name} (${s.email})?\n\nIf they have never done any work in the system they are deleted. If they have, they are switched off instead: hidden and unable to sign in, with everything they did kept.`)) deleteStaffMutation.mutate(s.id) }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 border border-red-200 rounded-md px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  Remove {s.name.split(' ')[0]}
+                                </button>
+                                <span className="text-[11px] text-slate-400">Asks you to confirm first.</span>
+                              </div>
+                            )}
                             {organizations.length > 1 && (s.role === 'admin' || s.role === 'super_admin') && (
                               <div className="col-span-2 border-t border-slate-200 pt-3">
                                 <div className="text-xs font-semibold text-slate-700 mb-2">Companies</div>

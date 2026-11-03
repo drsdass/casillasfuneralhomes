@@ -5,6 +5,7 @@ import { useSession } from '@/context/SessionContext'
 import { loadBoardData, type BoardData, type BoardRowData, type OrderState } from '@/lib/tvBoard'
 import { format } from 'date-fns'
 import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
+import { boardOrder, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -110,7 +111,7 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
             </tr>
           </thead>
           <tbody className="text-base">
-            {data.rows.map((r) => (
+            {boardOrder(data.rows).map((r) => (
               <BoardRow key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
           </tbody>
@@ -131,11 +132,10 @@ export default function TvBoard() {
   return <BoardView data={data} backTo="/" />
 }
 
-function OrderCell({ status }: { status: OrderState }) {
-  if (status === 'confirmed') return <Check size={16} className="text-emerald-400" />
-  if (status === 'ordered') return <Clock size={16} className="text-amber-400" />
-  if (status === 'pending') return <span className="text-slate-400 text-xs">pending</span>
-  return <span className="text-slate-500">—</span>
+function ExtraCell({ state }: { state: BoardExtra }) {
+  if (state === 'confirmed') return <span className="inline-flex items-center gap-1 font-semibold text-emerald-400"><Check size={16} /> Confirmed</span>
+  if (state === 'yes') return <span className="inline-flex items-center gap-1 font-semibold text-amber-300"><Clock size={15} /> Yes</span>
+  return <span className="text-slate-500">No</span>
 }
 
 function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
@@ -160,9 +160,9 @@ function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: stri
       </td>
       <td className="py-3 px-3 text-slate-200 text-sm">{service && service.staff.length > 0 ? service.staff.join(', ') : <span className="text-slate-500">—</span>}</td>
       <td className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
-      <td className="py-3 px-3"><OrderCell status={r.flowers} /></td>
-      <td className="py-3 px-3"><OrderCell status={r.birds} /></td>
-      <td className="py-3 px-3"><OrderCell status={r.escort} /></td>
+      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)} /></td>
+      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)} /></td>
+      <td className="py-3 px-3"><ExtraCell state={extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)} /></td>
       <td className="py-3 px-3 text-slate-200">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
       <td className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere]">
         {specialNotes.length > 0

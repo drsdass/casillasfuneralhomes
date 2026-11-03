@@ -210,6 +210,13 @@ export const mockStore = {
     return { tempPassword: 'ChangeMe123!' }
   },
 
+  deleteStaffMember(staffId: string, changedBy: StaffMember): { mode: 'deleted' | 'deactivated'; name: string } {
+    const s = staffStore.find((x) => x.id === staffId)
+    staffStore = staffStore.filter((x) => x.id !== staffId)
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'delete', summary: `Deleted staff member ${s?.name ?? staffId}`, changedBy: changedBy.id, changedByName: changedBy.name })
+    return { mode: 'deleted', name: s?.name ?? '' }
+  },
+
   // -----------------------------------------------------------------
   // Cases
   // -----------------------------------------------------------------
@@ -584,12 +591,12 @@ export const mockStore = {
     caseId ? paymentStore.filter((p) => p.caseId === caseId) : paymentStore,
 
   recordPayment(
-    input: { contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string },
+    input: { contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string; receivedAt?: string },
     changedBy: StaffMember
   ): Payment {
     const payment: Payment = {
       id: newId('pay'), contractId: input.contractId, caseId: input.caseId, amount: input.amount,
-      method: input.method, reference: input.reference, receivedAt: new Date().toISOString(), recordedBy: changedBy.id,
+      method: input.method, reference: input.reference, receivedAt: input.receivedAt ?? new Date().toISOString(), recordedBy: changedBy.id,
     }
     paymentStore = [...paymentStore, payment]
     const totalPaid = paymentStore.filter((p) => p.contractId === input.contractId).reduce((sum, p) => sum + p.amount, 0)

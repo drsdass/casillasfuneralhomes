@@ -244,7 +244,7 @@ export const api = {
     if (USE_MOCK) return delay(mockStore.getStaff())
     const { data, error } = await supabase!.from('staff_members').select('*, staff_locations(location_id)')
     if (error) throw error
-    return (data ?? []).map(rowToStaff)
+    return (data ?? []).map(rowToStaff).filter((s) => s.active !== false) // people who were switched off stay out of every list
   },
 
   // "Who is online" — see src/db/presence.sql.
@@ -407,6 +407,19 @@ export const api = {
       summary: `Added new staff member: ${input.name} (${input.role.replace('_', ' ')})`, changedBy: changedBy.id,
     })
     return { tempPassword: data.tempPassword }
+  },
+
+  /** Super Admin only. Someone with no history is deleted; someone with history is switched off (hidden, sign-in blocked) so nothing they did is lost. */
+  async deleteStaffMember(staffId: string, changedBy: StaffMember): Promise<{ mode: 'deleted' | 'deactivated'; name: string }> {
+    if (USE_MOCK) return delay(mockStore.deleteStaffMember(staffId, changedBy))
+    const { data, error } = await supabase!.functions.invoke('delete-staff-member', { body: { staffId } })
+    if (error) {
+      let reason: string | undefined
+      try { reason = (await (error as { context?: Response }).context?.clone().json())?.error } catch { /* no readable reason */ }
+      throw new Error(reason ?? error.message)
+    }
+    logAuditReal({ entityType: 'staff', entityId: staffId, action: 'delete', summary: `${data.mode === 'deleted' ? 'Deleted' : 'Switched off'} staff member ${data.name}`, changedBy: changedBy.id })
+    return data
   },
 
   // -------------------------------------------------------------------
@@ -1021,12 +1034,13 @@ export const api = {
    * matter how many separate payments come in.
    */
   async recordPayment(input: {
-    contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string
+    contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string; receivedAt?: string
   }, changedBy: StaffMember): Promise<Payment> {
     if (USE_MOCK) return delay(mockStore.recordPayment(input, changedBy))
     const { data, error } = await supabase!.from('payments').insert({
       contract_id: input.contractId, case_id: input.caseId, amount: input.amount,
       method: input.method, reference: input.reference || null, recorded_by: changedBy.id,
+      ...(input.receivedAt ? { received_at: input.receivedAt } : {}),
     }).select().single()
     if (error) throw error
 

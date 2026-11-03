@@ -18,6 +18,8 @@ export function PaymentsPanel({ caseObj, contract, canEdit, currentUser, autoOpe
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [reference, setReference] = useState('')
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+  const [paidOn, setPaidOn] = useState(today())
   const [err, setErr] = useState('')
 
   const total = contract?.total ?? 0
@@ -26,15 +28,15 @@ export function PaymentsPanel({ caseObj, contract, canEdit, currentUser, autoOpe
   useEffect(() => { if (autoOpen > 0 && canEdit) { setAmount(balance > 0 ? balance.toFixed(2) : ''); setOpen(true) } }, [autoOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pay = useMutation({
-    mutationFn: (v: { amount: number; method: PaymentMethod; reference?: string }) => api.recordPayment({ contractId: contract!.id, caseId: caseObj.id, ...v }, currentUser),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments', caseObj.id] }); qc.invalidateQueries({ queryKey: ['contracts'] }); setOpen(false); setAmount(''); setReference('') },
+    mutationFn: (v: { amount: number; method: PaymentMethod; reference?: string; receivedAt?: string }) => api.recordPayment({ contractId: contract!.id, caseId: caseObj.id, ...v }, currentUser),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payments', caseObj.id] }); qc.invalidateQueries({ queryKey: ['contracts'] }); setOpen(false); setAmount(''); setReference(''); setPaidOn(today()) },
     onError: (e) => setErr(e instanceof Error ? e.message : 'Could not save that payment.'),
   })
 
   function submit() {
     const n = Number(amount.replace(/[$,\s]/g, ''))
     if (!n || n <= 0) { setErr('Type the amount that was paid.'); return }
-    setErr(''); pay.mutate({ amount: Math.round(n * 100) / 100, method, reference: reference.trim() || undefined })
+    setErr(''); pay.mutate({ amount: Math.round(n * 100) / 100, method, reference: reference.trim() || undefined, receivedAt: paidOn && paidOn !== today() ? `${paidOn}T12:00:00` : undefined })
   }
 
   if (!contract) return <div className="text-sm text-slate-500">Nothing is on the invoice yet. Tick the items the family is ordering and they will appear here.</div>
@@ -49,6 +51,7 @@ export function PaymentsPanel({ caseObj, contract, canEdit, currentUser, autoOpe
       {open && (
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3 flex flex-wrap items-end gap-3">
           <label className="text-xs text-slate-500">Amount paid<input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="block mt-1 w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 bg-white" /></label>
+          <label className="text-xs text-slate-500">Date paid<input type="date" value={paidOn} max={today()} onChange={(e) => setPaidOn(e.target.value)} className="block mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 bg-white" /></label>
           <label className="text-xs text-slate-500">How<select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="block mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 bg-white">{METHODS.map((m) => <option key={m.v} value={m.v}>{m.label}</option>)}</select></label>
           <label className="text-xs text-slate-500 flex-1 min-w-40">Check # / note<input value={reference} onChange={(e) => setReference(e.target.value)} className="block mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 bg-white" /></label>
           <button type="button" onClick={submit} disabled={pay.isPending} className="text-sm font-medium bg-[#3b4a35] text-white rounded-md px-3.5 py-2 hover:bg-[#4d5f45] disabled:opacity-50">{pay.isPending ? 'Saving…' : 'Save payment'}</button>

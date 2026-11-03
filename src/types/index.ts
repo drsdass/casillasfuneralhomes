@@ -349,6 +349,7 @@ export interface FuneralCase {
   visitationLocation?: string
   serviceDate?: string
   serviceLocation?: string
+  boardFlowers?: string; boardBirds?: string; boardEscort?: string // 'no' | 'yes' | 'confirmed' on the TV Board; blank = worked out from the Orders
   boardDisp?: string // DISP code shown on the TV Board (CVC, DMP, RNC, SHIP-OUT, ...)
   color?: string // whiteboard color coding
   custodyStage: CustodyStage

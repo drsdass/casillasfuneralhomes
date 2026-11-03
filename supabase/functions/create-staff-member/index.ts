@@ -97,6 +97,15 @@ Deno.serve(async (req) => {
       }
       if (found) {
         const { data: existingStaff } = await supabaseAdmin.from('staff_members').select('id').eq('id', found.id).maybeSingle()
+        const { data: existingStaff2 } = await supabaseAdmin.from('staff_members').select('id, active').eq('id', found.id).maybeSingle()
+        if (existingStaff2 && existingStaff2.active === false) {
+          // Someone who was switched off earlier: turn them back on with the new details.
+          await supabaseAdmin.auth.admin.updateUserById(found.id, { password: DEFAULT_TEMP_PASSWORD, email_confirm: true, ban_duration: 'none' })
+          await supabaseAdmin.from('staff_members').update({ name: body.name, role: body.role, title: body.title || null, department: body.department || null, phone: body.phone || null, active: true, org_id: orgId }).eq('id', found.id)
+          await supabaseAdmin.from('staff_locations').delete().eq('staff_id', found.id)
+          await supabaseAdmin.from('staff_locations').insert(body.locationIds.map((locationId) => ({ staff_id: found!.id, location_id: locationId })))
+          return new Response(JSON.stringify({ id: found.id, tempPassword: DEFAULT_TEMP_PASSWORD }), { headers: { ...corsHeaders, 'content-type': 'application/json' } })
+        }
         if (existingStaff) {
           return new Response(JSON.stringify({ error: 'This email already belongs to someone on the staff list. Look for them in the list (they may be marked inactive).' }), {
             status: 400, headers: { ...corsHeaders, 'content-type': 'application/json' },
