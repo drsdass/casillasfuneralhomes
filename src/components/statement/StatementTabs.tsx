@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Printer, RotateCcw, Check, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { dateToSerial, type Raw, type SheetDef } from '@/lib/sheetEngine'
-import { summarize, type StatementSummary } from '@/lib/statementItems'
+import { summarize, withTaxRate, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
 import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
@@ -65,15 +65,17 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
   useEffect(() => () => { Object.values(timers.current).forEach((t) => window.clearTimeout(t)) }, [])
 
   // ---- every tab worked out, so each can show its own total and the invoice can add them up ----
+  const invRaw = savedAll?.['_invoice']
+  const taxRate = (() => { const n = Number(invRaw?.taxRate); return invRaw?.taxRate !== undefined && invRaw?.taxRate !== '' && isFinite(n) && n >= 0 ? n : DEFAULT_TAX_RATE })()
   const perSheet = useMemo(() => {
     const out = new Map<string, { defaults: Record<string, Raw>; saved: Record<string, Raw>; summary: StatementSummary }>()
     for (const sh of sheets ?? []) {
       const defaults = caseDefaults(sh, caseObj)
       const saved = { ...(savedAll?.[sh.name] ?? {}), ...(local[sh.name] ?? {}) }
-      out.set(sh.name, { defaults, saved, summary: summarize(sh, { ...defaults, ...saved }).summary })
+      out.set(sh.name, { defaults, saved, summary: summarize(withTaxRate(sh, taxRate), { ...defaults, ...saved }).summary })
     }
     return out
-  }, [sheets, savedAll, local, caseObj])
+  }, [sheets, savedAll, local, caseObj, taxRate])
 
   // ---- which tabs are on the invoice ----
   const inv = savedAll?.['_invoice']
@@ -82,11 +84,17 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
     return raw.split('|').filter((n) => perSheet.has(n))
   }, [inv, perSheet])
   const setTicked = useMutation({
-    mutationFn: (names: string[]) => api.saveCaseStatement(caseObj.id, '_invoice', { sources: names.join('|') }, currentUser),
+    mutationFn: (names: string[]) => api.saveCaseStatement(caseObj.id, '_invoice', { sources: names.join('|'), ...(invRaw?.taxRate !== undefined ? { taxRate: invRaw.taxRate as string | number } : {}) }, currentUser),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['case-statements', caseObj.id] }),
   })
   const toggleTab = (name: string) => setTicked.mutate(ticked.includes(name) ? ticked.filter((n) => n !== name) : [...(sheets ?? []).map((s) => s.name).filter((n) => n === name || ticked.includes(n))])
 
+  const saveRate = useMutation({
+    mutationFn: (r: string) => api.saveCaseStatement(caseObj.id, '_invoice', { sources: ticked.join('|'), taxRate: r }, currentUser),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['case-statements', caseObj.id] }),
+  })
+  const [rateDraft, setRateDraft] = useState<string | null>(null)
+  const commitRate = () => { if (rateDraft === null) return; const n = Number(rateDraft.replace('%', '').trim()); if (rateDraft.trim() !== '' && isFinite(n) && n >= 0 && n < 30) saveRate.mutate(String(n)); setRateDraft(null) }
   const several = ticked.length > 1
   const lines = useMemo(() => ticked.flatMap((n) => (perSheet.get(n)?.summary.lines ?? []).filter((l) => l.checked && l.amount !== 0).map((l) => ({ name: several ? `${l.label || 'Other charge'} (${n.trim()})` : (l.label || 'Other charge'), amount: l.amount }))), [ticked, perSheet, several])
   const tax = Math.round(ticked.reduce((s, n) => s + (perSheet.get(n)?.summary.tax ?? 0), 0) * 100) / 100
@@ -142,10 +150,16 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
               <button type="button" onClick={() => { if (confirm('Clear everything typed on this tab for this case and go back to the blank form?')) { setLocal((l) => ({ ...l, [view]: {} })); save.mutate({ sheet: view, data: {} }) } }}
                 className="inline-flex items-center gap-1.5 text-sm text-slate-500 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"><RotateCcw size={14} /> Start this tab over</button>
             )}
+            <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 ml-2" title="Sales tax differs by city. Set the rate for this case; every form on this case uses it.">
+              Sales tax
+              <input value={rateDraft ?? String(taxRate)} disabled={!canEdit} inputMode="decimal" aria-label="Sales tax percent"
+                onFocus={(e) => { setRateDraft(String(taxRate)); e.currentTarget.select() }} onChange={(e) => setRateDraft(e.target.value)} onBlur={commitRate} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                className="w-16 text-right border border-slate-300 rounded-md px-2 py-1 text-sm" />%
+            </label>
             <span className="text-xs text-slate-400 ml-auto">{savedFlash ? <span className="inline-flex items-center gap-1 text-emerald-700"><Check size={13} /> Saved</span> : canEdit ? 'Tick the box on a tab to add that package to the invoice. Tick or untick single items inside it.' : 'View only.'}</span>
           </div>
           <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-            <StatementSheet sheet={sheet} saved={cur.saved} defaults={cur.defaults} canEdit={canEdit} onChange={(k, v) => onChange(view, k, v)} />
+            <StatementSheet sheet={withTaxRate(sheet, taxRate)} saved={cur.saved} defaults={cur.defaults} canEdit={canEdit} onChange={(k, v) => onChange(view, k, v)} />
           </div>
           <div className="no-print rounded-md border border-slate-200 bg-white p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

@@ -75,6 +75,21 @@ export interface StatementSummary {
   total: number
 }
 
+/** The rate the forms were built with; each case can use its own (cases are in different cities). */
+export const DEFAULT_TAX_RATE = 8.75
+const taxCache = new WeakMap<SheetDef, Map<number, SheetDef>>()
+/** A copy of the form whose State Sales Tax line uses this percent instead of 8.75%. */
+export function withTaxRate(sheet: SheetDef, rate: number): SheetDef {
+  if (!(rate >= 0) || rate === DEFAULT_TAX_RATE) return sheet
+  const key = statementLayout(sheet).taxKey
+  const cell = key ? sheet.cells[key] : undefined
+  if (!key || !cell || cell.f === undefined || !/8\.75%/.test(cell.f)) return sheet
+  let m = taxCache.get(sheet); if (!m) taxCache.set(sheet, (m = new Map()))
+  let out = m.get(rate)
+  if (!out) { out = { ...sheet, cells: { ...sheet.cells, [key]: { ...cell, f: cell.f.replace(/8\.75%/g, `${rate}%`) } } }; m.set(rate, out) }
+  return out
+}
+
 /** Prefix for the "ticked / not ticked" flag saved next to the cell values. */
 export const FLAG = 'x:'
 
