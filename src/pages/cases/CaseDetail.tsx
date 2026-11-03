@@ -25,13 +25,15 @@ import { WorkflowTrack } from '@/components/workflow/WorkflowTrack'
 import { computeWorkflow } from '@/lib/workflow'
 import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
 import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
+import { CaseQuotes } from '@/components/quote/CaseQuotes'
+import { quotes as quotesApi } from '@/lib/quotes'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
-const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
+const tabs = ['Overview', 'Tasks', 'Orders', 'Quotes', 'Notes', 'Documents', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
 const orderStatusStyles: Record<OrderStatus, string> = {
@@ -118,6 +120,7 @@ export default function CaseDetail() {
   const { data: orders = [] } = useQuery({ queryKey: ['case-orders', caseId], queryFn: () => api.getOrders(caseId!), enabled: !!caseId })
   const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: api.getContracts })
   const { data: gplItems = [] } = useQuery({ queryKey: ['gpl', c?.locationId], queryFn: () => api.getGplItems(c?.locationId), enabled: !!c })
+  const { data: caseQuotes = [] } = useQuery({ queryKey: ['case-quotes', caseId], queryFn: () => quotesApi.list(caseId!), enabled: !!caseId })
   const { data: caseEmails = [] } = useQuery({ queryKey: ['case-emails', caseId], queryFn: () => api.getEmails({ caseId: caseId! }), enabled: !!caseId })
   const { data: signatureRequests = [] } = useQuery({ queryKey: ['signature-requests', caseId], queryFn: () => api.getSignatureRequests(caseId!), enabled: !!caseId })
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
@@ -563,7 +566,7 @@ export default function CaseDetail() {
               tab === t ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            {t}
+            {t}{t === 'Quotes' && caseQuotes.length > 0 && <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{caseQuotes.length}</span>}
           </button>
         ))}
       </div>
@@ -845,7 +848,7 @@ export default function CaseDetail() {
 
       {tab === 'Orders' && (
         <div className="space-y-4">
-          <StatementWorkspace caseObj={c} view={ordersView} onView={setOrdersView} canEdit={canEdit} currentUser={currentUser!} />
+          <StatementWorkspace caseObj={c} view={ordersView} onView={setOrdersView} canEdit={canEdit} currentUser={currentUser!} onQuoteSaved={() => { setTab('Quotes'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
         </div>
       )}
 
@@ -1274,6 +1277,10 @@ export default function CaseDetail() {
             </Card>
           </div>
         </div>
+      )}
+
+      {tab === 'Quotes' && (
+        <Card className="p-5"><CaseQuotes caseObj={c} canEdit={canEdit} currentUser={currentUser!} onGoToOrders={() => setTab('Orders')} /></Card>
       )}
 
       {tab === 'Emails' && (

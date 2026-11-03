@@ -8,8 +8,10 @@ import { DictateButton } from '@/components/ui/DictateButton'
 import type { InboundEmail } from '@/types'
 
 /** Write or reply to an email from the shared funeral home address. The system records who sent it. */
-export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '', body: initialBody = '', forward, caseId, replyTo, onClose }: {
+export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '', body: initialBody = '', forward, caseId, replyTo, onClose, onSent }: {
   to?: string; subject?: string; body?: string; forward?: boolean; caseId?: string; replyTo?: InboundEmail; onClose: () => void
+  /** Called once the email has gone out, with the address it was sent to. */
+  onSent?: (to: string) => void
 }) {
   const { currentUser } = useSession()
   const { language } = useLanguage()
@@ -27,6 +29,7 @@ export function ComposeEmail({ to: initialTo = '', subject: initialSubject = '',
       qc.invalidateQueries({ queryKey: ['case-emails'] })
       qc.invalidateQueries({ queryKey: ['activity-panel'] })
       setSent(true)
+      onSent?.(to.trim())
       setTimeout(onClose, 1200)
     },
   })

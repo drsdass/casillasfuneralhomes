@@ -27,7 +27,10 @@ body {
 /* Used by pages with a print button (Invoices, generated case documents):
    printing shows only the element carrying .print-target, not the rest of
    the app chrome. */
+/* Printed-only copies (rendered into <body>): hidden on screen, shown when printing. */
+.print-only { display: none; }
 @media print {
+  .print-only { display: block; }
   body * {
     visibility: hidden;
   }

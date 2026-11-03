@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Printer, RotateCcw, Check } from 'lucide-react'
+import { Printer, RotateCcw, Check, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { dateToSerial, type Raw, type SheetDef } from '@/lib/sheetEngine'
 import { summarize, type StatementSummary } from '@/lib/statementItems'
 import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
+import { quotes, defaultValidUntil, money as fmt, type QuoteLine } from '@/lib/quotes'
 
 let sheetsPromise: Promise<SheetDef[]> | null = null
 const loadSheets = () => (sheetsPromise ??= import('@/data/statementSheets.json').then((m) => m.default as unknown as SheetDef[]))
@@ -36,8 +37,9 @@ function caseDefaults(sheet: SheetDef, caseObj: FuneralCase): Record<string, Raw
  * Ashlie's statement tabs for one case. Each tab is a package. Ticking the box on a tab adds that package to the
  * case's invoice; the invoice is every ticked tab added up (staff untick any line that is doubled). Payments follow.
  */
-export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser }: { caseObj: FuneralCase; view: string; onView: (v: string) => void; canEdit: boolean; currentUser: StaffMember }) {
+export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser, onQuoteSaved }: { caseObj: FuneralCase; view: string; onView: (v: string) => void; canEdit: boolean; currentUser: StaffMember; onQuoteSaved?: () => void }) {
   const qc = useQueryClient()
+  const [quoting, setQuoting] = useState(false)
   const { data: sheets } = useQuery({ queryKey: ['statement-sheets'], queryFn: loadSheets, staleTime: Infinity })
   const { data: savedAll } = useQuery({ queryKey: ['case-statements', caseObj.id], queryFn: () => api.getCaseStatements(caseObj.id) })
   const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: api.getContracts })
@@ -135,6 +137,7 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
         <>
           <div className="no-print flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"><Printer size={15} /> Print this form</button>
+            {canEdit && <button type="button" onClick={() => setQuoting(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#3b4a35] rounded-md px-3 py-1.5 hover:bg-[#4d5f45]"><FileText size={15} /> Save as quote</button>}
             {canEdit && Object.keys(cur.saved).length > 0 && (
               <button type="button" onClick={() => { if (confirm('Clear everything typed on this tab for this case and go back to the blank form?')) { setLocal((l) => ({ ...l, [view]: {} })); save.mutate({ sheet: view, data: {} }) } }}
                 className="inline-flex items-center gap-1.5 text-sm text-slate-500 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"><RotateCcw size={14} /> Start this tab over</button>
@@ -176,6 +179,80 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
           </div>
         </>
       )}
+      {quoting && (
+        <SaveQuoteDialog
+          names={names} current={view} perSheet={perSheet} caseObj={caseObj} currentUser={currentUser}
+          onClose={() => setQuoting(false)}
+          onSaved={() => { setQuoting(false); qc.invalidateQueries({ queryKey: ['case-quotes', caseObj.id] }); onQuoteSaved?.() }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Saves what is priced on one or more tabs as a numbered quote for this family. */
+function SaveQuoteDialog({ names, current, perSheet, caseObj, currentUser, onClose, onSaved }: {
+  names: string[]; current: string
+  perSheet: Map<string, { summary: StatementSummary }>
+  caseObj: FuneralCase; currentUser: StaffMember; onClose: () => void; onSaved: () => void
+}) {
+  const [picked, setPicked] = useState<string[]>([current])
+  const [name, setName] = useState('')
+  const [days, setDays] = useState(30)
+  const [note, setNote] = useState('')
+  const chosen = names.filter((n) => picked.includes(n))
+  const lines: QuoteLine[] = chosen.flatMap((n) => (perSheet.get(n)?.summary.lines ?? []).filter((l) => l.checked && l.amount !== 0).map((l) => ({ name: l.label || 'Other charge', amount: l.amount, pkg: n })))
+  const tax = Math.round(chosen.reduce((s, n) => s + (perSheet.get(n)?.summary.tax ?? 0), 0) * 100) / 100
+  const credit = Math.round(chosen.reduce((s, n) => s + (perSheet.get(n)?.summary.credit ?? 0), 0) * 100) / 100
+  const total = Math.round((lines.reduce((s, l) => s + l.amount, 0) + tax - credit) * 100) / 100
+  const toggle = (n: string) => {
+    const next = picked.includes(n) ? picked.filter((x) => x !== n) : [...picked, n]
+    setPicked(next)
+  }
+  const save = useMutation({
+    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
+    onSuccess: onSaved,
+  })
+  return (
+    <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Save as a quote</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
+        </div>
+        <p className="mb-3 text-sm text-slate-600">This saves a copy of the prices as they are right now. Changing the order form later will not change a quote that is already saved.</p>
+        <div className="mb-3">
+          <div className="mb-1 text-sm font-medium text-slate-700">Include these packages</div>
+          <div className="space-y-1">
+            {names.map((n) => (
+              <label key={n} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-1.5 text-sm">
+                <span className="flex items-center gap-2"><input type="checkbox" checked={picked.includes(n)} onChange={() => toggle(n)} style={{ accentColor: '#3b4a35' }} />{n.trim()}</span>
+                <span className="text-slate-500 tabular-nums">{fmt(perSheet.get(n)?.summary.total ?? 0)}</span>
+              </label>
+            ))}
+          </div>
+          {chosen.length > 1 && <p className="mt-1 text-xs text-amber-700">More than one package is combined, so anything in both is added twice. Untick the doubled lines on each tab first.</p>}
+        </div>
+        <label className="mb-3 block text-sm font-medium text-slate-700">Name for the family to see
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Full Service with Cremation" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
+          <span className="mt-0.5 block text-xs font-normal text-slate-500">Use words the family will understand. Names like "DIR CRE" are office shorthand and are not shown on the quote unless you type them here.</span>
+        </label>
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <label className="block text-sm font-medium text-slate-700">Good for (days)
+            <input type="number" min={0} value={days} onChange={(e) => setDays(Number(e.target.value) || 0)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
+          </label>
+          <div className="self-end pb-2 text-right text-sm text-slate-600">{lines.length} items<div className="text-lg font-semibold text-slate-900 tabular-nums">{fmt(total)}</div></div>
+        </div>
+        <label className="mb-3 block text-sm font-medium text-slate-700">Note to the family (optional)
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base" />
+        </label>
+        {lines.length === 0 && <p className="mb-2 text-sm text-amber-700">Nothing is priced on the chosen package yet. Enter prices on the form first.</p>}
+        {save.isError && <p className="mb-2 text-sm text-red-600">{(save.error as Error).message}</p>}
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
+          <button type="button" disabled={lines.length === 0 || save.isPending} onClick={() => save.mutate()} className="rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{save.isPending ? 'Saving…' : 'Save quote'}</button>
+        </div>
+      </div>
     </div>
   )
 }
