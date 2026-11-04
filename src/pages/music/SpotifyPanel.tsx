@@ -82,7 +82,7 @@ export default function SpotifyPanel({ isAdmin, roomNames = [] }: { isAdmin: boo
         </div>
         {missing.length > 0 && (
           <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {missing.join(', ')} {missing.length > 1 ? 'don’t' : 'doesn’t'} show up as {missing.length > 1 ? 'Spotify speakers' : 'a Spotify speaker'} yet. In the Sonos app go to Settings → Services &amp; Voice → Add a Service → Spotify (sign in with the same Spotify account), then play any song on each speaker once. Until then, use <b>Choose music…</b> on a room card (Sonos Favorites) for those rooms.
+            {missing.join(', ')} {missing.length > 1 ? 'don’t' : 'doesn’t'} show up as {missing.length > 1 ? 'Spotify speakers' : 'a Spotify speaker'} yet. In the Sonos app tap your profile icon → Account → Content Services → Add a service → Spotify (sign in with the same Spotify account), then play any Spotify song on each speaker once. Until then, use <b>Choose music…</b> on a room card (Sonos Favorites) for those rooms.
           </div>
         )}
       </div>

@@ -54,6 +54,7 @@ async function sp(token: string, method: string, path: string, body?: unknown) {
     const m = String(data?.error?.message ?? '')
     if (res.status === 404 && /device/i.test(m)) throw new Fail(404, 'Spotify can’t see that speaker right now. Open the Sonos app once, or play any song on it, then try again.')
     if (res.status === 403 && /premium/i.test(m + (data?.error?.reason ?? ''))) throw new Fail(403, 'This Spotify account needs Premium to be controlled from here.')
+    if (res.status === 403 && /restriction/i.test(m)) throw new Fail(403, 'Spotify won’t let that device do this right now (“Restriction violated”). That is usually a phone or tablet rather than a speaker — pick one of the rooms instead. If a room does this, play a song on it from the Sonos app once and try again.')
     if (res.status === 403) throw new Fail(403, 'Spotify said no (' + (m || 'forbidden') + '). If this keeps happening, the account may not be on the app’s allowed-users list.')
     if (res.status === 429) throw new Fail(429, 'Spotify is busy — try again in a few seconds.')
     throw new Fail(502, m || `Spotify said ${res.status}`)
