@@ -129,11 +129,11 @@ export default function MusicPage() {
               <h2 className="text-lg font-semibold text-slate-900">Play on {picking.name}</h2>
               <button type="button" aria-label="Close" onClick={() => setPicking(null)} className="rounded-md p-2 text-slate-400 hover:bg-slate-100"><X size={20} /></button>
             </div>
-            <p className="mb-3 text-sm text-slate-500">These are the Favorites saved in the Sonos app. To add a playlist or station here, save it as a Favorite in the Sonos app once.</p>
+            <p className="mb-3 text-sm text-slate-500">These are the Sonos Favorites and Sonos playlists saved in the Sonos app. To add more, save a Favorite or build a Sonos playlist in the Sonos app once.</p>
             {(favsLoading || favsFetching) && <div className="py-3 text-center text-sm text-slate-400">Loading…</div>}
             <button type="button" onClick={() => refetchFavs()} className="mb-2 text-xs text-slate-500 underline hover:text-slate-800">Refresh the list</button>
             {favErr && <div className="mb-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Could not load the Favorites: {msg(favErr)}</div>}
-            {!favsLoading && !favErr && favs.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No Favorites yet. In the Sonos app, open a playlist or station and tap the heart / “Add to Sonos Favorites”.{favData?.debug && <div className="mt-2 text-xs text-slate-400">{favData.debug}</div>}</div>}
+            {!favsLoading && !favErr && favs.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Nothing saved yet. In the Sonos app, make a Sonos playlist or open a playlist or station and choose “Add to Sonos Favorites”.{favData?.debug && <div className="mt-2 text-xs text-slate-400">{favData.debug}</div>}</div>}
             <div className="grid gap-2 sm:grid-cols-2">
               {favs.map((f) => (
                 <button key={f.id} type="button" onClick={() => { act(() => sonos.loadFavorite(picking.id, f.id)); setPicking(null) }}

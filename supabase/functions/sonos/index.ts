@@ -167,6 +167,13 @@ Deno.serve(async (req) => {
             notes.push(`${h.name ?? h.id}${h.id === hh ? ' (used for rooms)' : ''}: ${items.length}`)
             for (const i of items) { if (seen.has(i.id)) continue; seen.add(i.id); out.push({ id: i.id, name: i.name, description: i.description, image: i.imageUrl, service: i.service?.name, household: h.id }) }
           } catch (e) { notes.push(`${h.name ?? h.id}: ${e instanceof Error ? e.message : 'error'}`) }
+          // Sonos playlists (saved in the Sonos app → "Sonos playlist") are a separate list from Favorites
+          try {
+            const pl = await sonos(t, 'GET', `/households/${h.id}/playlists`)
+            const ps = pl.playlists ?? []
+            notes.push(`${ps.length} Sonos playlists`)
+            for (const i of ps) { const id = 'pl:' + i.id; if (seen.has(id)) continue; seen.add(id); out.push({ id, name: i.name, description: `Sonos playlist${i.trackCount ? ' · ' + i.trackCount + ' songs' : ''}`, service: 'Sonos playlist' }) }
+          } catch (e) { notes.push(`playlists: ${e instanceof Error ? e.message : 'error'}`) }
         }
         return json({ connected: true, favorites: out, debug: `Sonos systems and Favorites found — ${notes.join('; ')}` })
       }
@@ -176,7 +183,13 @@ Deno.serve(async (req) => {
       case 'previous': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/playback/skipToPreviousTrack`); return json({ ok: true })
       case 'groupVolume': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/groupVolume`, { volume: Math.max(0, Math.min(100, Math.round(b.volume))) }); return json({ ok: true })
       case 'playerVolume': guardPlayers([String(b.playerId)]); await sonos(t, 'POST', `/players/${b.playerId}/playerVolume`, { volume: Math.max(0, Math.min(100, Math.round(b.volume))) }); return json({ ok: true })
-      case 'loadFavorite': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/favorites`, { favoriteId: b.favoriteId, playOnCompletion: true, action: 'REPLACE' }); return json({ ok: true })
+      case 'loadFavorite': {
+        await guardGroup(b.groupId)
+        const fid = String(b.favoriteId)
+        if (fid.startsWith('pl:')) await sonos(t, 'POST', `/groups/${b.groupId}/playlists`, { playlistId: fid.slice(3), playOnCompletion: true, action: 'REPLACE' })
+        else await sonos(t, 'POST', `/groups/${b.groupId}/favorites`, { favoriteId: fid, playOnCompletion: true, action: 'REPLACE' })
+        return json({ ok: true })
+      }
       // Put exactly these speakers together as one group.
       case 'setGroup': {
         const ids: string[] = b.playerIds ?? []
