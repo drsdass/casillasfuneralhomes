@@ -1,5 +1,5 @@
 import { Time24 } from '../../components/ui/DateTime24'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { isKnownPlace, isBuiltInAddress, knownAddress } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
@@ -66,6 +66,49 @@ export default function FirstCallIntake() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
 
+  // ---- Unsaved-work protection: everything typed is kept on this computer until Save, so leaving the page
+  // (e.g. to open the Vital Sheet) never loses it. The SSN is deliberately not kept. ----
+  const draftKey = `fc-draft:${caseId ?? 'new'}`
+  const [draftNote, setDraftNote] = useState('')
+  const draftState = { chosenLocationId, caseNumber, firstName, middleName, lastName, dateOfDeath, timeOfDeath, dateOfBirth, veteran, locationType, locationAddress, gateCode, weight, familyPresent, familyReady, contagious, locationInstructions, nokName, nokPhone, nokRelationship, coronerCase, coronerCaseNumber, doctorName, doctorPhone, hospiceName, hospicePhone, personCalling, callReceivedAt, timeOfRemoval, callerInstructions }
+  const draftSetters: Record<string, (v: never) => void> = { chosenLocationId: setChosenLocationId, caseNumber: setCaseNumber, firstName: setFirstName, middleName: setMiddleName, lastName: setLastName, dateOfDeath: setDateOfDeath, timeOfDeath: setTimeOfDeath, dateOfBirth: setDateOfBirth, veteran: setVeteran, locationType: setLocationType, locationAddress: setLocationAddress, gateCode: setGateCode, weight: setWeight, familyPresent: setFamilyPresent, familyReady: setFamilyReady, contagious: setContagious, locationInstructions: setLocationInstructions, nokName: setNokName, nokPhone: setNokPhone, nokRelationship: setNokRelationship, coronerCase: setCoronerCase, coronerCaseNumber: setCoronerCaseNumber, doctorName: setDoctorName, doctorPhone: setDoctorPhone, hospiceName: setHospiceName, hospicePhone: setHospicePhone, personCalling: setPersonCalling, callReceivedAt: setCallReceivedAt, timeOfRemoval: setTimeOfRemoval, callerInstructions: setCallerInstructions }
+  const draftReady = useRef(false)
+  const dirty = useRef(false)
+  const baseline = useRef<string | null>(null)
+  const applyDraft = () => {
+    try {
+      const raw = localStorage.getItem(draftKey); if (!raw) return
+      const d = JSON.parse(raw) as { at: number; v: Record<string, unknown> }
+      if (!d?.v || Date.now() - d.at > 7 * 86400_000) { localStorage.removeItem(draftKey); return }
+      for (const [k, val] of Object.entries(d.v)) draftSetters[k]?.(val as never)
+      setDraftNote(`Restored what you had typed (unsaved) from ${new Date(d.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}. Press Save to keep it.`)
+      dirty.current = true
+    } catch { /* storage unavailable */ }
+  }
+  const draftJson = JSON.stringify(draftState)
+  useEffect(() => {
+    if (!draftReady.current) return
+    if (baseline.current === null) { baseline.current = draftJson; return } // what the page started with isn't a change
+    if (draftJson === baseline.current) return
+    const t = window.setTimeout(() => {
+      try {
+        const empty = Object.values(draftState).every((v) => v === '' || v === false || v === 'residence')
+        if (empty) return
+        dirty.current = true
+        localStorage.setItem(draftKey, JSON.stringify({ at: Date.now(), v: draftState }))
+      } catch { /* storage unavailable */ }
+    }, 400)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftJson])
+  useEffect(() => { if (!isEdit) { baseline.current = draftJson; applyDraft(); draftReady.current = true } }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (dirty.current) { e.preventDefault(); e.returnValue = '' } }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [])
+  const clearDraft = () => { dirty.current = false; try { localStorage.removeItem(draftKey) } catch { /* ignore */ } }
+
   useEffect(() => {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
@@ -100,7 +143,9 @@ export default function FirstCallIntake() {
       setCallReceivedAt(fc.callReceivedAt ?? '')
       setTimeOfRemoval(fc.timeOfRemoval ?? '')
     }
-  }, [existing])
+    applyDraft() // anything typed but not yet saved comes back on top
+    draftReady.current = true
+  }, [existing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Picking a hospital or the Coroner's office fills the address (unless something else was already typed there).
   const chooseLocation = (t: NonNullable<FirstCallInfo['locationType']>) => {
@@ -145,7 +190,7 @@ export default function FirstCallIntake() {
       if (ssn.trim()) await api.setDecedentSsn(created.id, ssn, currentUser!)
       return created.id
     },
-    onSuccess: (id) => setSavedCaseId(id),
+    onSuccess: (id) => { clearDraft(); setDraftNote(''); setSavedCaseId(id) },
   })
 
   const linkMutation = useMutation({
@@ -184,6 +229,13 @@ export default function FirstCallIntake() {
 
       {!savedCaseId ? (
         <div className="space-y-4">
+          {draftNote && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <span>{draftNote}</span>
+              <button type="button" onClick={() => { if (window.confirm('Throw away what was typed and start over?')) { clearDraft(); window.location.reload() } }} className="text-xs underline">Discard</button>
+            </div>
+          )}
+          <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-1.5 text-xs text-amber-800">Nothing is saved to the case until you press <b>{isEdit ? 'Save Changes' : 'Save & Create Case'}</b> at the bottom. What you type is kept on this computer in the meantime.</div>
           <LocationPicker value={locId} onChange={setChosenLocationId} />
           <Card className="overflow-hidden">
             <div className={sectionLabel}>DECEASED</div>
