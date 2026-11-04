@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Lock, Unlock, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
+import { Lock, Unlock, VolumeX, Mic, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
 import { sonos, isPlaying, type SonosGroup, type SonosPlayer } from '@/lib/sonos'
 import { useSession } from '@/context/SessionContext'
 import { useKeepAwake } from '@/lib/keepAwake'
@@ -59,6 +59,16 @@ export default function MusicPage() {
   const isLocked = (g: SonosGroup) => g.playerIds.some((id) => lockedIds.includes(id))
   const free = groups.filter((g) => !isLocked(g))
   const anyPlaying = free.some(isPlaying)
+  // Service mode: the Chapel speaker is muted (a joined Chapel Hall keeps playing). Ending it only un-mutes — it never starts music.
+  const chapel = players.find((p) => p.name.trim().toLowerCase() === 'chapel')
+  const serviceOn = !!chapel?.muted
+  const startService = () => act(async () => {
+    if (!chapel) return
+    await sonos.mute(chapel.id, true)
+    const g = groups.find((x) => x.playerIds.includes(chapel.id))
+    if (g && g.playerIds.length === 1 && isPlaying(g)) await sonos.pause(g.id)   // Chapel alone: stop it too, don't leave it running silently
+  })
+  const endService = () => act(() => sonos.mute(chapel!.id, false))
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -96,6 +106,15 @@ export default function MusicPage() {
 
       {st?.connected && (
         <>
+          {chapel && (serviceOn ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-base font-semibold text-amber-900"><VolumeX size={22} /> Service in progress — the Chapel is quiet<span className="text-sm font-normal text-amber-800">&nbsp;(other rooms keep playing)</span></div>
+              <button type="button" onClick={endService} className="rounded-lg bg-amber-600 px-5 py-3 text-base font-semibold text-white hover:bg-amber-700">End service — un-mute Chapel</button>
+            </div>
+          ) : (
+            <button type="button" onClick={startService} className="inline-flex items-center gap-2 rounded-lg border-2 border-[#3b4a35] bg-white px-5 py-3 text-base font-semibold text-[#3b4a35] hover:bg-[#3b4a35]/10"><Mic size={20} /> Start service — quiet the Chapel</button>
+          ))}
+
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rooms</span>
             <button type="button" disabled={free.length <= 1} onClick={() => { const lead = free.find(isPlaying) ?? free[0]; act(() => sonos.setGroup(lead.id, players.filter((p) => !lockedIds.includes(p.id)).map((p) => p.id))) }}
@@ -169,6 +188,7 @@ function RoomCard({ g, players, nameOf, locked, lockedIds, canLock, onLock, onPl
     <Card className={`p-4 ${playing ? 'ring-2 ring-emerald-400/70' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2"><Speaker size={20} className="shrink-0 text-[#3b4a35]" /><h2 className="truncate text-lg font-semibold text-slate-900">{g.name}</h2></div>
+        {members.length > 0 && members.every((p) => p.muted) && <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-900"><VolumeX size={12} /> Muted</span>}
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${playing ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{playing ? 'Playing' : g.playbackState === 'PLAYBACK_STATE_PAUSED' ? 'Paused' : 'Stopped'}</span>
       </div>
 
@@ -197,7 +217,7 @@ function RoomCard({ g, players, nameOf, locked, lockedIds, canLock, onLock, onPl
       <div className="mt-3"><Slider value={g.volume ?? 0} onCommit={onVolume} label={`${g.name} volume`} /></div>
       {members.length > 1 && (
         <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-          {members.map((p) => <div key={p.id}><div className="text-xs text-slate-500">{p.name}</div><Slider value={p.volume ?? 0} onCommit={(v) => onPlayerVolume(p.id, v)} label={`${p.name} volume`} /></div>)}
+          {members.map((p) => <div key={p.id}><div className="text-xs text-slate-500">{p.name}{p.muted ? ' — muted for the service' : ''}</div><Slider value={p.volume ?? 0} onCommit={(v) => onPlayerVolume(p.id, v)} label={`${p.name} volume`} /></div>)}
         </div>
       )}
 

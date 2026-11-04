@@ -1,6 +1,6 @@
 import { USE_MOCK, supabase } from './supabase'
 
-export interface SonosPlayer { id: string; name: string; volume: number | null }
+export interface SonosPlayer { id: string; name: string; volume: number | null; muted?: boolean }
 export interface SonosTrack { name?: string; artist?: string; album?: string; image?: string }
 export interface SonosGroup { id: string; name: string; playbackState: string; playerIds: string[]; volume: number | null; muted: boolean; track: SonosTrack | null }
 export interface SonosState { connected: boolean; groups: SonosGroup[]; players: SonosPlayer[]; locked: string[]; canLock: boolean }
@@ -82,6 +82,10 @@ export const sonos = {
   },
   async play(groupId: string) { if (USE_MOCK) { const g = mock.groups.find((x) => x.id === groupId)!; g.playbackState = 'PLAYBACK_STATE_PLAYING'; return } await call({ action: 'play', groupId }) },
   async pause(groupId: string) { if (USE_MOCK) { mock.groups.find((x) => x.id === groupId)!.playbackState = 'PLAYBACK_STATE_PAUSED'; return } await call({ action: 'pause', groupId }) },
+  async mute(playerId: string, muted: boolean) {
+    if (USE_MOCK) { const p = mock.players.find((x) => x.id === playerId); if (p) p.muted = muted; return }
+    await call({ action: 'mute', playerId, muted })
+  },
   async next(groupId: string) { if (!USE_MOCK) await call({ action: 'next', groupId }) },
   async previous(groupId: string) { if (!USE_MOCK) await call({ action: 'previous', groupId }) },
   async groupVolume(groupId: string, volume: number) {

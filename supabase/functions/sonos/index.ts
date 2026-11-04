@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
         }))
         const players = await Promise.all((g.players ?? []).map(async (p: any) => {
           const v = await sonos(t, 'GET', `/players/${p.id}/playerVolume`).catch(() => ({}))
-          return { id: p.id, name: p.name, volume: typeof v.volume === 'number' ? v.volume : null }
+          return { id: p.id, name: p.name, volume: typeof v.volume === 'number' ? v.volume : null, muted: !!v.muted }
         }))
         return json({ connected: true, groups, players, locked, canLock })
       }
@@ -182,6 +182,8 @@ Deno.serve(async (req) => {
       case 'next': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/playback/skipToNextTrack`); return json({ ok: true })
       case 'previous': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/playback/skipToPreviousTrack`); return json({ ok: true })
       case 'groupVolume': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/groupVolume`, { volume: Math.max(0, Math.min(100, Math.round(b.volume))) }); return json({ ok: true })
+      // Mute / unmute ONE speaker without touching what is playing (used by "Start service" for the Chapel).
+      case 'mute': guardPlayers([String(b.playerId)]); await sonos(t, 'POST', `/players/${b.playerId}/playerVolume/mute`, { muted: !!b.muted }); return json({ ok: true })
       case 'playerVolume': guardPlayers([String(b.playerId)]); await sonos(t, 'POST', `/players/${b.playerId}/playerVolume`, { volume: Math.max(0, Math.min(100, Math.round(b.volume))) }); return json({ ok: true })
       case 'loadFavorite': {
         await guardGroup(b.groupId)
