@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useKeepAwake } from '@/lib/keepAwake'
 import { useSession } from '@/context/SessionContext'
 import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } from '@/lib/tvBoard'
 import { format } from 'date-fns'
@@ -61,6 +62,7 @@ export const boardLocColors = (locations: { id: string; name: string }[]) => {
 
 /** The board itself. Used by the logged-in /board page and by a wall monitor's private /tv/<link> page. */
 export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }) {
+  useKeepAwake()
   const [now, setNow] = useState(new Date())
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
