@@ -12,14 +12,14 @@ import { History, GripVertical, ExternalLink, X, ArrowDownUp, Search, ChevronRig
 
 const stageAccent: Record<CustodyStage, string> = {
   scene_first_call: '#b04545',
-  in_transit: '#b3925a',
-  funeral_home: '#3b4a35',
-  chapel_service: '#5f6f4f',
+  in_transit: '#9fb0c4',
+  funeral_home: '#3d5a80',
+  chapel_service: '#6b88ad',
   crematory: '#8b5e34',
   ashes_received: '#6b5a3f',
   cemetery_burial: '#4a5568',
-  shipped_released: '#2f4a3f',
-  completed: '#1f2a1c',
+  shipped_released: '#2f5d7c',
+  completed: '#1c2a3d',
 }
 
 type SortMode = 'newest' | 'oldest' | 'name'

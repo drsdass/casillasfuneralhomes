@@ -1,21 +1,22 @@
 @import "tailwindcss";
 @import "./sanders-theme.css";
+@import "./casillas-theme.css";
 
 @theme {
   --font-display: 'Playfair Display', Georgia, serif;
   --font-sans: 'Open Sans', ui-sans-serif, system-ui, sans-serif;
 
-  /* Warm stone neutrals instead of cool blue-grey, with the two "light grey text" shades darkened for readability. */
-  --color-slate-50: #faf8f4;
-  --color-slate-100: #f3f0e9;
-  --color-slate-200: #e6e1d6;
-  --color-slate-300: #d2ccbd;
-  --color-slate-400: #766f64;
-  --color-slate-500: #57524a;
-  --color-slate-600: #46423b;
-  --color-slate-700: #38342e;
-  --color-slate-800: #292622;
-  --color-slate-900: #1c1a17;
+  /* Cool gray neutrals, with the two "light grey text" shades darkened for readability. */
+  --color-slate-50: #f6f8fa;
+  --color-slate-100: #eef1f5;
+  --color-slate-200: #dfe4ea;
+  --color-slate-300: #c9d1da;
+  --color-slate-400: #6b7684;
+  --color-slate-500: #4f5a68;
+  --color-slate-600: #3f4954;
+  --color-slate-700: #313a45;
+  --color-slate-800: #232a33;
+  --color-slate-900: #161b22;
 }
 
 html { font-size: 17px; }

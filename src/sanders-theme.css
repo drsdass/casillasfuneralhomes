@@ -1,39 +1,54 @@
-/* Sanders look: the same screens, recoloured. Generated from the colour classes the app uses; applies only when a Sanders user (or a Sanders family link) is showing. */
-html[data-company="sanders"] {
-  --brand: #2c4a5a; --brand-hover: #3d6074; --brand-dark: #1c3341; --brand-soft: #5a7f91;
-  --accent: #5f8ea5; --accent-light: #c7dbe5; --accent-hover: #74a0b5;
-}
-html[data-company="sanders"] .accent-\[\#3b4a35\] { accent-color: var(--brand) !important; }
-html[data-company="sanders"] .active\:bg-\[\#3b4a35\]:active { background-color: var(--brand) !important; }
+/* Sanders look: a light silver menu with deep navy controls (the opposite of Casillas). Applies only when a Sanders user (or a Sanders family link) is showing. */
+html[data-company="sanders"]{ --brand:#22384f; --brand-hover:#33506c; --brand-dark:#172636; --brand-soft:#5d7791; --accent:#a9c1db; --accent-text:#34608a; --accent-light:#c9d8e8; --accent-hover:#bcd0e4; --board:#111b27; --paper:#f1f4f7; }
+html[data-company="sanders"] .bg-\[\#1f2a1c\] { background-color: var(--board) !important; }
 html[data-company="sanders"] .bg-\[\#2b3327\] { background-color: var(--brand-dark) !important; }
+html[data-company="sanders"] .text-\[\#2b3327\] { color: var(--brand-dark) !important; }
+html[data-company="sanders"] .accent-\[\#3b4a35\] { accent-color: var(--brand) !important; }
 html[data-company="sanders"] .bg-\[\#3b4a35\] { background-color: var(--brand) !important; }
 html[data-company="sanders"] .bg-\[\#3b4a35\]\/10 { background-color: color-mix(in srgb, var(--brand) 10%, transparent) !important; }
 html[data-company="sanders"] .bg-\[\#3b4a35\]\/5 { background-color: color-mix(in srgb, var(--brand) 5%, transparent) !important; }
+html[data-company="sanders"] .active\:bg-\[\#3b4a35\]:active { background-color: var(--brand) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]:hover { background-color: var(--brand) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/20:hover { background-color: color-mix(in srgb, var(--brand) 20%, transparent) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/5:hover { background-color: color-mix(in srgb, var(--brand) 5%, transparent) !important; }
+html[data-company="sanders"] .border-\[\#3b4a35\] { border-color: var(--brand) !important; }
+html[data-company="sanders"] .border-\[\#3b4a35\]\/30 { border-color: color-mix(in srgb, var(--brand) 30%, transparent) !important; }
+html[data-company="sanders"] .border-\[\#3b4a35\]\/40 { border-color: color-mix(in srgb, var(--brand) 40%, transparent) !important; }
+html[data-company="sanders"] .ring-\[\#3b4a35\]\/40 { --tw-ring-color: color-mix(in srgb, var(--brand) 40%, transparent) !important; }
+html[data-company="sanders"] .text-\[\#3b4a35\] { color: var(--brand) !important; }
+html[data-company="sanders"] .hover\:text-\[\#3b4a35\]:hover { color: var(--brand) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#4d5f45\]:hover { background-color: var(--brand-hover) !important; }
+html[data-company="sanders"] .border-\[\#4d5f45\] { border-color: var(--brand-hover) !important; }
 html[data-company="sanders"] .bg-\[\#5f6f4f\] { background-color: var(--brand-soft) !important; }
 html[data-company="sanders"] .bg-\[\#b3925a\] { background-color: var(--accent) !important; }
 html[data-company="sanders"] .bg-\[\#b3925a\]\/10 { background-color: color-mix(in srgb, var(--accent) 10%, transparent) !important; }
 html[data-company="sanders"] .bg-\[\#b3925a\]\/15 { background-color: color-mix(in srgb, var(--accent) 15%, transparent) !important; }
 html[data-company="sanders"] .bg-\[\#b3925a\]\/5 { background-color: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
-html[data-company="sanders"] .bg-\[\#cbb98c\] { background-color: var(--accent-light) !important; }
-html[data-company="sanders"] .border-\[\#3b4a35\] { border-color: var(--brand) !important; }
-html[data-company="sanders"] .border-\[\#3b4a35\]\/30 { border-color: color-mix(in srgb, var(--brand) 30%, transparent) !important; }
-html[data-company="sanders"] .border-\[\#4d5f45\] { border-color: var(--brand-hover) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#b3925a\]\/5:hover { background-color: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
 html[data-company="sanders"] .border-\[\#b3925a\] { border-color: var(--accent) !important; }
 html[data-company="sanders"] .border-\[\#b3925a\]\/20 { border-color: color-mix(in srgb, var(--accent) 20%, transparent) !important; }
 html[data-company="sanders"] .border-\[\#b3925a\]\/30 { border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important; }
 html[data-company="sanders"] .border-\[\#b3925a\]\/40 { border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
-html[data-company="sanders"] .focus\:ring-\[\#b3925a\]:focus { --tw-ring-color: var(--accent) !important; }
-html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/20:hover { background-color: color-mix(in srgb, var(--brand) 20%, transparent) !important; }
-html[data-company="sanders"] .hover\:bg-\[\#3b4a35\]\/5:hover { background-color: color-mix(in srgb, var(--brand) 5%, transparent) !important; }
-html[data-company="sanders"] .hover\:bg-\[\#4d5f45\]:hover { background-color: var(--brand-hover) !important; }
-html[data-company="sanders"] .hover\:bg-\[\#b3925a\]\/5:hover { background-color: color-mix(in srgb, var(--accent) 5%, transparent) !important; }
-html[data-company="sanders"] .hover\:bg-\[\#c4a36b\]:hover { background-color: var(--accent-hover) !important; }
 html[data-company="sanders"] .hover\:border-\[\#b3925a\]:hover { border-color: var(--accent) !important; }
-html[data-company="sanders"] .hover\:text-\[\#3b4a35\]:hover { color: var(--brand) !important; }
-html[data-company="sanders"] .hover\:text-\[\#b3925a\]:hover { color: var(--accent) !important; }
-html[data-company="sanders"] .hover\:text-\[\#d9c78f\]:hover { color: var(--accent-light) !important; }
 html[data-company="sanders"] .ring-\[\#b3925a\]\/40 { --tw-ring-color: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
-html[data-company="sanders"] .text-\[\#2b3327\] { color: var(--brand-dark) !important; }
-html[data-company="sanders"] .text-\[\#3b4a35\] { color: var(--brand) !important; }
-html[data-company="sanders"] .text-\[\#b3925a\] { color: var(--accent) !important; }
+html[data-company="sanders"] .focus\:ring-\[\#b3925a\]:focus { --tw-ring-color: var(--accent) !important; }
+html[data-company="sanders"] .text-\[\#b3925a\] { color: var(--accent-text) !important; }
+html[data-company="sanders"] .hover\:text-\[\#b3925a\]:hover { color: var(--accent-text) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#c4a36b\]:hover { background-color: var(--accent-hover) !important; }
+html[data-company="sanders"] .bg-\[\#cbb98c\] { background-color: var(--accent-light) !important; }
+html[data-company="sanders"] .bg-\[\#d9c78f\]\/40 { background-color: color-mix(in srgb, var(--accent-light) 40%, transparent) !important; }
 html[data-company="sanders"] .text-\[\#d9c78f\] { color: var(--accent-light) !important; }
+html[data-company="sanders"] .text-\[\#d9c78f\]\/70 { color: color-mix(in srgb, var(--accent-light) 70%, transparent) !important; }
+html[data-company="sanders"] .text-\[\#d9c78f\]\/90 { color: color-mix(in srgb, var(--accent-light) 90%, transparent) !important; }
+html[data-company="sanders"] .hover\:text-\[\#d9c78f\]:hover { color: var(--accent-light) !important; }
+html[data-company="sanders"] .hover\:bg-\[\#f4f6f2\]:hover { background-color: var(--paper) !important; }
+
+/* Sanders menu is light (Casillas is dark): silver sidebar, dark text, navy highlight. */
+html[data-company="sanders"] .app-side { background-color: #e8ecf1 !important; color: #243447 !important; border-right: 1px solid #cdd5de; }
+html[data-company="sanders"] .app-side .text-slate-100, html[data-company="sanders"] .app-side .text-slate-200 { color: #243447 !important; }
+html[data-company="sanders"] .app-side .text-slate-300, html[data-company="sanders"] .app-side .text-slate-300\/70 { color: #55657a !important; }
+html[data-company="sanders"] .app-side .border-white\/10 { border-color: #cdd5de !important; }
+html[data-company="sanders"] .app-side .bg-white\/5 { background-color: rgba(34, 56, 79, 0.07) !important; }
+html[data-company="sanders"] .app-side .hover\:bg-white\/10:hover { background-color: rgba(34, 56, 79, 0.10) !important; }
+html[data-company="sanders"] .app-side .hover\:text-white:hover { color: #172636 !important; }
+html[data-company="sanders"] .app-side .bg-\[\#b3925a\] { background-color: #22384f !important; color: #ffffff !important; }

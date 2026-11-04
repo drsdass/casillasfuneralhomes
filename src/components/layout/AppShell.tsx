@@ -145,11 +145,11 @@ export default function AppShell() {
       {/* Phone: dim the page behind the open menu */}
       {menuOpen && <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setMenuOpen(false)} />}
       {/* Sidebar — always visible on a computer; a slide-over drawer on a phone */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`app-side fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
           {!activeOrg || brandFor(activeOrg.name).key === 'casillas' ? (
             <>
-              <BrandLogo on="dark" name={activeOrg?.name} className="h-10 w-auto shrink-0" />
+              <BrandLogo on={/^sanders/i.test(activeOrg?.name ?? '') ? 'white' : 'dark'} name={activeOrg?.name} className="h-10 w-auto shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-lg font-display font-semibold tracking-tight">Casillas OS</div>
                 <div className="text-xs text-slate-300">{activeOrg?.name ?? 'Casillas Funeral Home'}</div>
@@ -157,7 +157,7 @@ export default function AppShell() {
             </>
           ) : (
             <div className="flex-1 min-w-0">
-              <BrandLogo on="dark" name={activeOrg.name} className="h-14 w-auto max-w-full" />
+              <BrandLogo on={/^sanders/i.test(activeOrg?.name ?? '') ? 'white' : 'dark'} name={activeOrg.name} className="h-14 w-auto max-w-full" />
             </div>
           )}
           <button onClick={() => setMenuOpen(false)} className="lg:hidden text-slate-300 hover:text-white" aria-label="Close menu"><X size={20} /></button>
@@ -250,7 +250,7 @@ export default function AppShell() {
           <div className="flex items-center gap-3 mb-3">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-              style={{ backgroundColor: currentUser.avatarColor ?? '#b3925a' }}
+              style={{ backgroundColor: currentUser.avatarColor ?? '#5a6f88' }}
             >
               {currentUser.name.split(' ').map((n) => n[0]).join('')}
             </div>

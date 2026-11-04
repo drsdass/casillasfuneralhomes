@@ -158,7 +158,7 @@ export default function CaseForm() {
     mutationFn: async () => {
       if (quoteStart && !firstName.trim() && !lastName.trim() && !contactName.trim()) throw new Error('Enter the name of the person asking for the quote (or the patient\'s name).')
       if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time.')
-      const colorPalette = ['#3d4f3a', '#8b5e34', '#6b7f4f', '#a8763e', '#2f4a3f']
+      const colorPalette = ['#3d5a80', '#6b7c8f', '#6b88ad', '#8a97a6', '#2f5d7c']
       const contacts = contactName
         ? [{ id: existing?.contacts[0]?.id ?? `c-${Date.now()}`, name: contactName, relationship: contactRelationship, phone: contactPhone, email: contactEmail, isPrimary: true, isAuthorizingAgent: true }]
         : (existing?.contacts ?? [])

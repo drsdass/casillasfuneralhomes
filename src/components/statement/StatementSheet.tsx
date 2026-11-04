@@ -131,7 +131,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
           {isEditing ? (
             <input autoFocus onFocus={(e) => e.currentTarget.select()} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
               onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(null) }}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', font: 'inherit', color: 'inherit', background: '#fffbe0', border: '2px solid #b3925a', padding: '0 2px', textAlign: css.textAlign as CSSProperties['textAlign'], zIndex: 5, outline: 'none' }} />
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', font: 'inherit', color: 'inherit', background: '#fffbe0', border: '2px solid #5a6f88', padding: '0 2px', textAlign: css.textAlign as CSSProperties['textAlign'], zIndex: 5, outline: 'none' }} />
           ) : rot ? (
             <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%) rotate(180deg)', writingMode: 'vertical-rl', whiteSpace: 'nowrap' }}>{shown.text}</span>
           ) : shown.kind === 'acct' ? (
@@ -150,7 +150,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
       <style>{`
         .stmt-sheet { zoom: var(--sz); }
         .stmt-off { opacity: .35; text-decoration: line-through; }
-        .stmt-edit:hover { outline: 1px dashed #b3925a; outline-offset: -1px; cursor: text; }
+        .stmt-edit:hover { outline: 1px dashed #5a6f88; outline-offset: -1px; cursor: text; }
         main table.stmt-table { display: table !important; overflow: visible; }
         @page stmt { size: letter portrait; margin: 0.25in; }
         @media print { .stmt-off { visibility: hidden !important; } .stmt-print { page: stmt; } .stmt-sheet { zoom: var(--pz) !important; } .stmt-edit:hover { outline: none; } }
@@ -169,7 +169,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
               <input key={l.key} type="checkbox" className="no-print" checked={l.checked} disabled={!canEdit}
                 title={`${l.checked ? 'Ordered' : 'Not ordered'}: ${l.label || 'other charge'}`}
                 onChange={() => onChange(FLAG + l.key, l.checked ? 0 : 1)}
-                style={{ position: 'absolute', left: colX[c - 1] - 22, top: rowY[r - 1] + (sheet.rows[r - 1] - 15) / 2, width: 15, height: 15, margin: 0, accentColor: '#3b4a35', cursor: canEdit ? 'pointer' : 'default', zIndex: 3 }} />
+                style={{ position: 'absolute', left: colX[c - 1] - 22, top: rowY[r - 1] + (sheet.rows[r - 1] - 15) / 2, width: 15, height: 15, margin: 0, accentColor: '#3d5a80', cursor: canEdit ? 'pointer' : 'default', zIndex: 3 }} />
             )
           })}
           {imgStyle && <img src="/statement-logo.png" alt="" style={imgStyle} />}

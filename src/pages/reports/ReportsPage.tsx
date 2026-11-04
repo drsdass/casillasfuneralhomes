@@ -11,9 +11,9 @@ import { DollarSign, FileText, TrendingUp, AlertCircle } from 'lucide-react'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 
 const dispositionColors: Record<string, string> = {
-  burial: '#3b4a35',
-  cremation: '#b3925a',
-  entombment: '#6b7f4f',
+  burial: '#3d5a80',
+  cremation: '#9fb0c4',
+  entombment: '#6b88ad',
   donation: '#8b5e34',
   undetermined: '#94a3b8',
 }
@@ -103,7 +103,7 @@ export default function ReportsPage() {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-              <Bar dataKey="revenue" fill="#3b4a35" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="revenue" fill="#3d5a80" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -116,7 +116,7 @@ export default function ReportsPage() {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="cases" fill="#b3925a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="cases" fill="#9fb0c4" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -146,7 +146,7 @@ export default function ReportsPage() {
               <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
               <Tooltip />
-              <Bar dataKey="value" fill="#6b7f4f" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="value" fill="#6b88ad" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>

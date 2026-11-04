@@ -141,7 +141,7 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
           const on = ticked.includes(n); const t = perSheet.get(n)?.summary.total ?? 0
           return (
             <div key={n} className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-t-md border border-b-0 -mb-px transition ${view === n ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent hover:bg-white'} ${on ? 'ring-1 ring-inset ring-[#3b4a35]/40' : ''}`}>
-              <input type="checkbox" checked={on} disabled={!canEdit || setTicked.isPending} onChange={() => toggleTab(n)} title={on ? 'This package is on the invoice — click to take it off' : 'Click to add this package to the invoice'} style={{ width: 17, height: 17, accentColor: '#3b4a35', cursor: canEdit ? 'pointer' : 'default' }} />
+              <input type="checkbox" checked={on} disabled={!canEdit || setTicked.isPending} onChange={() => toggleTab(n)} title={on ? 'This package is on the invoice — click to take it off' : 'Click to add this package to the invoice'} style={{ width: 17, height: 17, accentColor: '#3d5a80', cursor: canEdit ? 'pointer' : 'default' }} />
               <button type="button" onClick={() => onView(n)} className={`text-left text-sm font-medium ${view === n ? 'text-[#3b4a35]' : 'text-slate-500 hover:text-slate-800'}`}>
                 {n.trim()}<span className="block text-[11px] font-normal text-slate-400">{money(t)}</span>
               </button>
@@ -262,7 +262,7 @@ function SaveQuoteDialog({ names, current, perSheet, sheets, taxRate, caseObj, c
           <div className="space-y-1">
             {names.map((n) => (
               <label key={n} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-1.5 text-sm">
-                <span className="flex items-center gap-2"><input type="checkbox" checked={picked.includes(n)} onChange={() => toggle(n)} style={{ accentColor: '#3b4a35' }} />{n.trim()}</span>
+                <span className="flex items-center gap-2"><input type="checkbox" checked={picked.includes(n)} onChange={() => toggle(n)} style={{ accentColor: '#3d5a80' }} />{n.trim()}</span>
                 <span className="text-slate-500 tabular-nums">{fmt(perSheet.get(n)?.summary.total ?? 0)}</span>
               </label>
             ))}

@@ -63,7 +63,7 @@ function QuoteList({ onNew }: { onNew: () => void }) {
 
       <div className="flex flex-wrap items-center gap-3">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by number, name or phone" className="w-full sm:w-72 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        <label className="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showVoid} onChange={(e) => setShowVoid(e.target.checked)} style={{ accentColor: '#3b4a35' }} /> Show voided</label>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={showVoid} onChange={(e) => setShowVoid(e.target.checked)} style={{ accentColor: '#3d5a80' }} /> Show voided</label>
       </div>
 
       {shown.length === 0 ? (
@@ -212,7 +212,7 @@ function QuoteBuilder({ onDone }: { onDone: () => void }) {
               const on = included.includes(s.name)
               return (
                 <div key={s.name} className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-t-md border border-b-0 -mb-px ${view === s.name ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent hover:bg-white'} ${on ? 'ring-1 ring-inset ring-[#3b4a35]/40' : ''}`}>
-                  <input type="checkbox" checked={on} onChange={() => setIncluded((i) => (i.includes(s.name) ? i.filter((x) => x !== s.name) : [...i, s.name]))} title={on ? 'This package is in the quote — click to take it out' : 'Click to put this package in the quote'} style={{ width: 17, height: 17, accentColor: '#3b4a35' }} />
+                  <input type="checkbox" checked={on} onChange={() => setIncluded((i) => (i.includes(s.name) ? i.filter((x) => x !== s.name) : [...i, s.name]))} title={on ? 'This package is in the quote — click to take it out' : 'Click to put this package in the quote'} style={{ width: 17, height: 17, accentColor: '#3d5a80' }} />
                   <button type="button" onClick={() => setView(s.name)} className={`text-left text-sm font-medium ${view === s.name ? 'text-[#3b4a35]' : 'text-slate-500 hover:text-slate-800'}`}>
                     {s.name.trim()}<span className="block text-[11px] font-normal text-slate-400">{money(perSheet.get(s.name)?.total ?? 0)}</span>
                   </button>

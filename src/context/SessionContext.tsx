@@ -160,7 +160,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // "Add to Home Screen" picks up the right name and icon for the company.
     document.getElementById('app-manifest')?.setAttribute('href', `/manifest-${key}.webmanifest`)
     document.getElementById('app-touch-icon')?.setAttribute('href', `/icon-${key}-180.png`)
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', key === 'sanders' ? '#2c4a5a' : '#3b4a35')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', key === 'sanders' ? '#374556' : '#3d5a80')
   }, [activeOrg])
   setCompany(activeOrg?.name) // so messages and forms outside React hooks use the right company name
 
