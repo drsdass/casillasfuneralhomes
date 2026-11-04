@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
+import { Lock, Unlock, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
 import { sonos, isPlaying, type SonosGroup, type SonosPlayer } from '@/lib/sonos'
 import { useSession } from '@/context/SessionContext'
 import { useKeepAwake } from '@/lib/keepAwake'
@@ -44,7 +44,10 @@ export default function MusicPage() {
   const players = st?.players ?? []
   const groups = st?.groups ?? []
   const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? ''
-  const anyPlaying = groups.some(isPlaying)
+  const lockedIds = st?.locked ?? []
+  const isLocked = (g: SonosGroup) => g.playerIds.some((id) => lockedIds.includes(id))
+  const free = groups.filter((g) => !isLocked(g))
+  const anyPlaying = free.some(isPlaying)
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -55,7 +58,7 @@ export default function MusicPage() {
         </div>
         {st?.connected && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={!anyPlaying} onClick={() => act(async () => { for (const g of groups.filter(isPlaying)) await sonos.pause(g.id) })}
+            <button type="button" disabled={!anyPlaying} onClick={() => act(async () => { for (const g of free.filter(isPlaying)) await sonos.pause(g.id) })}
               className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-3 text-base font-semibold text-white hover:bg-red-700 disabled:opacity-40"><PauseCircle size={20} /> Pause everything</button>
           </div>
         )}
@@ -63,7 +66,7 @@ export default function MusicPage() {
 
       {outcome && (
         <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${outcome === 'connected' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
-          <span>{outcome === 'connected' ? 'Sonos is connected.' : outcome === 'denied' ? 'Sonos was not allowed — nothing changed.' : outcome === 'expired' ? 'That connect link timed out. Press Connect Sonos again.' : 'Could not connect Sonos. Try again, and check the setup steps.'}</span>
+          <span>{outcome === 'connected' ? 'Sonos is connected.' : outcome === 'denied' ? 'Sonos was not allowed — nothing changed.' : outcome === 'expired' ? 'That connect link timed out. Press Connect Sonos again.' : 'Could not connect Sonos.'}{params.get('why') ? ` Reason: ${params.get('why')}` : ' Try again, and check the setup steps.'}</span>
           <button type="button" aria-label="Dismiss" onClick={() => { params.delete('sonos'); setParams(params) }}><X size={16} /></button>
         </div>
       )}
@@ -78,15 +81,16 @@ export default function MusicPage() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Rooms</span>
-            <button type="button" disabled={groups.length <= 1 || !groups[0]} onClick={() => { const lead = groups.find(isPlaying) ?? groups[0]; act(() => sonos.setGroup(lead.id, players.map((p) => p.id))) }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"><Link2 size={15} /> Play in all rooms together</button>
-            <button type="button" disabled={groups.length >= players.length} onClick={() => act(async () => { for (const g of groups) for (const id of g.playerIds.slice(1)) await sonos.separate(id) })}
+            <button type="button" disabled={free.length <= 1} onClick={() => { const lead = free.find(isPlaying) ?? free[0]; act(() => sonos.setGroup(lead.id, players.filter((p) => !lockedIds.includes(p.id)).map((p) => p.id))) }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"><Link2 size={15} /> Play in all rooms together{lockedIds.length ? ' (except locked)' : ''}</button>
+            <button type="button" disabled={free.every((g) => g.playerIds.length <= 1)} onClick={() => act(async () => { for (const g of free) for (const id of g.playerIds.slice(1)) await sonos.separate(id) })}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"><Unlink size={15} /> Separate rooms</button>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             {groups.map((g) => (
-              <RoomCard key={g.id} g={g} players={players} nameOf={nameOf}
+              <RoomCard key={g.id} g={g} players={players} nameOf={nameOf} locked={isLocked(g)} lockedIds={lockedIds} canLock={!!st?.canLock}
+                onLock={(on) => act(() => sonos.lock(g.playerIds[0], on))}
                 onPlayPause={() => act(() => (isPlaying(g) ? sonos.pause(g.id) : sonos.play(g.id)))}
                 onNext={() => act(() => sonos.next(g.id))} onPrev={() => act(() => sonos.previous(g.id))}
                 onVolume={(v) => act(() => sonos.groupVolume(g.id, v))}
@@ -133,8 +137,8 @@ export default function MusicPage() {
   )
 }
 
-function RoomCard({ g, players, nameOf, onPlayPause, onNext, onPrev, onVolume, onPlayerVolume, onPick, onToggleRoom }: {
-  g: SonosGroup; players: SonosPlayer[]; nameOf: (id: string) => string
+function RoomCard({ g, players, nameOf, locked, lockedIds, canLock, onLock, onPlayPause, onNext, onPrev, onVolume, onPlayerVolume, onPick, onToggleRoom }: {
+  g: SonosGroup; players: SonosPlayer[]; nameOf: (id: string) => string; locked: boolean; lockedIds: string[]; canLock: boolean; onLock: (on: boolean) => void
   onPlayPause: () => void; onNext: () => void; onPrev: () => void; onVolume: (v: number) => void; onPlayerVolume: (id: string, v: number) => void
   onPick: () => void; onToggleRoom: (p: SonosPlayer) => void
 }) {
@@ -147,6 +151,13 @@ function RoomCard({ g, players, nameOf, onPlayPause, onNext, onPrev, onVolume, o
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${playing ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{playing ? 'Playing' : g.playbackState === 'PLAYBACK_STATE_PAUSED' ? 'Paused' : 'Stopped'}</span>
       </div>
 
+      {locked && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="flex items-center gap-1.5"><Lock size={15} /> Locked — this room keeps playing. Staff can’t pause or change it.</span>
+          {canLock && <button type="button" onClick={() => { if (confirm('Unlock this room so its music and volume can be changed?')) onLock(false) }} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold hover:bg-amber-100"><Unlock size={13} /> Unlock</button>}
+        </div>
+      )}
+
       <div className="mt-3 flex min-h-[3.5rem] items-center gap-3">
         {g.track?.image ? <img src={g.track.image} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400"><Music2 size={22} /></span>}
         <div className="min-w-0">
@@ -155,6 +166,7 @@ function RoomCard({ g, players, nameOf, onPlayPause, onNext, onPrev, onVolume, o
         </div>
       </div>
 
+      <fieldset disabled={locked} className={locked ? 'opacity-50' : ''}>
       <div className="mt-3 flex items-center justify-center gap-3">
         <button type="button" onClick={onPrev} aria-label="Previous song" className="grid h-12 w-12 place-items-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50"><SkipBack size={20} /></button>
         <button type="button" onClick={onPlayPause} aria-label={playing ? 'Pause' : 'Play'} className="grid h-16 w-16 place-items-center rounded-full bg-[#3b4a35] text-white shadow hover:bg-[#4d5f45]">{playing ? <Pause size={28} /> : <Play size={28} className="translate-x-0.5" />}</button>
@@ -169,16 +181,21 @@ function RoomCard({ g, players, nameOf, onPlayPause, onNext, onPrev, onVolume, o
       )}
 
       <button type="button" onClick={onPick} className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-800 hover:bg-slate-50">Choose music…</button>
+      </fieldset>
 
-      {players.length > 1 && (
+      {!locked && canLock && g.playerIds.length === 1 && (
+        <button type="button" onClick={() => onLock(true)} className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500 underline hover:text-slate-800"><Lock size={12} /> Lock this room (keep its music and volume from being changed)</button>
+      )}
+
+      {!locked && players.length > 1 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Also playing in</div>
           <div className="flex flex-wrap gap-1.5">
             {players.map((p) => {
               const on = g.playerIds.includes(p.id)
               return (
-                <button key={p.id} type="button" onClick={() => onToggleRoom(p)} aria-pressed={on}
-                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm ${on ? 'border-[#3b4a35] bg-[#3b4a35]/10 font-medium text-[#3b4a35]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                <button key={p.id} type="button" onClick={() => onToggleRoom(p)} aria-pressed={on} disabled={lockedIds.includes(p.id)} title={lockedIds.includes(p.id) ? 'Locked' : undefined}
+                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm ${on ? 'border-[#3b4a35] bg-[#3b4a35]/10 font-medium text-[#3b4a35]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'} disabled:opacity-40`}>
                   {on && <Check size={13} />}{nameOf(p.id) || p.name}
                 </button>
               )

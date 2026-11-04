@@ -3,7 +3,7 @@ import { USE_MOCK, supabase } from './supabase'
 export interface SonosPlayer { id: string; name: string; volume: number | null }
 export interface SonosTrack { name?: string; artist?: string; album?: string; image?: string }
 export interface SonosGroup { id: string; name: string; playbackState: string; playerIds: string[]; volume: number | null; muted: boolean; track: SonosTrack | null }
-export interface SonosState { connected: boolean; groups: SonosGroup[]; players: SonosPlayer[] }
+export interface SonosState { connected: boolean; groups: SonosGroup[]; players: SonosPlayer[]; locked: string[]; canLock: boolean }
 export interface SonosFavorite { id: string; name: string; description?: string; image?: string; service?: string }
 
 export const isPlaying = (g: SonosGroup) => g.playbackState === 'PLAYBACK_STATE_PLAYING' || g.playbackState === 'PLAYBACK_STATE_BUFFERING'
@@ -11,6 +11,7 @@ export const isPlaying = (g: SonosGroup) => g.playbackState === 'PLAYBACK_STATE_
 // ---- demo (no Supabase): three speakers that behave like the real ones ----------------------------------------------------
 const mock = {
   connected: true,
+  locked: ['p-casket'] as string[],
   players: [
     { id: 'p-chapel', name: 'Chapel', volume: 30 },
     { id: 'p-hall', name: 'Chapel Hall', volume: 25 },
@@ -44,9 +45,9 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
 
 export const sonos = {
   async state(): Promise<SonosState> {
-    if (USE_MOCK) return tick({ connected: mock.connected, groups: mock.groups, players: mock.players })
+    if (USE_MOCK) return tick({ connected: mock.connected, groups: mock.groups, players: mock.players, locked: mock.locked, canLock: true })
     const d = await call<Partial<SonosState>>({ action: 'state' })
-    return { connected: d.connected !== false, groups: d.groups ?? [], players: d.players ?? [] }
+    return { connected: d.connected !== false, groups: d.groups ?? [], players: d.players ?? [], locked: d.locked ?? [], canLock: !!d.canLock }
   },
   async favorites(): Promise<SonosFavorite[]> {
     if (USE_MOCK) return tick(mock.favorites)
@@ -63,6 +64,10 @@ export const sonos = {
   async disconnect(): Promise<void> {
     if (USE_MOCK) { mock.connected = false; return }
     await call({ action: 'disconnect' })
+  },
+  async lock(playerId: string, locked: boolean) {
+    if (USE_MOCK) { mock.locked = locked ? [...mock.locked, playerId] : mock.locked.filter((x) => x !== playerId); return }
+    await call({ action: 'lock', playerId, locked })
   },
   async play(groupId: string) { if (USE_MOCK) { const g = mock.groups.find((x) => x.id === groupId)!; g.playbackState = 'PLAYBACK_STATE_PLAYING'; return } await call({ action: 'play', groupId }) },
   async pause(groupId: string) { if (USE_MOCK) { mock.groups.find((x) => x.id === groupId)!.playbackState = 'PLAYBACK_STATE_PAUSED'; return } await call({ action: 'pause', groupId }) },
