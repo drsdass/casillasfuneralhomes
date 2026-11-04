@@ -39,6 +39,7 @@ export default function SpotifyPanel({ isAdmin, roomNames = [], groupNames = [] 
   const isRoom = (n: string) => known.includes(n.toLowerCase())
   const covered = (r: string) => st.devices.some((d) => d.name.toLowerCase() === r.toLowerCase() || (d.name.toLowerCase().startsWith(r.toLowerCase() + ' +') ) || groupNames.some((g) => g.toLowerCase() === d.name.toLowerCase() && g.toLowerCase().includes(r.toLowerCase())))
   const missing = roomNames.filter((r) => !covered(r))
+  const anyRoom = st.devices.some((d) => isRoom(d.name) || /\+ \d+$/.test(d.name))
   const playIt = (p: SpotifyPlaylist) => { if (!pickDev) return; setNote(`Starting “${p.name}” in ${pickDev.name}…`); act(() => spotify.play(pickDev.id, p.uri, p.name)); setTimeout(() => setNote(''), 4000) }
 
   return (
@@ -59,7 +60,7 @@ export default function SpotifyPanel({ isAdmin, roomNames = [], groupNames = [] 
           <div className="truncate text-base font-medium text-slate-900">{st.track?.name ?? 'Nothing playing'}</div>
           <div className="truncate text-sm text-slate-500">{[st.track?.artist, dev ? `in ${dev.name}` : ''].filter(Boolean).join(' · ')}</div>
         </div>
-        {dev && !locked(dev.name) && (
+        {dev && anyRoom && !locked(dev.name) && (
           <div className="flex items-center gap-2">
             <button type="button" aria-label="Previous" onClick={() => act(() => spotify.previous(dev.id))} className="grid h-11 w-11 place-items-center rounded-full border border-slate-300 hover:bg-white"><SkipBack size={18} /></button>
             <button type="button" aria-label={playing ? 'Pause' : 'Play'} onClick={() => act(() => (playing ? spotify.pause(dev.id) : spotify.play(dev.id, '')))} className="grid h-14 w-14 place-items-center rounded-full text-white shadow" style={{ background: GREEN }}>{playing ? <Pause size={24} /> : <Play size={24} className="translate-x-0.5" />}</button>
@@ -69,6 +70,24 @@ export default function SpotifyPanel({ isAdmin, roomNames = [], groupNames = [] 
         {dev && locked(dev.name) && <span className="flex items-center gap-1.5 text-sm text-amber-800"><Lock size={14} /> {dev.name} is locked</span>}
       </div>
 
+      {!anyRoom ? (
+        <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <div className="text-base font-semibold text-slate-900">Playing Spotify in the rooms</div>
+          <p className="text-sm text-slate-600">Spotify doesn’t let this page see the Sonos speakers, so the Spotify music itself is started from each room card above (<b>Choose music…</b>). Whatever Spotify is playing in a room can be paused, skipped, turned up or locked from its card.</p>
+          <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-700">
+            <li>Open the <b>Sonos app</b> → <b>Browse</b> → <b>Spotify</b> and open a playlist.</li>
+            <li>Tap <b>⋯</b> → <b>Add to Sonos Favorites</b> (do this once per playlist).</li>
+            <li>Here on the Music page, press <b>Choose music…</b> on a room and pick it.</li>
+          </ol>
+          {lists.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Playlists on this Spotify account</div>
+              <div className="flex flex-wrap gap-1.5">{lists.slice(0, 12).map((p) => <span key={p.uri} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{p.name}</span>)}</div>
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       {/* where to play */}
       <div>
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">1. Play in which room?</div>
@@ -109,6 +128,8 @@ export default function SpotifyPanel({ isAdmin, roomNames = [], groupNames = [] 
         ))}
       </div>
 
+      </>
+      )}
     </Card>
   )
 }
