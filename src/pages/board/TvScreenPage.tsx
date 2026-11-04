@@ -19,5 +19,7 @@ export default function TvScreenPage() {
     return <div className="h-screen bg-[#1f2a1c] text-white flex items-center justify-center text-center p-8"><div><div className="text-2xl font-semibold">This screen link is not valid</div><div className="mt-2 text-slate-300">It may have been turned off or replaced. Ask an administrator for the new link.</div></div></div>
   }
   if (!data) return <div className="h-screen bg-[#1f2a1c] text-slate-300 flex items-center justify-center">{isError ? 'Reconnecting…' : 'Loading…'}</div>
-  return <BoardView data={data} />
+  // ?safe=5 pulls the board in from the edges (a percent) for a TV that crops the picture; the default is a small margin.
+  const sp = Number(new URLSearchParams(window.location.search).get('safe'))
+  return <BoardView data={data} safe={isFinite(sp) && sp > 0 && sp <= 12 ? sp : 2} />
 }

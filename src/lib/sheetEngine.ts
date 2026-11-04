@@ -1,4 +1,4 @@
-/** A tiny spreadsheet engine for the Statement of Funeral Goods and Services forms: numbers, text, + - * /, SUM(), TODAY(). */
+/** A tiny spreadsheet engine for the Statement of Funeral Goods and Services forms: numbers, text, + - * /, SUM(), TODAY(), RENTAL(). */
 
 export type Raw = string | number | undefined
 export interface SheetCell { s: number; v?: string | number; f?: string }
@@ -111,6 +111,7 @@ export function makeEvaluator(sheet: SheetDef, over: Record<string, Raw>) {
         const flat = args.flatMap((a) => (Array.isArray(a) ? a : [a]))
         if (name === 'SUM') return flat.reduce<number>((s, v) => s + (typeof v === 'number' ? v : 0), 0)
         if (name === 'TODAY') return todaySerial()
+        if (name === 'RENTAL') return /rental/i.test(String(flat[0] ?? '')) ? 1 : 0   // a rented casket is not a sale, so it carries no sales tax
         if (name === 'ROUND') return Math.round(asNum(flat[0]) * 10 ** asNum(flat[1])) / 10 ** asNum(flat[1])
         if (name === 'MAX') return Math.max(...flat.map(asNum))
         if (name === 'MIN') return Math.min(...flat.map(asNum))

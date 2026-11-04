@@ -183,6 +183,9 @@ function RoomCard({ g, players, nameOf, locked, lockedIds, canLock, onLock, onPl
       <button type="button" onClick={onPick} className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-800 hover:bg-slate-50">Choose music…</button>
       </fieldset>
 
+      {!locked && canLock && g.playerIds.length > 1 && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><Lock size={12} /> To lock a room (like the Casket Room), press <b>Separate rooms</b> at the top first, then use “Lock this room” on its card.</div>
+      )}
       {!locked && canLock && g.playerIds.length === 1 && (
         <button type="button" onClick={() => onLock(true)} className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500 underline hover:text-slate-800"><Lock size={12} /> Lock this room (keep its music and volume from being changed)</button>
       )}

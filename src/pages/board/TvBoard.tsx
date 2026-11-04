@@ -18,7 +18,7 @@ import { shortLocationName } from '@/lib/company'
  * It shrinks the whole board just enough to fit (and lets text re-wrap wider as it shrinks), and re-checks
  * whenever something on the board changes, the TV is resized, or the list loads.
  */
-export function FitToScreen({ children }: { children: ReactNode }) {
+export function FitToScreen({ children, safe = 2 }: { children: ReactNode; safe?: number }) {
   const box = useRef<HTMLDivElement>(null)
   const inner = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
@@ -28,7 +28,9 @@ export function FitToScreen({ children }: { children: ReactNode }) {
     if (!b || !el) return
     let raf = 0
     const fit = () => {
-      const W = b.clientWidth, H = b.clientHeight
+      // The room for the board is the box minus its padding (clientWidth/Height include it, which used to push the last column and last row off the screen).
+      const cs = getComputedStyle(b)
+      const W = b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = b.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
       if (!W || !H) return
       let best = 0.2
       // From full size downwards, find the largest size where the board (re-wrapped to the wider space) fits.
@@ -49,7 +51,7 @@ export function FitToScreen({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <div ref={box} className="flex-1 min-h-0 overflow-hidden p-4">
+    <div ref={box} className="flex-1 min-h-0 overflow-hidden" style={{ padding: `${safe * 0.5}vh ${safe}vw ${safe}vh` }}>
       <div ref={inner} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
     </div>
   )
@@ -62,7 +64,7 @@ export const boardLocColors = (locations: { id: string; name: string }[]) => {
 }
 
 /** The board itself. Used by the logged-in /board page and by a wall monitor's private /tv/<link> page. */
-export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }) {
+export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?: string; safe?: number }) {
   useKeepAwake()
   const [now, setNow] = useState(new Date())
   useEffect(() => {
@@ -77,13 +79,13 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
 
   return (
     <div className="h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
-      <div className="no-print flex items-center justify-between px-6 py-3 bg-black/20 gap-4">
+      <div className="no-print flex items-center justify-between px-6 py-1.5 bg-black/20 gap-4">
         {backTo ? (
           <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white"><ArrowLeft size={15} /> Back</Link>
         ) : <div className="text-sm text-slate-300 w-24">{here}</div>}
         <div className="flex items-center gap-3">
-          <BrandLogo on="dark" className="h-8 w-auto" />
-          <span className="font-display text-lg font-semibold tracking-wide">{getCompanyName()}</span>
+          <BrandLogo on="dark" className="h-6 w-auto" />
+          <span className="font-display text-base font-semibold tracking-wide">{getCompanyName()}</span>
         </div>
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-3 text-sm">
@@ -97,21 +99,21 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
         </div>
       </div>
 
-      <FitToScreen>
+      <FitToScreen safe={safe}>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="text-sm uppercase tracking-wide text-[#d9c78f] border-b-2 border-[#4d5f45]">
-              <th className="py-3 px-3">Name</th>
-              <th className="py-3 px-3">Visitation</th>
-              <th className="py-3 px-3">Funeral Attendant</th>
-              <th className="py-3 px-3">Service</th>
-              <th className="py-3 px-3">Funeral Attendant</th>
-              <th className="py-3 px-3">Disp.</th>
-              <th className="py-3 px-3">Flowers</th>
-              <th className="py-3 px-3">Birds</th>
-              <th className="py-3 px-3">Escort</th>
-              <th className="py-3 px-3">Casket</th>
-              <th className="py-3 px-3">Special Requests</th>
+              <th className="py-1.5 px-3">Name</th>
+              <th className="py-1.5 px-3">Visitation</th>
+              <th className="py-1.5 px-3">Funeral Attendant</th>
+              <th className="py-1.5 px-3">Service</th>
+              <th className="py-1.5 px-3">Funeral Attendant</th>
+              <th className="py-1.5 px-3">Disp.</th>
+              <th className="py-1.5 px-3">Flowers</th>
+              <th className="py-1.5 px-3">Birds</th>
+              <th className="py-1.5 px-3">Escort</th>
+              <th className="py-1.5 px-3">Casket</th>
+              <th className="py-1.5 px-3">Special Requests</th>
             </tr>
           </thead>
           <tbody className="text-base">
