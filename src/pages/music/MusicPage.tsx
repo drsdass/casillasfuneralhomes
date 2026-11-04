@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { Lock, Unlock, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
@@ -12,14 +12,22 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wr
 
 function Slider({ value, onCommit, label }: { value: number; onCommit: (v: number) => void; label: string }) {
   const [v, setV] = useState(value)
-  const [drag, setDrag] = useState(false)
-  useEffect(() => { if (!drag) setV(value) }, [value, drag])
-  const done = () => { setDrag(false); onCommit(v) }
+  const dragging = useRef(false)
+  const lastTouch = useRef(0)       // when the person last used this slider
+  const sent = useRef(value)        // last value we actually sent to Sonos
+  // Follow Sonos only when nobody is using the slider (and not for 8 s after) — Sonos ramps volume, so its in-between readings made the knob jump.
+  useEffect(() => { if (!dragging.current && Date.now() - lastTouch.current > 8000) { setV(value); sent.current = value } }, [value])
+  const done = () => {
+    if (!dragging.current) return
+    dragging.current = false; lastTouch.current = Date.now()
+    if (v !== sent.current) { sent.current = v; onCommit(v) }
+  }
   return (
     <label className="flex items-center gap-3">
       <Volume2 size={20} className="shrink-0 text-slate-500" />
       <input type="range" min={0} max={100} value={v} aria-label={label}
-        onChange={(e) => { setDrag(true); setV(+e.target.value) }} onPointerUp={done} onKeyUp={done} onTouchEnd={done}
+        onChange={(e) => { dragging.current = true; lastTouch.current = Date.now(); setV(+e.target.value) }}
+        onPointerUp={done} onKeyUp={done} onTouchEnd={done} onBlur={done}
         className="h-3 w-full accent-[#3b4a35]" />
       <span className="w-9 text-right text-sm tabular-nums text-slate-600">{v}</span>
     </label>
