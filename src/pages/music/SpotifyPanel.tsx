@@ -8,7 +8,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wr
 const GREEN = '#1db954'
 
 /** Spotify (Premium) — pick a playlist, pick a room. Sits under the Sonos rooms on the Music page. */
-export default function SpotifyPanel({ isAdmin, roomNames = [] }: { isAdmin: boolean; roomNames?: string[] }) {
+export default function SpotifyPanel({ isAdmin, roomNames = [], groupNames = [] }: { isAdmin: boolean; roomNames?: string[]; groupNames?: string[] }) {
   const qc = useQueryClient()
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
@@ -35,7 +35,10 @@ export default function SpotifyPanel({ isAdmin, roomNames = [] }: { isAdmin: boo
   const playing = st.playing && !!dev
   const pickId = st.devices.some((d) => d.id === target && !locked(d.name)) ? target : (st.devices.find((d) => d.id === st.deviceId && !locked(d.name)) ?? st.devices.find((d) => !locked(d.name)))?.id ?? ''
   const pickDev = st.devices.find((d) => d.id === pickId)
-  const missing = roomNames.filter((r) => !st.devices.some((d) => d.name.toLowerCase() === r.toLowerCase()))
+  const known = [...roomNames, ...groupNames].map((n) => n.toLowerCase())   // a grouped pair shows up in Spotify under the group name, e.g. "Chapel + 1"
+  const isRoom = (n: string) => known.includes(n.toLowerCase())
+  const covered = (r: string) => st.devices.some((d) => d.name.toLowerCase() === r.toLowerCase() || (d.name.toLowerCase().startsWith(r.toLowerCase() + ' +') ) || groupNames.some((g) => g.toLowerCase() === d.name.toLowerCase() && g.toLowerCase().includes(r.toLowerCase())))
+  const missing = roomNames.filter((r) => !covered(r))
   const playIt = (p: SpotifyPlaylist) => { if (!pickDev) return; setNote(`Starting “${p.name}” in ${pickDev.name}…`); act(() => spotify.play(pickDev.id, p.uri, p.name)); setTimeout(() => setNote(''), 4000) }
 
   return (
@@ -75,7 +78,7 @@ export default function SpotifyPanel({ isAdmin, roomNames = [] }: { isAdmin: boo
             return (
               <button key={d.id} type="button" disabled={lk} onClick={() => setTarget(d.id)} aria-pressed={on}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium ${on ? 'border-[#1db954] bg-[#1db954]/10 text-emerald-800' : 'border-slate-300 text-slate-700 hover:bg-slate-50'} disabled:opacity-40`}>
-                {lk ? <Lock size={13} /> : on ? <Check size={14} /> : <Speaker size={14} />}{d.name}{roomNames.some((r) => r.toLowerCase() === d.name.toLowerCase()) ? '' : ' (not a room)'}
+                {lk ? <Lock size={13} /> : on ? <Check size={14} /> : <Speaker size={14} />}{d.name}{isRoom(d.name) || /\+ \d+$/.test(d.name) ? '' : ' (not a room)'}
               </button>
             )
           })}

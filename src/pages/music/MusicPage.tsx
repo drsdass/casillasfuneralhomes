@@ -110,7 +110,7 @@ export default function MusicPage() {
             ))}
           </div>
 
-          <SpotifyPanel isAdmin={isAdmin} roomNames={players.map((p) => p.name)} />
+          <SpotifyPanel isAdmin={isAdmin} roomNames={players.map((p) => p.name)} groupNames={groups.map((g) => g.name)} />
 
           {isAdmin && (
             <div className="pt-2 text-right">
