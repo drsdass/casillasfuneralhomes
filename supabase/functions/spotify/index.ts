@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
       default: return json({ error: 'Unknown action.' }, 400)
     }
   } catch (e) {
-    if (e instanceof Fail) return json({ error: e.message }, e.status === 409 ? 200 : e.status)
-    return json({ error: 'Something went wrong talking to Spotify.' }, 500)
+    if (e instanceof Fail) return json({ error: e.message }, 200)
+    return json({ error: 'Something went wrong talking to Spotify: ' + (e instanceof Error ? e.message : 'unknown') }, 200)
   }
 })

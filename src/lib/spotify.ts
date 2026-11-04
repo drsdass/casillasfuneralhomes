@@ -26,7 +26,12 @@ const tick = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(JSON.parse(J
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase!.functions.invoke('spotify', { body })
-  if (error) throw new Error(error.message || 'Could not reach the Spotify service.')
+  if (error) {
+    // the function answered with an error status: its message is in the response body, not in error.message
+    let why = ''
+    try { const j = await (error as { context?: Response }).context?.json(); why = j?.error ?? '' } catch { /* no body */ }
+    throw new Error(why || error.message || 'Could not reach the Spotify service.')
+  }
   if (data?.error) throw Object.assign(new Error(data.error), { redirectUri: data.redirectUri })
   return data as T
 }
