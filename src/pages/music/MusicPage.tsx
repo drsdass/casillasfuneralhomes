@@ -6,6 +6,7 @@ import { sonos, isPlaying, type SonosGroup, type SonosPlayer } from '@/lib/sonos
 import { useSession } from '@/context/SessionContext'
 import { useKeepAwake } from '@/lib/keepAwake'
 import { Card } from '@/components/ui/Primitives'
+import SpotifyPanel from './SpotifyPanel'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.')
 
@@ -41,6 +42,7 @@ export default function MusicPage() {
   const act = (f: () => Promise<unknown>) => run.mutate(f)
 
   const outcome = params.get('sonos')
+  const spOutcome = params.get('spotify')
   const players = st?.players ?? []
   const groups = st?.groups ?? []
   const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? ''
@@ -68,6 +70,12 @@ export default function MusicPage() {
         <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${outcome === 'connected' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
           <span>{outcome === 'connected' ? 'Sonos is connected.' : outcome === 'denied' ? 'Sonos was not allowed — nothing changed.' : outcome === 'expired' ? 'That connect link timed out. Press Connect Sonos again.' : 'Could not connect Sonos.'}{params.get('why') ? ` Reason: ${params.get('why')}` : ' Try again, and check the setup steps.'}</span>
           <button type="button" aria-label="Dismiss" onClick={() => { params.delete('sonos'); setParams(params) }}><X size={16} /></button>
+        </div>
+      )}
+      {spOutcome && (
+        <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${spOutcome === 'connected' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>
+          <span>{spOutcome === 'connected' ? 'Spotify is connected.' : spOutcome === 'denied' ? 'Spotify was not allowed — nothing changed.' : spOutcome === 'expired' ? 'That connect link timed out. Press Connect Spotify again.' : 'Could not connect Spotify.'}{params.get('why') ? ` Reason: ${params.get('why')}` : ''}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => { params.delete('spotify'); params.delete('why'); setParams(params) }}><X size={16} /></button>
         </div>
       )}
       {err && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
@@ -101,6 +109,8 @@ export default function MusicPage() {
                   : act(() => sonos.setGroup(g.id, [...g.playerIds, p.id]))} />
             ))}
           </div>
+
+          <SpotifyPanel isAdmin={isAdmin} />
 
           {isAdmin && (
             <div className="pt-2 text-right">

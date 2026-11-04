@@ -27,6 +27,7 @@ import { WorkflowTrack } from '@/components/workflow/WorkflowTrack'
 import { computeWorkflow } from '@/lib/workflow'
 import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
 import { PrintCenter } from '@/components/documents/PrintCenter'
+import { FamilyMedia } from '@/components/media/FamilyMedia'
 import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import { CaseQuotes } from '@/components/quote/CaseQuotes'
 import { quotes as quotesApi } from '@/lib/quotes'
@@ -36,7 +37,7 @@ import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
-const tabs = ['Overview', 'Tasks', 'Orders', 'Quotes', 'Notes', 'Documents', 'Emails', 'Financials'] as const
+const tabs = ['Overview', 'Tasks', 'Orders', 'Quotes', 'Notes', 'Documents', 'Media', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
 const orderStatusStyles: Record<OrderStatus, string> = {
@@ -1276,6 +1277,10 @@ export default function CaseDetail() {
             </Card>
           </div>
         </div>
+      )}
+
+      {tab === 'Media' && (
+        <Card className="p-5"><FamilyMedia caseId={c.id} canEdit={canEdit} currentUser={currentUser!} /></Card>
       )}
 
       {tab === 'Quotes' && (

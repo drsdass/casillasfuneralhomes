@@ -127,6 +127,12 @@ Deno.serve(async (req) => {
         }
         const next = b.locked ? Array.from(new Set([...locked, id])) : locked.filter((x) => x !== id)
         await db.from('sonos_links').update({ locked_players: next }).eq('org_id', orgId)
+        // Remember the room NAMES too, so the Spotify side (which only knows names) can respect the same lock.
+        try {
+          const all = await sonos(t, 'GET', `/households/${hh}/groups`)
+          const names = (all.players ?? []).filter((p: any) => next.includes(p.id)).map((p: any) => String(p.name))
+          await db.from('sonos_links').update({ locked_names: names }).eq('org_id', orgId)
+        } catch { /* column not added yet (spotify.sql) — the Sonos lock itself still works */ }
         return json({ ok: true })
       }
       case 'state': {

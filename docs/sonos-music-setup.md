@@ -32,3 +32,19 @@ Sonos plays whatever service is linked to it. A personal **Spotify** account is 
 listening only; playing it for the public in a business (a chapel) is outside those terms. For the chapel use a
 business-licensed service — e.g. **Soundtrack Your Brand** (works with Sonos) — or the family's own purchased/uploaded
 songs. Whichever service you link, the OS controls it the same way through Sonos Favorites.
+
+
+---
+
+## Spotify (direct connection)
+
+1. Run `src/db/spotify.sql` and `src/db/sonos-lock.sql` in the Supabase SQL editor.
+2. Create Edge Functions `spotify` (Verify JWT **ON**) and `spotify-callback` (Verify JWT **OFF**) from `supabase/functions/`. Redeploy `sonos` (JWT ON).
+3. developer.spotify.com/dashboard → Create app (Web API) → Redirect URI = `https://<project>.supabase.co/functions/v1/spotify-callback`.
+4. Secrets: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` (APP_URL already set).
+5. In the Spotify app's User Management add the Premium account's name + email.
+6. In the OS: Music → Connect Spotify → Agree. In the Sonos app add Spotify as a service once so the speakers appear as Spotify devices.
+
+## Family media (USB music / video)
+
+Run `src/db/spotify.sql` (creates the private `case-media` bucket and `case_media` table). Case → Media tab → choose files. Supabase's default per-file upload limit is 50 MB (raise it in Project Settings → Storage for long videos).
