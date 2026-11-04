@@ -2,16 +2,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { Printer, FileText, Receipt, Route, ClipboardList, ScrollText, FilePlus2 } from 'lucide-react'
+import { Printer, FileText, Receipt, Route, ClipboardList, ScrollText, FilePlus2, BookOpen, Wallet, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { quotes, quoteLabel, money } from '@/lib/quotes'
 import { CaseInvoiceForms, lockInvoiceRep } from '@/components/quote/StatementForms'
 import { QuoteView } from '@/components/quote/QuoteView'
 import { CustodyRecord } from '@/components/cases/CustodyTimeline'
 import { CaseSummarySheet } from './CaseSummarySheet'
+import { ServiceProgram, PaymentReceipt, type ProgramText } from './ProgramAndReceipt'
 import type { FuneralCase, StaffMember } from '@/types'
 
-type Job = { kind: 'contract' } | { kind: 'custody' } | { kind: 'summary' } | { kind: 'quote'; id: string }
+type Job = { kind: 'program' } | { kind: 'receipt' } | { kind: 'contract' } | { kind: 'custody' } | { kind: 'summary' } | { kind: 'quote'; id: string }
 export type FormKey = 'release' | 'embalming' | 'preneed' | 'first_call' | 'vital_sheet'
 
 const FORMS: { key: FormKey; title: string; note: string }[] = [
@@ -39,6 +40,13 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
   const { data: events = [] } = useQuery({ queryKey: ['events'], queryFn: () => api.getCalendarEvents() })
   const { data: orders = [] } = useQuery({ queryKey: ['orders', c.id], queryFn: () => api.getOrders(c.id) })
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => api.getStaff() })
+  const { data: payments = [] } = useQuery({ queryKey: ['payments', c.id], queryFn: () => api.getPayments(c.id) })
+  const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: () => api.getContracts() })
+  const { data: family } = useQuery({ queryKey: ['family-activity', c.id], queryFn: () => api.getFamilyActivity(c.id) })
+  const [progOpen, setProgOpen] = useState(false)
+  const [prog, setProg] = useState<ProgramText>({ obituary: '', officiant: '', music: '', pallbearers: '', interment: '', closing: 'Thank you for celebrating the life of our loved one.' })
+  useEffect(() => { if (family?.obituary?.body) setProg((p) => (p.obituary ? p : { ...p, obituary: family.obituary!.body })) }, [family])
+  const contract = contracts.find((k) => k.caseId === c.id)
   const location = locations.find((l) => l.id === c.locationId)
   const hasContract = typeof saved?.['_invoice']?.sources === 'string' && String(saved['_invoice'].sources).length > 0
 
@@ -57,6 +65,8 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
   let doc: ReactNode = null
   if (job?.kind === 'custody') doc = <CustodyRecord c={c} log={log} location={location} preparedBy={currentUser.name} />
   else if (job?.kind === 'summary') doc = <CaseSummarySheet c={c} location={location} events={events.filter((e) => e.caseId === c.id)} orders={orders} staff={staff} preparedBy={currentUser.name} />
+  else if (job?.kind === 'program') doc = <ServiceProgram c={c} events={events.filter((e) => e.caseId === c.id)} text={prog} location={location} />
+  else if (job?.kind === 'receipt') doc = <PaymentReceipt c={c} contract={contract} payments={payments} location={location} preparedBy={currentUser.name} />
   else if (job?.kind === 'contract') doc = <CaseInvoiceForms caseObj={c} fallback={null} />
   else if (job?.kind === 'quote') { const q = list.find((x) => x.id === job.id); if (q) doc = <QuoteView quote={q} label={quoteLabel(c, q)} caseObj={c} location={location} /> }
 
@@ -103,6 +113,8 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Records</div>
         <div className="grid gap-2 sm:grid-cols-2">
           <Tile icon={<Route size={16} />} title="Chain of Custody" note={`${log.length} move${log.length === 1 ? '' : 's'} with date, time and who recorded them · signature lines`} onClick={() => print({ kind: 'custody' })} />
+          <Tile icon={<Wallet size={16} />} title="Payment receipt" note={`${payments.length} payment${payments.length === 1 ? '' : 's'} · total, paid and balance due`} onClick={() => print({ kind: 'receipt' })} />
+          <Tile icon={<BookOpen size={16} />} title="Service program / obituary" note="Memorial keepsake — fill in the obituary, music and pallbearers first" onClick={() => setProgOpen(true)} action="Prepare" />
           <Tile icon={<ClipboardList size={16} />} title="Case summary sheet" note="Decedent, family contacts, services and orders on one page" onClick={() => print({ kind: 'summary' })} />
         </div>
       </div>
@@ -112,6 +124,24 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
           <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Forms &amp; authorizations <span className="font-normal normal-case text-slate-400">— opens the form so you can print, save, send or e-sign it</span></div>
           <div className="grid gap-2 sm:grid-cols-2">
             {FORMS.map((f) => <Tile key={f.key} icon={<FilePlus2 size={16} />} title={f.title} note={f.note} onClick={() => onOpenForm(f.key)} action="Open" />)}
+          </div>
+        </div>
+      )}
+
+      {progOpen && (
+        <div className="no-print fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" onClick={() => setProgOpen(false)}>
+          <div className="my-4 w-full max-w-xl rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold text-slate-800">Service program</h3><button type="button" aria-label="Close" onClick={() => setProgOpen(false)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100"><X size={18} /></button></div>
+            <p className="mb-3 text-xs text-slate-500">The name, dates and the visitation / service times come from the case. Fill in what you want printed; leave a box empty to leave it off. (The family's obituary is filled in if they wrote one.)</p>
+            {([['obituary', 'Obituary', 6], ['officiant', 'Officiant', 1], ['music', 'Music / readings', 3], ['pallbearers', 'Pallbearers', 2], ['interment', 'Interment', 1], ['closing', 'Closing line', 2]] as const).map(([k, label, rows]) => (
+              <label key={k} className="mb-2 block text-sm font-medium text-slate-700">{label}
+                <textarea rows={rows} value={prog[k]} onChange={(e) => setProg({ ...prog, [k]: e.target.value })} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal" />
+              </label>
+            ))}
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setProgOpen(false)} className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={() => { setProgOpen(false); print({ kind: 'program' }) }} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#4d5f45]"><Printer size={14} /> Print program</button>
+            </div>
           </div>
         </div>
       )}
