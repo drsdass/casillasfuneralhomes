@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
-import { Lock, Unlock, VolumeX, Mic, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Lock, Unlock, VolumeX, Mic, Play, Pause, SkipBack, SkipForward, Volume2, Music2, X, Link2, Unlink, PauseCircle, Speaker, Copy, Check, MonitorPlay } from 'lucide-react'
 import { sonos, isPlaying, type SonosGroup, type SonosPlayer } from '@/lib/sonos'
 import { useSession } from '@/context/SessionContext'
 import { useKeepAwake } from '@/lib/keepAwake'
@@ -99,6 +99,12 @@ export default function MusicPage() {
       )}
       {err && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>}
       {error && !st && <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Could not reach the music service: {msg(error)}</div>}
+
+      <Link to="/chapel-tv" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50">
+        <span className="grid h-11 w-11 place-items-center rounded-lg bg-[#3b4a35] text-white"><MonitorPlay size={22} /></span>
+        <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-slate-900">Chapel TV</span><span className="block text-sm text-slate-500">Play a video, YouTube link or a family’s files on the chapel TV</span></span>
+        <span className="text-sm font-medium text-[#3b4a35]">Open →</span>
+      </Link>
 
       {isLoading && <div className="py-16 text-center text-slate-400">Looking for the speakers…</div>}
 

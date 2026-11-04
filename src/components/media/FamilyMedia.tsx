@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Film, Image as ImageIcon, Maximize2, Music2, Pause, Play, SkipBack, SkipForward, Trash2, Upload, Usb } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Film, Image as ImageIcon, Maximize2, MonitorPlay, Music2, Pause, Play, SkipBack, SkipForward, Trash2, Upload, Usb } from 'lucide-react'
+import { chapelPlayer, type PlayerItem } from '@/lib/chapelPlayer'
 import { caseMedia, type CaseMedia } from '@/lib/caseMedia'
 import type { StaffMember } from '@/types'
 
@@ -21,6 +23,11 @@ export function FamilyMedia({ caseId, canEdit, currentUser }: { caseId: string; 
   const stage = useRef<HTMLDivElement>(null)
   const pick = useRef<HTMLInputElement>(null)
   const item = cur != null ? items[cur] : undefined
+  const [sent, setSent] = useState('')
+  const toTv = async (list: CaseMedia[], now: boolean) => {
+    const its: PlayerItem[] = list.map((m) => ({ id: m.id, title: m.name.replace(/\.[^.]+$/, ''), kind: m.kind, source: 'file', path: m.path }))
+    try { await (now ? chapelPlayer.playNow(currentUser.orgId, its, currentUser.name) : chapelPlayer.add(currentUser.orgId, its, currentUser.name)); setSent(now ? `Playing on the Chapel TV: ${its.length > 1 ? `${its.length} files` : its[0].title}` : `Added to the Chapel TV list: ${its.length > 1 ? `${its.length} files` : its[0].title}`) } catch (e) { setErrs([e instanceof Error ? e.message : 'Could not reach the Chapel TV.']) }
+  }
 
   const upload = async (files: FileList | File[]) => {
     const list = Array.from(files)
@@ -84,6 +91,16 @@ export function FamilyMedia({ caseId, canEdit, currentUser }: { caseId: string; 
       {!isLoading && items.length === 0 && busy.length === 0 && <div className="py-6 text-center text-sm text-slate-400">Nothing added yet for this family.</div>}
 
       {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <MonitorPlay size={20} className="text-emerald-700" />
+          <div className="min-w-0 flex-1 text-sm text-emerald-900">{sent || 'Show these on the chapel TV (sound comes out of the Sonos speakers).'}</div>
+          <button type="button" onClick={() => toTv(items, true)} className="rounded-lg bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4d5f45]">Play all on Chapel TV</button>
+          <button type="button" onClick={() => toTv(items, false)} className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100">Add to list</button>
+          <Link to="/chapel-tv" className="text-sm font-medium text-emerald-800 underline">Open remote</Link>
+        </div>
+      )}
+
+      {items.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div ref={stage} className="flex min-h-[260px] flex-col overflow-hidden rounded-xl bg-black">
             <div className="grid flex-1 place-items-center">
@@ -116,6 +133,7 @@ export function FamilyMedia({ caseId, canEdit, currentUser }: { caseId: string; 
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500"><Icon k={m.kind} size={17} /></span>
                   <span className="min-w-0"><span className="block truncate text-sm font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{mb(m.size)}</span></span>
                 </button>
+                <button type="button" aria-label={`Play ${m.name} on the Chapel TV`} title="Play on the Chapel TV" onClick={() => toTv([m], true)} className="rounded p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><MonitorPlay size={17} /></button>
                 {canEdit && <button type="button" aria-label={`Delete ${m.name}`} onClick={() => { if (confirm(`Remove “${m.name}” from this case?`)) del.mutate(m) }} className="rounded p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={16} /></button>}
               </li>
             ))}
@@ -123,7 +141,7 @@ export function FamilyMedia({ caseId, canEdit, currentUser }: { caseId: string; 
         </div>
       )}
       {unsupported && <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">This browser may not be able to play that kind of file. Convert it to MP3 (sound) or MP4 (video) and add it again.</div>}
-      <p className="text-xs text-slate-400">Sound plays from the device this page is open on. To hear it in the chapel, open this page on the chapel computer or TV and press Full screen.</p>
+      <p className="text-xs text-slate-400">The player above plays on this device only. Use “Play on Chapel TV” to show it in the chapel.</p>
     </div>
   )
 }

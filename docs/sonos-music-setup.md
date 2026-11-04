@@ -48,3 +48,9 @@ songs. Whichever service you link, the OS controls it the same way through Sonos
 ## Family media (USB music / video)
 
 Run `src/db/spotify.sql` (creates the private `case-media` bucket and `case_media` table). Case → Media tab → choose files. Supabase's default per-file upload limit is 50 MB (raise it in Project Settings → Storage for long videos).
+
+## Chapel TV (video on the chapel TV, sound from Sonos)
+1. Run `src/db/chapel-player.sql` in Supabase (run `spotify.sql` first).
+2. On the laptop that feeds the chapel TV, sign in to the OS, open `/player`, drag it to the TV screen and press **Start** once. Leave it open.
+3. On the tablet open **Music → Chapel TV** (`/chapel-tv`). Paste YouTube links or upload videos into the House library, or open a case → **Media** and press **Play all on Chapel TV**.
+4. Sound: the TV's sound must reach Sonos — HDMI-ARC to a Sonos soundbar, or the TV's audio output into the Five's line-in (Line-In autoplay on, grouped with Chapel Hall).

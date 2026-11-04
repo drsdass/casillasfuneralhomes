@@ -34,6 +34,8 @@ import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
 import TvScreenPage from '@/pages/board/TvScreenPage'
+import ChapelPlayerPage from '@/pages/player/ChapelPlayerPage'
+import ChapelTvPage from '@/pages/player/ChapelTvPage'
 import ServiceRoom from '@/pages/service/ServiceRoom'
 import WatchPage from '@/pages/service/WatchPage'
 import RemotePage from '@/pages/service/RemotePage'
@@ -81,6 +83,7 @@ export default function App() {
             <Route element={<RequireAuth />}>
               {/* Full-screen, no sidebar — meant for a TV/monitor, not staff browsing */}
               <Route path="/board" element={<TvBoard />} />
+              <Route path="/player" element={<ChapelPlayerPage />} />
 
               <Route
                 element={
@@ -105,6 +108,7 @@ export default function App() {
                 <Route path="/driver" element={<DriverView />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/music" element={<MusicPage />} />
+                <Route path="/chapel-tv" element={<ChapelTvPage />} />
                 <Route path="/staff-schedule" element={<StaffSchedule />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/families" element={<FamiliesList />} />
