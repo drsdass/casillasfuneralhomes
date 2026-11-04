@@ -428,13 +428,17 @@ export const mockStore = {
     caseId: string,
     toStage: CustodyStage,
     movedBy: StaffMember,
-    note?: string
+    note?: string,
+    at?: string
   ): { cases: FuneralCase[]; log: CustodyLogEntry[] } {
     const existing = caseStore.find((c) => c.id === caseId)
     const fromStage = existing?.custodyStage
     const now = new Date().toISOString()
+    const lastTs = custodyLogStore.filter((l) => l.caseId === caseId).map((l) => l.timestamp).sort().pop()
+    const live = !at || Math.abs(Date.now() - new Date(at).getTime()) < 10 * 60 * 1000
+    const applyStage = live || !lastTs || new Date(at!) >= new Date(lastTs)
     caseStore = caseStore.map((c) => {
-      if (c.id !== caseId) return c
+      if (c.id !== caseId || !applyStage) return c
       const done = (st: string) => st === 'completed' || st === 'shipped_released'
       let status = c.status
       if (done(toStage) && status !== 'completed') status = 'completed'
@@ -445,7 +449,7 @@ export const mockStore = {
     })
     const entry: CustodyLogEntry = {
       id: newId('cl'), caseId, fromStage, toStage,
-      movedBy: movedBy.id, movedByName: movedBy.name, timestamp: now, note,
+      movedBy: movedBy.id, movedByName: movedBy.name, timestamp: at ?? now, note,
     }
     custodyLogStore = [...custodyLogStore, entry]
     logAudit({

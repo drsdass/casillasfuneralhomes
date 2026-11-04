@@ -1,5 +1,5 @@
 /* Sanders look: a light silver menu with deep navy controls (the opposite of Casillas). Applies only when a Sanders user (or a Sanders family link) is showing. */
-html[data-company="sanders"]{ --brand:#22384f; --brand-hover:#33506c; --brand-dark:#172636; --brand-soft:#5d7791; --accent:#a9c1db; --accent-text:#34608a; --accent-light:#c9d8e8; --accent-hover:#bcd0e4; --board:#111b27; --paper:#f1f4f7; }
+html[data-company="sanders"]{ --brand:#22384f; --brand-hover:#33506c; --brand-dark:#172636; --brand-soft:#5d7791; --accent:#a9c1db; --accent-text:#34608a; --accent-light:#c9d8e8; --accent-hover:#bcd0e4; --board:#0c1118; --paper:#f1f4f7; }
 html[data-company="sanders"] .bg-\[\#1f2a1c\] { background-color: var(--board) !important; }
 html[data-company="sanders"] .bg-\[\#2b3327\] { background-color: var(--brand-dark) !important; }
 html[data-company="sanders"] .text-\[\#2b3327\] { color: var(--brand-dark) !important; }

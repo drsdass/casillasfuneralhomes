@@ -1,5 +1,5 @@
 /* Casillas look: steel blue with silver-gray accents. Sanders has its own look (sanders-theme.css). */
-:root{ --brand:#3d5a80; --brand-hover:#4f6f99; --brand-dark:#2b3f5a; --brand-soft:#6b88ad; --accent:#b7c4d3; --accent-text:#4f6785; --accent-light:#c3cedb; --accent-hover:#c9d3df; --board:#1c2a3d; --paper:#f1f4f8; }
+:root{ --brand:#3d5a80; --brand-hover:#4f6f99; --brand-dark:#2b3f5a; --brand-soft:#6b88ad; --accent:#b7c4d3; --accent-text:#4f6785; --accent-light:#c3cedb; --accent-hover:#c9d3df; --board:#111a27; --paper:#f1f4f8; }
 html:not([data-company="sanders"]) .bg-\[\#1f2a1c\] { background-color: var(--board) !important; }
 html:not([data-company="sanders"]) .bg-\[\#2b3327\] { background-color: var(--brand-dark) !important; }
 html:not([data-company="sanders"]) .text-\[\#2b3327\] { color: var(--brand-dark) !important; }

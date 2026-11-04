@@ -1094,17 +1094,33 @@ export const api = {
     caseId: string,
     toStage: CustodyStage,
     movedBy: StaffMember,
-    note?: string
+    note?: string,
+    /** When it really happened (ISO). Leave out for "just now". A time in the past is added to the history without changing where the case is now, unless it is the latest move. */
+    at?: string
   ): Promise<{ cases: FuneralCase[]; log: CustodyLogEntry[] }> {
-    if (USE_MOCK) return delay(mockStore.moveCustody(caseId, toStage, movedBy, note))
+    if (USE_MOCK) return delay(mockStore.moveCustody(caseId, toStage, movedBy, note, at))
     const current = await this.getCase(caseId)
-    const { error: caseErr } = await supabase!.from('cases').update({ custody_stage: toStage }).eq('id', caseId)
-    if (caseErr) throw caseErr
+    const live = !at || Math.abs(Date.now() - new Date(at).getTime()) < 10 * 60 * 1000
+    let applyStage = true
+    if (!live) {
+      const { data: last } = await supabase!.from('custody_log').select('timestamp').eq('case_id', caseId).order('timestamp', { ascending: false }).limit(1).maybeSingle()
+      if (last && new Date(at!) < new Date(last.timestamp)) applyStage = false
+    }
+    if (applyStage) {
+      const { error: caseErr } = await supabase!.from('cases').update({ custody_stage: toStage }).eq('id', caseId)
+      if (caseErr) throw caseErr
+    }
     const { error: logErr } = await supabase!.from('custody_log').insert({
       case_id: caseId, from_stage: current?.custodyStage, to_stage: toStage,
-      moved_by: movedBy.id, note,
+      moved_by: movedBy.id, note, ...(at ? { timestamp: at } : {}),
     })
     if (logErr) throw logErr
+    if (!live || !applyStage) {
+      const nm = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
+      logAuditReal({ entityType: 'custody', entityId: caseId, caseId, action: 'status_change', summary: `Recorded ${nm}: ${CUSTODY_STAGE_LABELS[toStage] ?? toStage} at ${at}`, changedBy: movedBy.id })
+      const [cases, log] = await Promise.all([this.getCases(), this.getCustodyLog()])
+      return { cases, log }
+    }
     if (toStage === 'scene_first_call') this.firePush({ type: 'case', caseId, event: 'pickup' })
     const decedentName = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
     this.notifySlack(`📦 ${decedentName} moved to *${toStage.replace(/_/g, ' ')}* — by ${movedBy.name}`)

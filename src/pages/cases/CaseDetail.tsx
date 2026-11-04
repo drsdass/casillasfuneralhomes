@@ -1,4 +1,5 @@
 import { deriveServicePatch, deriveVitalEvents } from '@/lib/vitalToCase'
+import { CustodyTimeline } from '@/components/cases/CustodyTimeline'
 import { CaseEventsPanel } from '@/components/cases/CaseEventsPanel'
 import { BOARD_DISP_OPTIONS, BOARD_EXTRA_OPTIONS } from '@/lib/boardDisp'
 import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
@@ -695,6 +696,8 @@ export default function CaseDetail() {
               </div>
             )}
           </Card>
+
+          <Card className="lg:col-span-3 p-5"><CustodyTimeline caseObj={c} canEdit={canEdit} currentUser={currentUser!} /></Card>
 
           <Card className="lg:col-span-3 p-5">
             <div className="flex items-center justify-between mb-3">
