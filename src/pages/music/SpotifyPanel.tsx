@@ -8,12 +8,13 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wr
 const GREEN = '#1db954'
 
 /** Spotify (Premium) — pick a playlist, pick a room. Sits under the Sonos rooms on the Music page. */
-export default function SpotifyPanel({ isAdmin }: { isAdmin: boolean }) {
+export default function SpotifyPanel({ isAdmin, roomNames = [] }: { isAdmin: boolean; roomNames?: string[] }) {
   const qc = useQueryClient()
   const [err, setErr] = useState('')
   const [q, setQ] = useState('')
   const [term, setTerm] = useState('')
-  const [choosing, setChoosing] = useState<SpotifyPlaylist | null>(null)
+  const [target, setTarget] = useState('')
+  const [note, setNote] = useState('')
 
   const { data: st, isLoading, error } = useQuery({ queryKey: ['spotify-state'], queryFn: spotify.state, refetchInterval: 5000, retry: 1 })
   const { data: lists = [], isLoading: listsLoading } = useQuery({
@@ -32,13 +33,17 @@ export default function SpotifyPanel({ isAdmin }: { isAdmin: boolean }) {
   const locked = (name: string) => st.lockedNames.some((n) => n.toLowerCase() === name.toLowerCase())
   const dev = st.devices.find((d) => d.id === st.deviceId) ?? st.devices.find((d) => d.active)
   const playing = st.playing && !!dev
+  const pickId = st.devices.some((d) => d.id === target && !locked(d.name)) ? target : (st.devices.find((d) => d.id === st.deviceId && !locked(d.name)) ?? st.devices.find((d) => !locked(d.name)))?.id ?? ''
+  const pickDev = st.devices.find((d) => d.id === pickId)
+  const missing = roomNames.filter((r) => !st.devices.some((d) => d.name.toLowerCase() === r.toLowerCase()))
+  const playIt = (p: SpotifyPlaylist) => { if (!pickDev) return; setNote(`Starting “${p.name}” in ${pickDev.name}…`); act(() => spotify.play(pickDev.id, p.uri, p.name)); setTimeout(() => setNote(''), 4000) }
 
   return (
     <Card className="space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="grid h-8 w-8 place-items-center rounded-full text-white" style={{ background: GREEN }}><Music2 size={17} /></span>
-          <div><h2 className="text-lg font-semibold text-slate-900">Spotify</h2><p className="text-xs text-slate-500">Signed in as {st.user ?? 'the house account'} — pick a playlist, then a room.</p></div>
+          <div><h2 className="text-lg font-semibold text-slate-900">Spotify</h2><p className="text-xs text-slate-500">Signed in as {st.user ?? 'the house account'}.</p></div>
         </div>
         {isAdmin && <button type="button" onClick={() => { if (confirm('Disconnect Spotify from the OS?')) act(async () => { await spotify.disconnect(); await qc.invalidateQueries({ queryKey: ['spotify-state'] }) }) }} className="text-xs text-slate-400 underline hover:text-slate-600">Disconnect Spotify</button>}
       </div>
@@ -61,6 +66,29 @@ export default function SpotifyPanel({ isAdmin }: { isAdmin: boolean }) {
         {dev && locked(dev.name) && <span className="flex items-center gap-1.5 text-sm text-amber-800"><Lock size={14} /> {dev.name} is locked</span>}
       </div>
 
+      {/* where to play */}
+      <div>
+        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">1. Play in which room?</div>
+        <div className="flex flex-wrap gap-2">
+          {st.devices.map((d) => {
+            const on = d.id === pickId, lk = locked(d.name)
+            return (
+              <button key={d.id} type="button" disabled={lk} onClick={() => setTarget(d.id)} aria-pressed={on}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium ${on ? 'border-[#1db954] bg-[#1db954]/10 text-emerald-800' : 'border-slate-300 text-slate-700 hover:bg-slate-50'} disabled:opacity-40`}>
+                {lk ? <Lock size={13} /> : on ? <Check size={14} /> : <Speaker size={14} />}{d.name}{roomNames.some((r) => r.toLowerCase() === d.name.toLowerCase()) ? '' : ' (not a room)'}
+              </button>
+            )
+          })}
+        </div>
+        {missing.length > 0 && (
+          <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {missing.join(', ')} {missing.length > 1 ? 'don’t' : 'doesn’t'} show up as {missing.length > 1 ? 'Spotify speakers' : 'a Spotify speaker'} yet. In the Sonos app go to Settings → Services &amp; Voice → Add a Service → Spotify (sign in with the same Spotify account), then play any song on each speaker once. Until then, use <b>Choose music…</b> on a room card (Sonos Favorites) for those rooms.
+          </div>
+        )}
+      </div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">2. Tap a playlist{pickDev ? ` — it plays in ${pickDev.name}` : ''}</div>
+      {note && <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{note}</div>}
+
       {/* search + playlists */}
       <form onSubmit={(e) => { e.preventDefault(); setTerm(q.trim()) }} className="flex gap-2">
         <label className="relative flex-1"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -71,30 +99,13 @@ export default function SpotifyPanel({ isAdmin }: { isAdmin: boolean }) {
       {!listsLoading && lists.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">{term ? 'No playlists found.' : 'No playlists in this Spotify account yet — save a few in Spotify, or use the search above.'}</div>}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {lists.map((p) => (
-          <button key={p.uri} type="button" onClick={() => setChoosing(p)} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:border-[#1db954]/70 hover:bg-slate-50">
+          <button key={p.uri} type="button" onClick={() => playIt(p)} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:border-[#1db954]/70 hover:bg-slate-50">
             {p.image ? <img src={p.image} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" /> : <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-400"><Music2 size={22} /></span>}
             <span className="min-w-0"><span className="block truncate text-base font-semibold text-slate-900">{p.name}</span><span className="block truncate text-xs text-slate-500">{[p.owner, p.tracks ? `${p.tracks} songs` : ''].filter(Boolean).join(' · ')}</span></span>
           </button>
         ))}
       </div>
 
-      {choosing && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={() => setChoosing(null)}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-1 flex items-center justify-between"><h3 className="text-lg font-semibold text-slate-900">Play “{choosing.name}” in…</h3><button type="button" aria-label="Close" onClick={() => setChoosing(null)} className="rounded-md p-2 text-slate-400 hover:bg-slate-100"><X size={20} /></button></div>
-            {st.devices.length === 0 && <div className="mb-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Spotify can’t see any speaker right now. In the Sonos app, add Spotify (Settings → Services &amp; Voice) and play any song once so the rooms appear here.</div>}
-            <div className="space-y-2">
-              {st.devices.map((d) => (
-                <button key={d.id} type="button" disabled={locked(d.name)} onClick={() => { act(() => spotify.play(d.id, choosing.uri, choosing.name)); setChoosing(null) }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:border-[#1db954]/70 hover:bg-slate-50 disabled:opacity-40">
-                  <Speaker size={20} className="text-slate-500" /><span className="flex-1 text-base font-medium text-slate-900">{d.name}</span>
-                  {locked(d.name) ? <span className="flex items-center gap-1 text-xs text-amber-800"><Lock size={12} /> Locked</span> : d.active && <span className="text-xs text-emerald-700">Active</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </Card>
   )
 }
