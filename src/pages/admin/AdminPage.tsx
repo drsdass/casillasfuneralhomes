@@ -75,6 +75,12 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
   })
 
+  const profileMutation = useMutation({
+    mutationFn: ({ staffId, ...v }: { staffId: string; name: string; title?: string; phone?: string }) => api.updateStaffProfile(staffId, v, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['staff'] }); window.alert('Saved.') },
+    onError: (e) => window.alert(getErrorMessage(e)),
+  })
+
   const deleteStaffMutation = useMutation({
     mutationFn: (staffId: string) => api.deleteStaffMember(staffId, currentUser!),
     onSuccess: (r) => { queryClient.invalidateQueries({ queryKey: ['staff'] }); setAccessPanelId(null); window.alert(r.mode === 'deleted' ? `${r.name} was deleted.` : `${r.name} has work in the system, so they were switched off instead: hidden from the lists and unable to sign in. Everything they did is kept.`) },
@@ -297,6 +303,7 @@ export default function AdminPage() {
                       <tr>
                         <td colSpan={5} className="bg-slate-50 px-4 py-4 border-b border-slate-100">
                           <div className="grid grid-cols-2 gap-8">
+                            <StaffDetailsEditor key={s.id + s.name + (s.title ?? '') + (s.phone ?? '')} s={s} onSave={(v) => profileMutation.mutate({ staffId: s.id, ...v })} saving={profileMutation.isPending} />
                             <div>
                               <div className="text-xs font-semibold text-slate-700 mb-2">Location Access</div>
                               <div className="space-y-1.5">
@@ -786,6 +793,30 @@ function AddTaskTemplateModal({
           </button>
         </div>
       </Card>
+    </div>
+  )
+}
+
+
+/** Fix a name (or title / phone) after the person was already added. Their login email stays the same. */
+function StaffDetailsEditor({ s, onSave, saving }: { s: { name: string; title?: string; phone?: string; email: string }; onSave: (v: { name: string; title?: string; phone?: string }) => void; saving: boolean }) {
+  const [name, setName] = useState(s.name)
+  const [title, setTitle] = useState(s.title ?? '')
+  const [phone, setPhone] = useState(s.phone ?? '')
+  const cls = 'w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
+  const changed = name.trim() !== s.name || title.trim() !== (s.title ?? '') || phone.trim() !== (s.phone ?? '')
+  return (
+    <div className="col-span-2 border-b border-slate-200 pb-4">
+      <div className="text-xs font-semibold text-slate-700 mb-2">Name &amp; details</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label className="text-xs text-slate-500">Full name<input value={name} onChange={(e) => setName(e.target.value)} className={cls} /></label>
+        <label className="text-xs text-slate-500">Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Funeral Director, etc." className={cls} /></label>
+        <label className="text-xs text-slate-500">Phone<input value={phone} onChange={(e) => setPhone(e.target.value)} className={cls} /></label>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <button type="button" disabled={!changed || !name.trim() || saving} onClick={() => onSave({ name: name.trim(), title: title.trim() || undefined, phone: phone.trim() || undefined })} className="rounded-md bg-[#3b4a35] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{saving ? 'Saving…' : 'Save name & details'}</button>
+        <span className="text-[11px] text-slate-400">Sign-in stays {s.email}. Only the name shown in the system changes.</span>
+      </div>
     </div>
   )
 }

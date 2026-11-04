@@ -145,6 +145,12 @@ export const mockStore = {
     return staffStore.filter((s) => s.orgId === org)
   },
 
+  updateStaffProfile(staffId: string, input: { name: string; title?: string; phone?: string }, changedBy: StaffMember): StaffMember[] {
+    staffStore = staffStore.map((s) => (s.id === staffId ? { ...s, name: input.name, title: input.title?.trim() || undefined, phone: input.phone?.trim() || undefined } : s))
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Updated ${input.name}'s details`, changedBy: changedBy.id, changedByName: changedBy.name })
+    return staffStore
+  },
+
   updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): StaffMember[] {
     const target = staffStore.find((s) => s.id === staffId)
     staffStore = staffStore.map((s) => (s.id === staffId ? { ...s, role } : s))

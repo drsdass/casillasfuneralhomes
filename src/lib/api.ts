@@ -330,6 +330,17 @@ export const api = {
   },
 
   /** Only callable by super_admin in the UI — enforced there and by a DB trigger (see schema.sql). */
+  /** super_admin only — fix a staff member's name, title or phone. Their login (email) is untouched. */
+  async updateStaffProfile(staffId: string, input: { name: string; title?: string; phone?: string }, changedBy: StaffMember): Promise<StaffMember[]> {
+    const name = input.name.trim()
+    if (!name) throw new Error('The name can\'t be empty.')
+    if (USE_MOCK) return delay(mockStore.updateStaffProfile(staffId, { ...input, name }, changedBy))
+    const { error } = await supabase!.from('staff_members').update({ name, title: input.title?.trim() || null, phone: input.phone?.trim() || null }).eq('id', staffId)
+    if (error) throw error
+    logAuditReal({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Updated ${name}'s details`, changedBy: changedBy.id })
+    return this.getStaff()
+  },
+
   async updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): Promise<StaffMember[]> {
     if (USE_MOCK) return delay(mockStore.updateStaffRole(staffId, role, changedBy))
     const { error } = await supabase!.from('staff_members').update({ role }).eq('id', staffId)
