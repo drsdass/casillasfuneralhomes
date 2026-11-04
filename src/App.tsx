@@ -37,6 +37,7 @@ import TvScreenPage from '@/pages/board/TvScreenPage'
 import ServiceRoom from '@/pages/service/ServiceRoom'
 import WatchPage from '@/pages/service/WatchPage'
 import RemotePage from '@/pages/service/RemotePage'
+import MusicPage from '@/pages/music/MusicPage'
 
 // Code-split: recharts is a heavy dependency only needed by manager+ roles
 // viewing the Reports page, so it shouldn't bloat everyone else's initial load.
@@ -103,6 +104,7 @@ export default function App() {
                 <Route path="/custody" element={<CustodyBoard />} />
                 <Route path="/driver" element={<DriverView />} />
                 <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/music" element={<MusicPage />} />
                 <Route path="/staff-schedule" element={<StaffSchedule />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/families" element={<FamiliesList />} />

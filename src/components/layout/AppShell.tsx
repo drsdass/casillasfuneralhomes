@@ -3,7 +3,7 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Volume2, VolumeX, X, FileText, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell,
+  Music2, Volume2, VolumeX, X, FileText, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { brandFor } from '@/lib/company'
@@ -34,6 +34,7 @@ const allNavItems = [
   { key: 'driver', to: '/driver', label: 'nav.driver', icon: Smartphone, end: false },
   { key: 'calendar', to: '/calendar', label: 'nav.calendar', icon: CalendarDays, end: false },
   { key: 'staff-schedule', to: '/staff-schedule', label: 'nav.staffSchedule', icon: Users, end: false },
+  { key: 'music', to: '/music', label: 'nav.music', icon: Music2, end: false },
   { key: 'messages', to: '/messages', label: 'nav.messages', icon: MessageCircle, end: false },
   { key: 'inbox', to: '/inbox', label: 'nav.inbox', icon: Mail, end: false },
   { key: 'financials', to: '/financials', label: 'nav.financials', icon: Receipt, end: false },
@@ -45,10 +46,10 @@ const allNavItems = [
 
 const NAV_GROUP: Record<string, string> = {
   cases: 'Cases', quotes: 'Cases', families: 'Cases', custody: 'Cases', driver: 'Cases',
-  calendar: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
+  calendar: 'Schedule', music: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
   financials: 'Business', reports: 'Business', board: 'Business', invoices: 'Business', admin: 'Business',
 }
-const EASY_NAV = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'driver', 'calendar', 'messages', 'invoices']
+const EASY_NAV = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'driver', 'calendar', 'music', 'messages', 'invoices']
 
 export default function AppShell() {
   const { easy, toggle: toggleEasy } = useEasyView()
