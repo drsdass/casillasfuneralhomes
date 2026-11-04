@@ -47,7 +47,12 @@ export const sonos = {
   async state(): Promise<SonosState> {
     if (USE_MOCK) return tick({ connected: mock.connected, groups: mock.groups, players: mock.players, locked: mock.locked, canLock: true })
     const d = await call<Partial<SonosState>>({ action: 'state' })
-    return { connected: d.connected !== false, groups: d.groups ?? [], players: d.players ?? [], locked: d.locked ?? [], canLock: !!d.canLock }
+    // Sonos returns rooms in a different order from one refresh to the next, which made the cards jump around. Keep a fixed order.
+    const players = [...(d.players ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+    const nm = (id: string) => players.find((p) => p.id === id)?.name ?? ''
+    const key = (g: SonosGroup) => g.playerIds.map(nm).sort()[0] ?? g.name
+    const groups = [...(d.groups ?? [])].sort((a, b) => key(a).localeCompare(key(b)) || a.id.localeCompare(b.id))
+    return { connected: d.connected !== false, groups, players, locked: d.locked ?? [], canLock: !!d.canLock }
   },
   async favorites(): Promise<SonosFavorite[]> {
     if (USE_MOCK) return tick(mock.favorites)

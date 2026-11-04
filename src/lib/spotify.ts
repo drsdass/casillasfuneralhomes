@@ -35,7 +35,7 @@ export const spotify = {
   async state(): Promise<SpotifyState> {
     if (USE_MOCK) return tick({ connected: mock.connected, user: 'Casillas Funeral Home', devices: mock.devices, playing: mock.playing, deviceId: mock.deviceId, track: mock.track, lockedNames: ['Casket Room'] })
     const d = await call<Partial<SpotifyState>>({ action: 'state' })
-    return { connected: d.connected !== false, user: d.user ?? null, devices: d.devices ?? [], playing: !!d.playing, deviceId: d.deviceId ?? null, track: d.track ?? null, lockedNames: d.lockedNames ?? [] }
+    return { connected: d.connected !== false, user: d.user ?? null, devices: [...(d.devices ?? [])].sort((a, b) => a.name.localeCompare(b.name)), playing: !!d.playing, deviceId: d.deviceId ?? null, track: d.track ?? null, lockedNames: d.lockedNames ?? [] }
   },
   async playlists(): Promise<SpotifyPlaylist[]> {
     if (USE_MOCK) return tick(mock.playlists)
