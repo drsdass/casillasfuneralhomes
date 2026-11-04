@@ -133,7 +133,7 @@ export function CustodyTimeline({ caseObj: c, canEdit, canFix, currentUser }: { 
 
 
 /** The printed Chain of Custody record: who and where, the First Call details, and every move with date, time, who recorded it and notes. */
-function CustodyRecord({ c, log, location, preparedBy }: { c: FuneralCase; log: CustodyLogEntry[]; location?: Location; preparedBy: string }) {
+export function CustodyRecord({ c, log, location, preparedBy }: { c: FuneralCase; log: CustodyLogEntry[]; location?: Location; preparedBy: string }) {
   const fc = c.firstCall
   const d = c.decedent
   const when = (iso: string) => format(parseISO(iso), 'EEE M/d/yyyy · h:mm a')

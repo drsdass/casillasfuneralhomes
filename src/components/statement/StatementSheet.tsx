@@ -57,7 +57,8 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
 
   const width = useMemo(() => sheet.cols.reduce((a, b) => a + b, 0), [sheet])
   const height = useMemo(() => sheet.rows.reduce((a, b) => a + b, 0), [sheet])
-  const printZoom = Math.min(1, 760 / width, 1000 / height)
+  // Letter page, printed with no browser margin and 0.3in of padding all round: 7.9in x 10.4in of room (96 px per inch).
+  const printZoom = Math.min(1, 750 / width, 985 / height)
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -152,8 +153,8 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
         .stmt-off { opacity: .35; text-decoration: line-through; }
         .stmt-edit:hover { outline: 1px dashed #5a6f88; outline-offset: -1px; cursor: text; }
         main table.stmt-table { display: table !important; overflow: visible; }
-        @page stmt { size: letter portrait; margin: 0.25in; }
-        @media print { .stmt-off { visibility: hidden !important; } .stmt-print { page: stmt; } .stmt-sheet { zoom: var(--pz) !important; } .stmt-edit:hover { outline: none; } }
+        @page { size: letter portrait; margin: 0; }
+        @media print { .stmt-off { visibility: hidden !important; } .stmt-print { box-sizing: border-box; width: 8.5in !important; padding: 0.3in; } .stmt-sheet { zoom: var(--pz) !important; margin: 0 auto; } .stmt-edit:hover { outline: none; } }
       `}</style>
       <div className="print-target stmt-print">
         <div className="stmt-sheet" style={{ ['--sz' as string]: zoom, ['--pz' as string]: printZoom, width, background: '#fff', position: 'relative' } as CSSProperties}>

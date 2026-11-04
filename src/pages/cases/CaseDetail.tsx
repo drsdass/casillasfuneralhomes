@@ -26,6 +26,7 @@ import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
 import { WorkflowTrack } from '@/components/workflow/WorkflowTrack'
 import { computeWorkflow } from '@/lib/workflow'
 import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
+import { PrintCenter } from '@/components/documents/PrintCenter'
 import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import { CaseQuotes } from '@/components/quote/CaseQuotes'
 import { quotes as quotesApi } from '@/lib/quotes'
@@ -1096,6 +1097,9 @@ export default function CaseDetail() {
 
       {tab === 'Documents' && !previewTemplate && (
         <div className="space-y-5">
+          <Card className="p-5">
+            <PrintCenter caseObj={c} canEdit={canEdit} currentUser={currentUser!} onOpenForm={(k) => setPreviewTemplate(k)} onGoTo={(t) => { setTab(t); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          </Card>
           {canEdit && (
             <Card className="p-4">
               <h3 className="text-sm font-medium text-slate-800 mb-3">Add a Document</h3>
@@ -1116,43 +1120,8 @@ export default function CaseDetail() {
                 <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
                 <span className="text-xs text-slate-400">Stored in-session only until Supabase Storage is connected</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setPreviewTemplate('release')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.release}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('embalming')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.embalming}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('preneed')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.preneed}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('first_call')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.first_call}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('vital_sheet')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.vital_sheet}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-2">
-                Death Certificate Control Form isn't wired up yet — that source document wasn't provided.
-              </p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                To send a document for signature, generate it above first — "Send for Signature" appears in the preview.
+              <p className="text-[11px] text-slate-400">
+                To send a form for signature, open it from the Print center above — "Send for Signature" appears in the preview.
               </p>
             </Card>
           )}
