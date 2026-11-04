@@ -156,8 +156,19 @@ Deno.serve(async (req) => {
         return json({ connected: true, groups, players, locked, canLock })
       }
       case 'favorites': {
-        const f = await sonos(t, 'GET', `/households/${hh}/favorites`)
-        return json({ connected: true, favorites: (f.items ?? []).map((i: any) => ({ id: i.id, name: i.name, description: i.description, image: i.imageUrl, service: i.service?.name })) })
+        // Ask every Sonos system on this account (not just the first), and say what came back so an empty list can be explained.
+        const hs = await sonos(t, 'GET', '/households')
+        const list: any[] = hs.households ?? [{ id: hh }]
+        const out: any[] = []; const seen = new Set<string>(); const notes: string[] = []
+        for (const h of list) {
+          try {
+            const f = await sonos(t, 'GET', `/households/${h.id}/favorites`)
+            const items = f.items ?? f.favorites ?? []
+            notes.push(`${h.name ?? h.id}${h.id === hh ? ' (used for rooms)' : ''}: ${items.length}`)
+            for (const i of items) { if (seen.has(i.id)) continue; seen.add(i.id); out.push({ id: i.id, name: i.name, description: i.description, image: i.imageUrl, service: i.service?.name, household: h.id }) }
+          } catch (e) { notes.push(`${h.name ?? h.id}: ${e instanceof Error ? e.message : 'error'}`) }
+        }
+        return json({ connected: true, favorites: out, debug: `Sonos systems and Favorites found — ${notes.join('; ')}` })
       }
       case 'play': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/playback/play`); return json({ ok: true })
       case 'pause': await guardGroup(b.groupId); await sonos(t, 'POST', `/groups/${b.groupId}/playback/pause`); return json({ ok: true })

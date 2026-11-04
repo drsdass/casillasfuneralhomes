@@ -36,7 +36,8 @@ export default function MusicPage() {
   const [err, setErr] = useState('')
 
   const { data: st, isLoading, error } = useQuery({ queryKey: ['sonos-state'], queryFn: sonos.state, refetchInterval: 4000, retry: 1 })
-  const { data: favs = [], isLoading: favsLoading, error: favErr, refetch: refetchFavs, isFetching: favsFetching } = useQuery({ queryKey: ['sonos-favorites'], queryFn: sonos.favorites, enabled: !!picking, staleTime: 0, refetchOnMount: 'always', retry: 0 })
+  const { data: favData, isLoading: favsLoading, error: favErr, refetch: refetchFavs, isFetching: favsFetching } = useQuery({ queryKey: ['sonos-favorites'], queryFn: sonos.favorites, enabled: !!picking, staleTime: 0, refetchOnMount: 'always', retry: 0 })
+  const favs = favData?.favorites ?? []
   const refresh = () => qc.invalidateQueries({ queryKey: ['sonos-state'] })
   const run = useMutation({ mutationFn: (f: () => Promise<unknown>) => f(), onSuccess: () => { setErr(''); setTimeout(refresh, 400) }, onError: (e) => setErr(msg(e)) })
   const act = (f: () => Promise<unknown>) => run.mutate(f)
@@ -132,7 +133,7 @@ export default function MusicPage() {
             {(favsLoading || favsFetching) && <div className="py-3 text-center text-sm text-slate-400">Loading…</div>}
             <button type="button" onClick={() => refetchFavs()} className="mb-2 text-xs text-slate-500 underline hover:text-slate-800">Refresh the list</button>
             {favErr && <div className="mb-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">Could not load the Favorites: {msg(favErr)}</div>}
-            {!favsLoading && !favErr && favs.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No Favorites yet. In the Sonos app, open a playlist or station and tap the heart / “Add to Sonos Favorites”.</div>}
+            {!favsLoading && !favErr && favs.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No Favorites yet. In the Sonos app, open a playlist or station and tap the heart / “Add to Sonos Favorites”.{favData?.debug && <div className="mt-2 text-xs text-slate-400">{favData.debug}</div>}</div>}
             <div className="grid gap-2 sm:grid-cols-2">
               {favs.map((f) => (
                 <button key={f.id} type="button" onClick={() => { act(() => sonos.loadFavorite(picking.id, f.id)); setPicking(null) }}

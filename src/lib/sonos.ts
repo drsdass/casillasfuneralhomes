@@ -59,9 +59,10 @@ export const sonos = {
     const groups = [...(d.groups ?? [])].sort((a, b) => key(a).localeCompare(key(b)) || a.id.localeCompare(b.id))
     return { connected: d.connected !== false, groups, players, locked: d.locked ?? [], canLock: !!d.canLock }
   },
-  async favorites(): Promise<SonosFavorite[]> {
-    if (USE_MOCK) return tick(mock.favorites)
-    return (await call<{ favorites?: SonosFavorite[] }>({ action: 'favorites' })).favorites ?? []
+  async favorites(): Promise<{ favorites: SonosFavorite[]; debug: string }> {
+    if (USE_MOCK) return tick({ favorites: mock.favorites, debug: '' })
+    const d = await call<{ favorites?: SonosFavorite[]; debug?: string }>({ action: 'favorites' })
+    return { favorites: d.favorites ?? [], debug: d.debug ?? '' }
   },
   async connectUrl(): Promise<{ url: string; redirectUri: string }> {
     if (USE_MOCK) return { url: '#', redirectUri: 'https://YOUR-PROJECT.supabase.co/functions/v1/sonos-callback' }
