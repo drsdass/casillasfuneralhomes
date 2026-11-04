@@ -204,7 +204,7 @@ function ConnectCard({ isAdmin }: { isAdmin: boolean }) {
     <Card className="space-y-4 p-6">
       <div className="flex items-center gap-3"><Speaker className="text-[#3b4a35]" size={28} /><div><h2 className="text-lg font-semibold text-slate-900">Connect Sonos</h2><p className="text-sm text-slate-500">One time only. After this the tablet (or any phone or computer) can run the music.</p></div></div>
       <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-700">
-        <li>Go to <b>integrations.sonos.com</b>, sign in with the Sonos account the speakers belong to, and choose <b>New control integration</b>. Name it “Casillas OS”.</li>
+        <li>Go to <b>developer.sonos.com</b>, click <b>Get Started</b>, sign in with the Sonos account the speakers belong to, open the integration manager (My Integrations), and choose <b>New control integration</b>. Name it “Casillas OS”.</li>
         <li>When it asks for a <b>Redirect URI</b>, paste this exact address:
           <div className="mt-1 flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 font-mono text-xs break-all">
             <span className="min-w-0 flex-1">{info?.redirectUri ?? 'https://<your-project>.supabase.co/functions/v1/sonos-callback'}</span>

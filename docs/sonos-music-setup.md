@@ -8,7 +8,7 @@ just opens **Music** in the OS.
 2. **Two cloud functions** — Supabase → Edge Functions → create:
    - `sonos` (paste `supabase/functions/sonos/index.ts`) — leave **Verify JWT ON**.
    - `sonos-callback` (paste `supabase/functions/sonos-callback/index.ts`) — turn **Verify JWT OFF**.
-3. **Sonos developer key** — go to integrations.sonos.com, sign in with the Sonos account the speakers belong to →
+3. **Sonos developer key** — go to developer.sonos.com, sign in with the Sonos account the speakers belong to →
    *New control integration* → name it "Casillas OS". For **Redirect URI** paste:
    `https://<your-project-ref>.supabase.co/functions/v1/sonos-callback`
    (the Music page shows this exact address with a copy button). Sonos then shows a **Key** and **Secret**.
