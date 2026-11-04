@@ -11,6 +11,7 @@ export interface BoardRowData {
   visits: BoardEvent[]; services: BoardEvent[]
   flowers: OrderState; birds: OrderState; escort: OrderState
   casket?: string; casketLines?: string[]; specials: string[]
+  custodyStage?: string
 }
 export interface BoardData {
   screen?: { name: string; locationId?: string | null }
@@ -33,6 +34,7 @@ export async function loadBoardData(): Promise<BoardData> {
     return {
       id: c.id, locationId: c.locationId, caseNumber: c.caseNumber, firstName: c.decedent.firstName, lastName: c.decedent.lastName, color: c.color,
       disposition: c.disposition, boardDisp: c.boardDisp, boardFlowers: c.boardFlowers, boardBirds: c.boardBirds, boardEscort: c.boardEscort, serviceDate: c.serviceDate, serviceLocation: c.serviceLocation, visitationLocation: c.visitationLocation, visitationDate: c.visitationDate, visitationEnd: c.visitationEnd, visits: evs('visitation'), services: evs('service'),
+      custodyStage: c.custodyStage,
       flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casketLines,
       specials: notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((n) => n.body),
     }

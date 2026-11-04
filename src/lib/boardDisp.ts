@@ -28,3 +28,33 @@ export function boardOrder<T extends { visits: { start: string }[]; services: { 
     return a.lastName.localeCompare(b.lastName)
   })
 }
+
+type Ev = { start: string; end: string; staff: string[]; label?: string; place?: string }
+interface EvRow { visits: Ev[]; services: Ev[]; visitationDate?: string; visitationEnd?: string; visitationLocation?: string; serviceDate?: string; serviceLocation?: string }
+
+/** The visitations and services to show: the calendar events when there are any, otherwise the date saved on the case itself. */
+export function boardEventsOf(r: EvRow): { visits: Ev[]; services: Ev[] } {
+  return {
+    visits: r.visits.length > 0 ? r.visits : r.visitationDate ? [{ start: r.visitationDate, end: r.visitationEnd ?? r.visitationDate, staff: [], place: r.visitationLocation }] : [],
+    services: r.services.length > 0 ? r.services : r.serviceDate ? [{ start: r.serviceDate, end: r.serviceDate, staff: [], place: r.serviceLocation }] : [],
+  }
+}
+
+/**
+ * Splits the board in two: cases that still have a visitation or service ahead of them (or nothing scheduled yet),
+ * and cases whose services are all over but which are still open — waiting on cremation, shipping, burial, ashes ...
+ * The second group is shown at the bottom, longest-waiting first.
+ */
+export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], now: Date): { current: T[]; waiting: T[]; doneAt: Map<T, string> } {
+  const current: T[] = [], waiting: T[] = []
+  const doneAt = new Map<T, string>()
+  for (const r of rows) {
+    const { visits, services } = boardEventsOf(r)
+    const all = [...visits, ...services]
+    const lastEnd = all.map((e) => (new Date(e.end) > new Date(e.start) ? e.end : e.start)).sort().pop()
+    // "done" = at least one service (or burial) happened and nothing is still ahead
+    if (services.length > 0 && lastEnd && new Date(lastEnd) <= now) { waiting.push(r); doneAt.set(r, lastEnd) } else current.push(r)
+  }
+  waiting.sort((a, b) => (doneAt.get(a) as string).localeCompare(doneAt.get(b) as string))
+  return { current: boardOrder(current), waiting, doneAt }
+}

@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { useKeepAwake } from '@/lib/keepAwake'
 import { useSession } from '@/context/SessionContext'
+import { CUSTODY_STAGE_LABELS } from '@/types'
 import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } from '@/lib/tvBoard'
 import { format } from 'date-fns'
 import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
-import { boardOrder, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
+import { boardSplit, boardEventsOf, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -69,6 +70,7 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
     return () => clearInterval(t)
   }, [])
   const colors = boardLocColors(data.locations)
+  const split = boardSplit(data.rows, now)
   const locName = (id: string) => shortLocationName(data.locations.find((l) => l.id === id)?.name ?? '')
   const used = data.locations.filter((l) => data.rows.some((r) => r.locationId === l.id))
   const here = data.screen?.locationId ? shortLocationName(data.locations.find((l) => l.id === data.screen!.locationId)?.name ?? '') : ''
@@ -113,9 +115,25 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
             </tr>
           </thead>
           <tbody className="text-base">
-            {boardOrder(data.rows).map((r) => (
+            {split.current.map((r) => (
               <BoardRow key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
+            {split.waiting.length > 0 && (
+              <>
+                <tr>
+                  <td colSpan={11} className="pt-6 pb-2 px-3">
+                    <div className="flex items-center gap-3 rounded-md border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-amber-200">
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                      <span className="text-sm font-bold uppercase tracking-wider">Services complete — items still pending</span>
+                      <span className="ml-auto text-xs font-semibold text-amber-200/80">{split.waiting.length} case{split.waiting.length === 1 ? '' : 's'}</span>
+                    </div>
+                  </td>
+                </tr>
+                {split.waiting.map((r) => (
+                  <BoardRow key={r.id} r={r} waitingSince={split.doneAt.get(r)} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
+                ))}
+              </>
+            )}
           </tbody>
         </table>
         {data.rows.length === 0 && (
@@ -152,10 +170,15 @@ function EventLine({ e, range }: { e: BoardEvent; range: boolean }) {
 const Staff = ({ e }: { e?: BoardEvent }) => (e && e.staff.length > 0 ? <>{e.staff.join(', ')}</> : <span className="text-slate-500">—</span>)
 
 /** One case. Several visitations / services stack as lines under each other; the name, DISP, flowers ... span all of them. */
-function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
+/** What the board says a finished case is waiting on, by where it is in the custody chain. */
+const WAIT_TEXT: Record<string, string> = { crematory: 'At the crematory', ashes_received: 'Ashes received — release / pickup', cemetery_burial: 'Burial / cemetery', funeral_home: 'Cremation / shipping / burial', chapel_service: 'Cremation / shipping / burial', in_transit: 'In transit' }
+
+function BoardRow({ r, color, loc, waitingSince }: { r: BoardRowData; color: string; loc: string; waitingSince?: string }) {
   // The calendar events when there are any; otherwise the visitation / service saved on the case itself.
-  const visits: BoardEvent[] = r.visits.length > 0 ? r.visits : r.visitationDate ? [{ start: r.visitationDate, end: r.visitationEnd ?? r.visitationDate, staff: [], place: r.visitationLocation }] : []
-  const services: BoardEvent[] = r.services.length > 0 ? r.services : r.serviceDate ? [{ start: r.serviceDate, end: r.serviceDate, staff: [], place: r.serviceLocation }] : []
+  const { visits, services } = boardEventsOf(r)
+  const wait = waitingSince ? (WAIT_TEXT[r.custodyStage ?? ''] ?? CUSTODY_STAGE_LABELS[r.custodyStage as keyof typeof CUSTODY_STAGE_LABELS] ?? 'Open') : ''
+  const tint = waitingSince ? 'bg-amber-300/[0.09]' : ''
+  const dim = waitingSince ? 'opacity-90' : ''
   const n = Math.max(1, visits.length, services.length)
   const specialNotes = r.specials
   return (
@@ -164,12 +187,18 @@ function BoardRow({ r, color, loc }: { r: BoardRowData; color: string; loc: stri
         const v = visits[i], sv = services[i]
         const last = i === n - 1
         return (
-          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} hover:bg-white/5 [&>td]:!py-1.5`}>
+          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} ${tint} ${dim} hover:bg-white/5 [&>td]:!py-1.5`}>
             {i === 0 && (
               <td rowSpan={n} className="py-3 px-3 pl-5 font-semibold whitespace-nowrap align-top border-b border-white/10" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
                 <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
                 {r.lastName}, {r.firstName}
                 <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+                {waitingSince && (
+                  <div className="mt-1 text-xs font-semibold text-amber-300">
+                    <span className="rounded bg-amber-300/20 px-1.5 py-0.5">Waiting: {wait}</span>
+                    <span className="ml-2 font-normal text-amber-200/70">service done {boardDay(waitingSince)}</span>
+                  </div>
+                )}
               </td>
             )}
             <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range /> : i === 0 ? '—' : ''}</td>

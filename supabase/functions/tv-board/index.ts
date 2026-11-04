@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
         disposition: c.disposition, boardDisp: c.board_disp ?? undefined, boardFlowers: c.board_flowers ?? undefined, boardBirds: c.board_birds ?? undefined, boardEscort: c.board_escort ?? undefined, serviceDate: c.service_date ?? undefined, serviceLocation: c.service_location ?? undefined, visitationLocation: c.visitation_location ?? undefined, visitationDate: c.visitation_date ?? undefined, visitationEnd: c.visitation_end ?? undefined,
         visits: evsFor(c.id, 'visitation'), services: evsFor(c.id, 'service'),
         flowers: status(c.id, /flower/i), birds: status(c.id, /dove|bird/i), escort: status(c.id, /escort|carriage/i),
-        casketLines,
+        casketLines, custodyStage: c.custody_stage ?? undefined,
         specials: (notes ?? []).filter((n: any) => n.case_id === c.id).sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at))).map((n: any) => n.body),
       }
     })
