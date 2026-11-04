@@ -2,7 +2,7 @@ import { Time24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, useRef } from 'react'
 import { isKnownPlace, isBuiltInAddress, knownAddress } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { LocationPicker, useDefaultLocation } from '@/components/ui/LocationPicker'
 import { api } from '@/lib/api'
@@ -20,6 +20,7 @@ export default function FirstCallIntake() {
   const { caseId } = useParams<{ caseId: string }>()
   const isEdit = !!caseId
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const { activeLocationId, currentUser } = useSession()
 
   const { data: existing } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: isEdit })
@@ -58,7 +59,10 @@ export default function FirstCallIntake() {
   const [timeOfRemoval, setTimeOfRemoval] = useState('')
   const [callerInstructions, setCallerInstructions] = useState('')
 
-  const dupes = useDuplicates({ id: caseId, firstName, lastName, phone: nokPhone })
+  const [autoId, setAutoId] = useState<string | null>(null)
+  const autoIdRef = useRef<string | null>(null)
+  const targetId = caseId ?? autoId
+  const dupes = useDuplicates({ id: targetId ?? undefined, firstName, lastName, phone: nokPhone })
   const [dupAck, setDupAck] = useState(false)
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null)
   const [sendMethod, setSendMethod] = useState<'text' | 'email' | null>(null)
@@ -109,8 +113,10 @@ export default function FirstCallIntake() {
   }, [])
   const clearDraft = () => { dirty.current = false; try { localStorage.removeItem(draftKey) } catch { /* ignore */ } }
 
+  const loadedOnce = useRef(false)
   useEffect(() => {
-    if (!existing) return
+    if (!existing || loadedOnce.current) return // load once; later refetches must not overwrite what is being typed
+    loadedOnce.current = true
     setCaseNumber(existing.caseNumber)
     setChosenLocationId(existing.locationId)
     setFirstName(existing.decedent.firstName)
@@ -154,8 +160,14 @@ export default function FirstCallIntake() {
     else if (isBuiltInAddress(locationAddress)) setLocationAddress('')
   }
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
+  // The case this form writes to: the one being edited, or the one created by the first automatic save.
+  const lastSsn = useRef('')
+  const createdNumber = useRef<string | null>(null)
+  const callTakenAtRef = useRef<string | null>(null)
+  const contactIdRef = useRef<string | null>(null)
+  const persist = async (): Promise<string> => {
+    {
+      const id0 = caseId ?? autoIdRef.current
       const firstCall: FirstCallInfo = {
         timeOfDeath: timeOfDeath || undefined,
         locationType, locationAddress: locationAddress || undefined, gateCode: gateCode || undefined,
@@ -166,17 +178,18 @@ export default function FirstCallIntake() {
         personCalling: personCalling || undefined, callReceivedAt: callReceivedAt || undefined,
         timeOfRemoval: timeOfRemoval || undefined,
         callTakenBy: existing?.firstCall?.callTakenBy ?? currentUser!.name,
-        callTakenAt: existing?.firstCall?.callTakenAt ?? new Date().toISOString(),
+        callTakenAt: existing?.firstCall?.callTakenAt ?? (callTakenAtRef.current ??= new Date().toISOString()),
       }
-      const contacts = nokName ? [{ id: existing?.contacts[0]?.id ?? `c-${Date.now()}`, name: nokName, relationship: nokRelationship, phone: nokPhone, isPrimary: true, isAuthorizingAgent: true }] : []
+      const contacts = nokName ? [{ id: existing?.contacts[0]?.id ?? (contactIdRef.current ??= `c-${Date.now()}`), name: nokName, relationship: nokRelationship, phone: nokPhone, isPrimary: true, isAuthorizingAgent: true }] : []
 
-      if (isEdit && caseId) {
+      if (id0) {
+        const caseId = id0
         await api.updateCase(caseId, {
-          caseNumber: caseNumber.trim() || existing?.caseNumber,
+          ...((caseNumber.trim() || existing?.caseNumber || createdNumber.current) ? { caseNumber: (caseNumber.trim() || existing?.caseNumber || createdNumber.current)! } : {}),
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, dateOfBirth: dateOfBirth || undefined, veteran },
           contacts, firstCall, locationId: locId,
         }, currentUser!)
-        if (ssn.trim()) await api.setDecedentSsn(caseId, ssn, currentUser!)
+        if (ssn.trim() && ssn !== lastSsn.current) { await api.setDecedentSsn(caseId, ssn, currentUser!); lastSsn.current = ssn }
         return caseId
       }
       const created = await api.createCase({
@@ -187,11 +200,47 @@ export default function FirstCallIntake() {
         contacts, firstCall,
         custodyStage: 'scene_first_call',
       }, currentUser!)
-      if (ssn.trim()) await api.setDecedentSsn(created.id, ssn, currentUser!)
+      autoIdRef.current = created.id; createdNumber.current = created.caseNumber; setAutoId(created.id)
+      if (ssn.trim()) { await api.setDecedentSsn(created.id, ssn, currentUser!); lastSsn.current = ssn }
       return created.id
-    },
+    }
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: persist,
     onSuccess: (id) => { clearDraft(); setDraftNote(''); setSavedCaseId(id) },
   })
+
+  // ---- Automatic saving: a few seconds after the last keystroke the form is saved to the case itself. ----
+  const [autoStatus, setAutoStatus] = useState<'' | 'saving' | 'saved' | 'error'>('')
+  const [autoAt, setAutoAt] = useState('')
+  const lastSaved = useRef<string | null>(null)
+  const inFlight = useRef(false)
+  const latestJson = useRef(draftJson)
+  latestJson.current = draftJson
+  const hasName = !!(firstName.trim() || lastName.trim())
+  const dupBlocked = !targetId && dupes.length > 0 && !dupAck
+  useEffect(() => {
+    if (savedCaseId || !draftReady.current) return
+    if (lastSaved.current === null) { lastSaved.current = baseline.current; if (lastSaved.current === null) return }
+    if (draftJson === lastSaved.current || inFlight.current || saveMutation.isPending) return
+    if (!locId || (!targetId && !hasName) || dupBlocked) return
+    const json = draftJson
+    const t = window.setTimeout(async () => {
+      inFlight.current = true; setAutoStatus('saving')
+      try {
+        await persist()
+        lastSaved.current = json; baseline.current = json
+        qc.invalidateQueries({ queryKey: ['cases'] })
+        if (latestJson.current === json) { clearDraft(); setDraftNote('') }
+        setAutoStatus('saved'); setAutoAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }))
+      } catch { setAutoStatus('error') }
+      finally { inFlight.current = false }
+    }, 4000)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftJson, autoStatus, locId, targetId, hasName, dupBlocked])
+
 
   const linkMutation = useMutation({
     mutationFn: () => api.createFamilyPortalLink(savedCaseId!, undefined, 30, currentUser!),
@@ -235,7 +284,9 @@ export default function FirstCallIntake() {
               <button type="button" onClick={() => { if (window.confirm('Throw away what was typed and start over?')) { clearDraft(); window.location.reload() } }} className="text-xs underline">Discard</button>
             </div>
           )}
-          <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-1.5 text-xs text-amber-800">Nothing is saved to the case until you press <b>{isEdit ? 'Save Changes' : 'Save & Create Case'}</b> at the bottom. What you type is kept on this computer in the meantime.</div>
+          <div className={`rounded-md border px-3 py-1.5 text-xs ${autoStatus === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50/70 text-emerald-800'}`}>
+            {autoStatus === 'saving' ? 'Saving…' : autoStatus === 'error' ? 'Could not save automatically — keep going, your typing is kept on this computer, and press Save at the bottom when you can.' : autoStatus === 'saved' ? <>✓ Saved automatically at {autoAt}. Keep typing — it saves itself.</> : <>Saves itself a few seconds after you stop typing{!targetId && !hasName ? ' (type a first or last name to start)' : ''}. You can also press <b>{targetId ? 'Save Changes' : 'Save & Create Case'}</b> at the bottom.</>}
+          </div>
           <LocationPicker value={locId} onChange={setChosenLocationId} />
           <Card className="overflow-hidden">
             <div className={sectionLabel}>DECEASED</div>
@@ -249,7 +300,7 @@ export default function FirstCallIntake() {
                 <div><label className={labelClass}>Middle Name</label><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></div>
                 <div><label className={labelClass}>Last Name</label><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></div>
               </div>
-              {!existing && <DuplicateWarning hits={dupes} ack={dupAck} onAck={setDupAck} />}
+              {!targetId && <DuplicateWarning hits={dupes} ack={dupAck} onAck={setDupAck} />}
               <div className="grid grid-cols-3 gap-3">
                 <div><label className={labelClass}>Date of Death</label><input type="date" value={dateOfDeath} onChange={(e) => setDateOfDeath(e.target.value)} className={inputClass} /></div>
                 <div><label className={labelClass}>Time</label><Time24 fine label="Time" value={timeOfDeath} onChange={setTimeOfDeath} /></div>
@@ -339,11 +390,11 @@ export default function FirstCallIntake() {
           <div className="flex justify-end">
             <button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !locId || (!existing && dupes.length > 0 && !dupAck)}
+              disabled={saveMutation.isPending || !locId || (!targetId && dupes.length > 0 && !dupAck)}
               title={locId ? undefined : 'Please choose a location first'}
               className="bg-[#3b4a35] text-white text-sm font-medium px-5 py-2.5 rounded-md hover:bg-[#4d5f45] disabled:opacity-60"
             >
-              {saveMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Save & Create Case'}
+              {saveMutation.isPending ? 'Saving…' : targetId ? 'Save Changes' : 'Save & Create Case'}
             </button>
           </div>
         </div>
