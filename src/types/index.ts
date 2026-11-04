@@ -409,6 +409,8 @@ export interface CustodyLogEntry {
   movedByName: string
   timestamp: string
   note?: string
+  editedAt?: string
+  editedByName?: string
 }
 
 // ---------------------------------------------------------------------------

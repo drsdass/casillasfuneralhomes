@@ -310,6 +310,8 @@ export function rowToCustodyLogEntry(row: any): CustodyLogEntry {
     movedByName: row.staff_members?.name ?? 'Unknown',
     timestamp: row.timestamp,
     note: row.note ?? undefined,
+    editedAt: row.edited_at ?? undefined,
+    editedByName: row.edited_by_name ?? undefined,
   }
 }
 

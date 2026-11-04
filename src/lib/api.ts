@@ -1143,6 +1143,38 @@ export const api = {
     return { cases, log }
   },
 
+  /** Fixes the time, place or note of an entry in a case's custody history. The row is stamped as edited and the change goes in the Activity log. */
+  async updateCustodyEntry(id: string, patch: { timestamp?: string; toStage?: CustodyStage; note?: string }, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateCustodyEntry(id, patch, by); return }
+    const { data: before, error: e0 } = await supabase!.from('custody_log').select('*').eq('id', id).single()
+    if (e0 || !before) throw e0 ?? new Error('That entry was not found.')
+    const row: Record<string, unknown> = { edited_at: new Date().toISOString(), edited_by_name: by.name }
+    if (patch.timestamp) row.timestamp = patch.timestamp
+    if (patch.toStage) row.to_stage = patch.toStage
+    if ('note' in patch) row.note = patch.note?.trim() || null
+    const { error } = await supabase!.from('custody_log').update(row).eq('id', id)
+    if (error) throw error
+    await this.followLatestCustody(before.case_id)
+    logAuditReal({ entityType: 'custody', entityId: before.case_id, caseId: before.case_id, action: 'update', summary: `Corrected a custody entry: was ${before.to_stage} at ${before.timestamp}${before.note ? ` (“${before.note}”)` : ''}; now ${patch.toStage ?? before.to_stage} at ${patch.timestamp ?? before.timestamp}`, changedBy: by.id })
+  },
+
+  async deleteCustodyEntry(id: string, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.deleteCustodyEntry(id, by); return }
+    const { data: before } = await supabase!.from('custody_log').select('*').eq('id', id).maybeSingle()
+    const { error } = await supabase!.from('custody_log').delete().eq('id', id)
+    if (error) throw error
+    if (before) {
+      await this.followLatestCustody(before.case_id)
+      logAuditReal({ entityType: 'custody', entityId: before.case_id, caseId: before.case_id, action: 'delete', summary: `Removed a custody entry: ${before.to_stage} at ${before.timestamp}${before.note ? ` (“${before.note}”)` : ''}`, changedBy: by.id })
+    }
+  },
+
+  /** After a history entry is fixed or removed, the case's current location is whatever its latest entry says. */
+  async followLatestCustody(caseId: string): Promise<void> {
+    const { data: last } = await supabase!.from('custody_log').select('to_stage').eq('case_id', caseId).order('timestamp', { ascending: false }).limit(1).maybeSingle()
+    if (last) await supabase!.from('cases').update({ custody_stage: last.to_stage }).eq('id', caseId)
+  },
+
   // -------------------------------------------------------------------
   // Scheduling
   // -------------------------------------------------------------------

@@ -103,3 +103,8 @@ export function canEditPriceList(role: UserRole): boolean {
 export function canDeleteCases(role: UserRole): boolean {
   return atLeast(role, 'admin')
 }
+
+/** Correcting or removing an entry in a case's custody history (e.g. while old files are being entered): manager and above. */
+export function canEditCustodyHistory(role: UserRole): boolean {
+  return atLeast(role, 'manager')
+}

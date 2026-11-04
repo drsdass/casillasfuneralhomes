@@ -15,7 +15,7 @@ import { Card, CaseStatusBadge, CustodyChip, formatCurrency } from '@/components
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useState, useRef } from 'react'
-import { canEditCases, canDeleteCases } from '@/lib/permissions'
+import { canEditCases, canDeleteCases, canEditCustodyHistory } from '@/lib/permissions'
 import { DeleteCaseDialog } from '@/components/cases/DeleteCaseDialog'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
@@ -697,7 +697,7 @@ export default function CaseDetail() {
             )}
           </Card>
 
-          <Card className="lg:col-span-3 p-5"><CustodyTimeline caseObj={c} canEdit={canEdit} currentUser={currentUser!} /></Card>
+          <Card className="lg:col-span-3 p-5"><CustodyTimeline caseObj={c} canEdit={canEdit} canFix={canEditCustodyHistory(currentUser!.role)} currentUser={currentUser!} /></Card>
 
           <Card className="lg:col-span-3 p-5">
             <div className="flex items-center justify-between mb-3">

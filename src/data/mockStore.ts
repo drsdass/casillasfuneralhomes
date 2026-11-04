@@ -424,6 +424,21 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Chain of custody
   // -----------------------------------------------------------------
+  updateCustodyEntry(id: string, patch: { timestamp?: string; toStage?: CustodyStage; note?: string }, by: StaffMember): void {
+    custodyLogStore = custodyLogStore.map((l) => (l.id === id ? { ...l, ...(patch.timestamp ? { timestamp: patch.timestamp } : {}), ...(patch.toStage ? { toStage: patch.toStage } : {}), ...('note' in patch ? { note: patch.note?.trim() || undefined } : {}), editedAt: new Date().toISOString(), editedByName: by.name } : l))
+    const e = custodyLogStore.find((l) => l.id === id)
+    if (e) this.followLatestCustody(e.caseId)
+  },
+  deleteCustodyEntry(id: string, _by: StaffMember): void {
+    const e = custodyLogStore.find((l) => l.id === id)
+    custodyLogStore = custodyLogStore.filter((l) => l.id !== id)
+    if (e) this.followLatestCustody(e.caseId)
+  },
+  followLatestCustody(caseId: string): void {
+    const last = custodyLogStore.filter((l) => l.caseId === caseId).sort((a, b) => a.timestamp.localeCompare(b.timestamp)).pop()
+    if (last) caseStore = caseStore.map((c) => (c.id === caseId ? { ...c, custodyStage: last.toStage } : c))
+  },
+
   moveCustody(
     caseId: string,
     toStage: CustodyStage,
