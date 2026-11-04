@@ -58,3 +58,14 @@ export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], no
   waiting.sort((a, b) => (doneAt.get(a) as string).localeCompare(doneAt.get(b) as string))
   return { current: boardOrder(current), waiting, doneAt }
 }
+
+export type EventPhase = 'now' | 'today' | 'done' | null
+
+/** Where one visitation / service line is right now: happening (green), later today (yellow), already over (check), or another day (nothing). */
+export function eventPhase(e: { start: string; end: string }, now: Date): EventPhase {
+  const start = new Date(e.start)
+  const end = new Date(e.end) > start ? new Date(e.end) : new Date(start.getTime() + 60 * 60 * 1000) // no end time entered: assume an hour
+  if (now >= start && now < end) return 'now'
+  if (now >= end) return 'done'
+  return start.toDateString() === now.toDateString() ? 'today' : null
+}

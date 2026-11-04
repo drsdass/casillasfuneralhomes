@@ -7,7 +7,7 @@ import { CUSTODY_STAGE_LABELS } from '@/types'
 import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } from '@/lib/tvBoard'
 import { format } from 'date-fns'
 import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
-import { boardSplit, boardEventsOf, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
+import { boardSplit, boardEventsOf, eventPhase, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
 import { ArrowLeft, Check, Clock } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
@@ -116,7 +116,7 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
           </thead>
           <tbody className="text-base">
             {split.current.map((r) => (
-              <BoardRow key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
+              <BoardRow key={r.id} r={r} now={now} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
             {split.waiting.length > 0 && (
               <>
@@ -130,7 +130,7 @@ export function BoardView({ data, backTo }: { data: BoardData; backTo?: string }
                   </td>
                 </tr>
                 {split.waiting.map((r) => (
-                  <BoardRow key={r.id} r={r} waitingSince={split.doneAt.get(r)} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
+                  <BoardRow key={r.id} r={r} now={now} waitingSince={split.doneAt.get(r)} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
                 ))}
               </>
             )}
@@ -158,11 +158,19 @@ function ExtraCell({ state }: { state: BoardExtra }) {
   return <span className="text-slate-500">No</span>
 }
 
-function EventLine({ e, range }: { e: BoardEvent; range: boolean }) {
+function EventLine({ e, range, now }: { e: BoardEvent; range: boolean; now: Date }) {
   const sub = [e.label, e.place].filter(Boolean).join(' · ')
+  const phase = eventPhase(e, now)
   return (
     <div className="whitespace-nowrap">
-      <div>{boardDay(e.start)} · {range ? boardRange(e.start, e.end) : boardClock(e.start)}</div>
+      <div className="flex items-center gap-2">
+        {phase === 'now' && <span className="board-pulse inline-block h-3 w-3 rounded-full bg-emerald-400" aria-hidden />}
+        {phase === 'today' && <span className="inline-block h-3 w-3 rounded-full bg-yellow-300" aria-hidden />}
+        {phase === 'done' && <Check size={14} className="text-slate-500" aria-hidden />}
+        <span className={phase === 'done' ? 'text-slate-400' : ''}>{boardDay(e.start)} · {range ? boardRange(e.start, e.end) : boardClock(e.start)}</span>
+        {phase === 'now' && <span className="rounded bg-emerald-400/20 px-1.5 text-[11px] font-bold tracking-wider text-emerald-300">NOW</span>}
+        {phase === 'today' && <span className="rounded bg-yellow-300/20 px-1.5 text-[11px] font-bold tracking-wider text-yellow-200">TODAY</span>}
+      </div>
       {sub && <div className="text-xs text-slate-400">{sub}</div>}
     </div>
   )
@@ -173,7 +181,7 @@ const Staff = ({ e }: { e?: BoardEvent }) => (e && e.staff.length > 0 ? <>{e.sta
 /** What the board says a finished case is waiting on, by where it is in the custody chain. */
 const WAIT_TEXT: Record<string, string> = { crematory: 'At the crematory', ashes_received: 'Ashes received — release / pickup', cemetery_burial: 'Burial / cemetery', funeral_home: 'Cremation / shipping / burial', chapel_service: 'Cremation / shipping / burial', in_transit: 'In transit' }
 
-function BoardRow({ r, color, loc, waitingSince }: { r: BoardRowData; color: string; loc: string; waitingSince?: string }) {
+function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color: string; loc: string; now: Date; waitingSince?: string }) {
   // The calendar events when there are any; otherwise the visitation / service saved on the case itself.
   const { visits, services } = boardEventsOf(r)
   const wait = waitingSince ? (WAIT_TEXT[r.custodyStage ?? ''] ?? CUSTODY_STAGE_LABELS[r.custodyStage as keyof typeof CUSTODY_STAGE_LABELS] ?? 'Open') : ''
@@ -201,9 +209,9 @@ function BoardRow({ r, color, loc, waitingSince }: { r: BoardRowData; color: str
                 )}
               </td>
             )}
-            <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range now={now} /> : i === 0 ? '—' : ''}</td>
             <td className="py-3 px-3 text-slate-200 text-sm align-top">{v || i === 0 ? <Staff e={v} /> : null}</td>
-            <td className="py-3 px-3 text-slate-200 align-top">{sv ? <EventLine e={sv} range={false} /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 align-top">{sv ? <EventLine e={sv} range={false} now={now} /> : i === 0 ? '—' : ''}</td>
             <td className="py-3 px-3 text-slate-200 text-sm align-top">{sv || i === 0 ? <Staff e={sv} /> : null}</td>
             {i === 0 && (<>
               <td rowSpan={n} className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap align-top border-b border-white/10">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
