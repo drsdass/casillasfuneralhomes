@@ -77,3 +77,8 @@ html.easy main input[type='checkbox'], html.easy main input[type='radio'] { widt
 @keyframes board-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); } 50% { opacity: .45; box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); } }
 .board-pulse { animation: board-pulse 2.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .board-pulse { animation: none; } }
+
+/* Printed forms: every box can shrink to its column and long text wraps inside it instead of spilling over the next box or off the page. */
+.doc-fit, .doc-fit * { min-width: 0; overflow-wrap: anywhere; }
+.doc-fit img, .doc-fit svg { overflow-wrap: normal; }
+@media print { .doc-fit input { border-radius: 0; } }

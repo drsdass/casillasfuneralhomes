@@ -1266,7 +1266,7 @@ export default function CaseDetail() {
               Sent successfully — check the Signature Requests list below the Documents tab.
             </div>
           )}
-          <div className="print-target" ref={formPreviewRef}>
+          <div className="print-target doc-fit" ref={formPreviewRef}>
             <Card className="p-8 max-w-2xl">
               {previewTemplate === 'release' && <ReleaseAuthorizationForm c={c} />}
               {previewTemplate === 'embalming' && <EmbalmingAuthorizationForm c={c} />}

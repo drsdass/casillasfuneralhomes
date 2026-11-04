@@ -634,27 +634,27 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
         </div>
 
         <div className="border border-slate-400 border-t-0">
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">VISITATION</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ? new Date(c.visitationDate).toLocaleDateString('en-US') : ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{c.visitationDate ? [c.visitationDate, c.visitationEnd].filter(Boolean).map((x) => new Date(x as string).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })).join('–') : (vs?.visitationHours ?? '')}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">Place</div>{c.visitationLocation ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">ROSARY/SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.rosaryDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.rosaryTime ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.rosaryLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.rosaryPlace ?? ''}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.rosaryBy ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">MASS FUNERAL SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.massDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.massTime ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.massLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.massPlace ?? ''}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.massBy ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr]">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr]">
             <div className="p-1 font-semibold border-r border-slate-400">GRAVESIDE SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.gravesideDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.gravesideTime ?? ''}</div>

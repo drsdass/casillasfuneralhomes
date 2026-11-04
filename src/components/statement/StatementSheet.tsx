@@ -70,6 +70,29 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
   }, [width])
   useEffect(() => { setEditing(null) }, [sheet.name])
 
+  // A value too long for its box on the form (a long name, address or place) is made a little smaller until it fits, never cut off or run over its neighbour.
+  useLayoutEffect(() => {
+    const root = wrapRef.current; if (!root) return
+    root.querySelectorAll<HTMLElement>('td[data-cell]').forEach((td) => {
+      if (td.dataset.fs) { td.style.fontSize = td.dataset.fs === '-' ? '' : td.dataset.fs; delete td.dataset.fs }
+      if (td.querySelector('input') || td.style.writingMode) return
+      // boxes that are cut off, and typed-in values that would run past their box, are shrunk; the form's own wording may run on into empty cells like in Excel
+      if (td.style.overflow !== 'hidden' && !td.dataset.val) return
+      const wraps = getComputedStyle(td).whiteSpace !== 'nowrap'
+      // room = its own box, plus (for a value with no underline of its own) the empty boxes right of it, as in Excel
+      let room = td.clientWidth
+      if (td.style.overflow !== 'hidden' && !(parseFloat(getComputedStyle(td).borderBottomWidth) > 0)) {
+        for (let n = td.nextElementSibling as HTMLElement | null; n && !(n.textContent ?? '').trim() && !n.querySelector('input'); n = n.nextElementSibling as HTMLElement | null) room += n.clientWidth
+      }
+      const over = () => td.scrollWidth > room + 1 || (wraps && td.scrollHeight > td.clientHeight + 1)
+      if (td.clientWidth === 0 || !over()) return
+      const base = parseFloat(getComputedStyle(td).fontSize); if (!base) return
+      td.dataset.fs = td.style.fontSize || '-'
+      let f = base
+      while (over() && f > base * 0.55) { f -= 0.5; td.style.fontSize = `${f}px` }
+    })
+  }, [ev, sheet, saved, defaults])
+
   const covered = useMemo(() => {
     const spans = new Map<string, { rs: number; cs: number }>(); const hidden = new Set<string>()
     for (const [r1, c1, r2, c2] of sheet.merges) {
@@ -125,7 +148,7 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
       const nb = flowsLeft ? ev.get(leftKey) : ev.get(rightKey)
       const rightFilled = nb !== '' && nb !== undefined
       tds.push(
-        <td key={key} rowSpan={sp?.rs} colSpan={sp?.cs} data-cell={`${colLetter(c)}${r}`}
+        <td key={key} rowSpan={sp?.rs} colSpan={sp?.cs} data-cell={`${colLetter(c)}${r}`} data-val={typeof val === 'string' && val !== '' && (key in over || cell?.f !== undefined) ? '1' : undefined}
           onClick={() => { if (!readOnly && !isEditing) { setEditing(key); setDraft(typeof val === 'number' && !st?.nf?.includes('$') && !/mmm|mm-dd/.test(st?.nf ?? '') ? String(val) : (shown.kind === 'acct' ? (shown.text === '-' ? '' : shown.text) : shown.text)) } }}
           className={readOnly ? '' : 'stmt-edit'}
           style={{ ...css, padding: css.paddingLeft ? undefined : '0 2px', position: 'relative', overflow: wrap || rot || rightFilled ? 'hidden' : 'visible', whiteSpace: wrap ? 'normal' : 'nowrap', wordBreak: wrap ? 'break-word' : undefined, lineHeight: 1.15, boxSizing: 'border-box' }}>

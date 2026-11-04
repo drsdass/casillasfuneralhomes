@@ -146,7 +146,7 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
         </div>
       )}
 
-      {job && doc && createPortal(<div className="print-only print-target">{doc}</div>, document.body)}
+      {job && doc && createPortal(<div className="print-only print-target doc-fit">{doc}</div>, document.body)}
     </div>
   )
 }
