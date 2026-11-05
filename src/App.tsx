@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import DriverView from '@/pages/driver/DriverView'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query'
 import LiveSync from '@/components/layout/LiveSync'
 import { SessionProvider } from '@/context/SessionContext'
@@ -64,6 +65,7 @@ export default function App() {
       <SessionProvider>
         <EasyViewProvider>
         <BrowserRouter>
+          <ErrorBoundary>
           <Routes>
             {/* Public routes — no staff auth */}
             <Route path="/login" element={<LoginPage />} />
@@ -141,7 +143,9 @@ export default function App() {
                 <Route path="/admin" element={<AdminPage />} />
               </Route>
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
         </EasyViewProvider>
       </SessionProvider>
