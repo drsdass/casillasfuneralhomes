@@ -110,7 +110,7 @@ export default function ObituaryManager() {
 function Editor({ initial, orgId, defaultLocation, by, onClose, onChanged }: { initial: Obituary | null; orgId: string; defaultLocation: string; by: string; onClose: () => void; onChanged: () => void }) {
   const { accessibleLocations, activeOrg } = useSession()
   const qc = useQueryClient()
-  const [o, setO] = useState<Obituary>(initial ?? { id: '', orgId, name: '', body: '', serviceInfo: '', status: 'draft', pinned: false, locationId: defaultLocation || undefined, createdAt: '', updatedAt: '' })
+  const [o, setO] = useState<Obituary>(initial ?? { id: '', orgId, slug: '', name: '', body: '', serviceInfo: '', status: 'draft', pinned: false, locationId: defaultLocation || undefined, createdAt: '', updatedAt: '' })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
   const [copied, setCopied] = useState(false)
