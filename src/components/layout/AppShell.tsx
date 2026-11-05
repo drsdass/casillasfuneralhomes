@@ -3,7 +3,7 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Music2, Volume2, VolumeX, X, FileText, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell,
+  Music2, Volume2, VolumeX, X, FileText, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell, BookHeart,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { brandFor } from '@/lib/company'
@@ -37,6 +37,7 @@ const allNavItems = [
   { key: 'music', to: '/music', label: 'nav.music', icon: Music2, end: false },
   { key: 'messages', to: '/messages', label: 'nav.messages', icon: MessageCircle, end: false },
   { key: 'inbox', to: '/inbox', label: 'nav.inbox', icon: Mail, end: false },
+  { key: 'obituaries', to: '/obituary-manager', label: 'nav.obituaries', icon: BookHeart, end: false },
   { key: 'financials', to: '/financials', label: 'nav.financials', icon: Receipt, end: false },
   { key: 'reports', to: '/reports', label: 'nav.reports', icon: BarChart3, end: false },
   { key: 'board', to: '/board', label: 'nav.board', icon: Tv, end: false },
@@ -46,6 +47,7 @@ const allNavItems = [
 
 const NAV_GROUP: Record<string, string> = {
   cases: 'Cases', quotes: 'Cases', families: 'Cases', custody: 'Cases', driver: 'Cases',
+  obituaries: 'Cases',
   calendar: 'Schedule', music: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
   financials: 'Business', reports: 'Business', board: 'Business', invoices: 'Business', admin: 'Business',
 }

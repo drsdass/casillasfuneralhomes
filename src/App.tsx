@@ -34,6 +34,8 @@ import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
 import TvScreenPage from '@/pages/board/TvScreenPage'
+import { PublicObituaries, PublicObituaryPage } from '@/pages/obituaries/PublicObituaries'
+import ObituaryManager from '@/pages/obituaries/ObituaryManager'
 import CaseGuide from '@/pages/cases/CaseGuide'
 import ChapelPlayerPage from '@/pages/player/ChapelPlayerPage'
 import ChapelTvPage from '@/pages/player/ChapelTvPage'
@@ -79,6 +81,8 @@ export default function App() {
             <Route path="/watch/:token" element={<WatchPage />} />
             <Route path="/remote/:token" element={<RemotePage />} />
             <Route path="/tv/:token" element={<TvScreenPage />} />
+            <Route path="/obituaries" element={<PublicObituaries />} />
+            <Route path="/obituaries/:slug" element={<PublicObituaryPage />} />
 
             {/* Staff-facing app, behind auth */}
             <Route element={<RequireAuth />}>
@@ -111,6 +115,7 @@ export default function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/music" element={<MusicPage />} />
                 <Route path="/chapel-tv" element={<ChapelTvPage />} />
+                <Route path="/obituary-manager" element={<ObituaryManager />} />
                 <Route path="/staff-schedule" element={<StaffSchedule />} />
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/families" element={<FamiliesList />} />

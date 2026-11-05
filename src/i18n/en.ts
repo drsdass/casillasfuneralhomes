@@ -171,6 +171,7 @@ export const en = {
     financials: 'Financials',
     reports: 'Reports',
     board: 'TV Board',
+    obituaries: 'Obituaries',
     music: 'Music',
     admin: 'Admin',
     invoices: 'Invoices',

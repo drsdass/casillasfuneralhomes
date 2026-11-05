@@ -7,6 +7,7 @@ import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { obituaries } from '@/lib/obituaries'
 import { TASK_STATUS_LABELS } from '@/types'
 import { getErrorMessage } from '@/lib/errors'
 import { VITAL_FIELDS, VITAL_SECTION_LABELS, VITAL_SECTION_ORDER } from '@/lib/vitalFields'
@@ -93,6 +94,10 @@ export default function CaseDetail() {
   const queryClient = useQueryClient()
   const { language } = useLanguage()
   const [composeOpen, setComposeOpen] = useState<{ to?: string; subject?: string; replyTo?: import('@/types').InboundEmail } | null>(null)
+  const obitPageMutation = useMutation({
+    mutationFn: () => obituaries.startFromCase(c!, currentUser!.name),
+    onSuccess: (o) => navigate('/obituary-manager', { state: { open: o } }),
+  })
   const setDispositionMutation = useMutation({
     mutationFn: (disposition: import('@/types').DispositionType) => api.updateCase(caseId!, { disposition }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
@@ -414,6 +419,7 @@ export default function CaseDetail() {
             <input type="checkbox" checked={!!c.obituaryCompleted} disabled={!canEdit || obituaryMutation.isPending} onChange={(e) => obituaryMutation.mutate(e.target.checked)} />
             Obituary done
           </label>
+          {canEdit && <button type="button" disabled={obitPageMutation.isPending} onClick={() => obitPageMutation.mutate()} className="inline-flex items-center gap-1.5 text-xs font-medium border border-slate-200 rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">{obitPageMutation.isPending ? 'Opening…' : 'Obituary page'}</button>}
           {canEdit && (
             <>
               {c.type !== 'pre_need' && <Link

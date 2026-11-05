@@ -54,3 +54,8 @@ Run `src/db/spotify.sql` (creates the private `case-media` bucket and `case_medi
 2. On the laptop that feeds the chapel TV, sign in to the OS, open `/player`, drag it to the TV screen and press **Start** once. Leave it open.
 3. On the tablet open **Music → Chapel TV** (`/chapel-tv`). Paste YouTube links or upload videos into the House library, or open a case → **Media** and press **Play all on Chapel TV**.
 4. Sound: the TV's sound must reach Sonos — HDMI-ARC to a Sonos soundbar, or the TV's audio output into the Five's line-in (Line-In autoplay on, grouped with Chapel Hall).
+
+## Obituaries (public pages + guest book)
+1. Run `src/db/obituaries.sql` in Supabase.
+2. Deploy the `public-obituary` Edge Function with **Verify JWT OFF** (anyone on the internet reads published obituaries through it).
+3. In the OS: **Obituaries** (left menu) for the list and editor; a case's **Obituary page** button creates the obituary from the case. The public pages are `/obituaries` and `/obituaries/<name>`.
