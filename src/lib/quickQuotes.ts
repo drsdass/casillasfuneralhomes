@@ -74,6 +74,20 @@ export const quickQuotes = {
     }
     throw new Error('Could not save the quote. Please try again.')
   },
+  /** Replaces what a saved quote contains (its prices, packages, who it is for) — the "edit this quote" button. The number, status and sent history stay. */
+  async replace(id: string, input: NewQuickQuote): Promise<void> {
+    const subtotal = round(input.lines.reduce((s, l) => s + l.amount, 0))
+    const total = round(subtotal + input.tax - input.credit)
+    if (USE_MOCK) {
+      mock = mock.map((q) => (q.id === id ? { ...q, forName: input.forName, contactPhone: input.contactPhone, contactEmail: input.contactEmail, name: input.name, taxRate: input.taxRate, packages: input.packages, lines: input.lines, subtotal, tax: input.tax, credit: input.credit, total, validUntil: input.validUntil, note: input.note, forms: input.forms } : q))
+      return
+    }
+    const { error } = await supabase!.from('quick_quotes').update({
+      for_name: input.forName, contact_phone: input.contactPhone ?? null, contact_email: input.contactEmail ?? null, name: input.name, tax_rate: input.taxRate, packages: input.packages,
+      lines: input.lines, subtotal, tax: input.tax, credit: input.credit, total, valid_until: input.validUntil ?? null, note: input.note ?? null, forms: input.forms ?? null,
+    }).eq('id', id)
+    if (error) throw error
+  },
   async update(id: string, patch: Partial<Pick<QuickQuote, 'status' | 'sentAt' | 'sentTo' | 'convertedCaseId'>>): Promise<void> {
     if (USE_MOCK) { mock = mock.map((q) => (q.id === id ? { ...q, ...patch } : q)); return }
     const row: Record<string, unknown> = {}
