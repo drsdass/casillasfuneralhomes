@@ -535,6 +535,7 @@ export default function CaseDetail() {
                 ))}
               </div>
             )}
+            {!step.done && <Link to={`/cases/${c.id}/guide`} className="shrink-0 rounded-md border border-[#3b4a35] bg-white text-[#3b4a35] text-sm font-medium px-4 py-2 hover:bg-[#3b4a35]/10">{language === 'es' ? 'Guíame' : 'Guide me'}</Link>}
             {step.button && canEdit && (
               step.to
                 ? <Link to={step.to} className="shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]">{step.button}</Link>

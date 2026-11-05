@@ -202,7 +202,7 @@ export default function CaseForm() {
           .then(() => { queryClient.invalidateQueries({ queryKey: ['quick-quotes'] }); queryClient.invalidateQueries({ queryKey: ['case-quotes', result.id] }) })
           .catch(() => {})
       }
-      if (result) navigate(`/cases/${result.id}`)
+      if (result) navigate(new URLSearchParams(location.search).get('flow') ? `/cases/${result.id}/guide` : `/cases/${result.id}`)
     },
   })
 

@@ -34,6 +34,7 @@ import AdminPage from '@/pages/admin/AdminPage'
 import FamilyPortal from '@/pages/family/FamilyPortal'
 import TvBoard from '@/pages/board/TvBoard'
 import TvScreenPage from '@/pages/board/TvScreenPage'
+import CaseGuide from '@/pages/cases/CaseGuide'
 import ChapelPlayerPage from '@/pages/player/ChapelPlayerPage'
 import ChapelTvPage from '@/pages/player/ChapelTvPage'
 import ServiceRoom from '@/pages/service/ServiceRoom'
@@ -96,6 +97,7 @@ export default function App() {
                 <Route path="/cases" element={<CaseList />} />
                 <Route path="/cases/upload" element={<UploadToCreate />} />
                 <Route path="/cases/first-call" element={<FirstCallIntake />} />
+                <Route path="/cases/:caseId/guide" element={<CaseGuide />} />
                 <Route path="/cases/:caseId/first-call" element={<FirstCallIntake />} />
                 <Route path="/cases/:caseId/vital-sheet" element={<VitalSheetIntake />} />
                 <Route path="/cases/:caseId/edrs" element={<EdrsEntry />} />

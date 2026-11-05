@@ -670,6 +670,7 @@ export default function VitalSheetIntake() {
                 </button>
               </div>
             )}
+            <button onClick={() => navigate(`/cases/${caseId}/guide`)} className="mb-2 w-full text-base font-semibold text-white bg-[#3b4a35] rounded-md px-3.5 py-3.5 hover:bg-[#4d5f45]">Continue — what’s next? →</button>
             <div className="flex gap-2">
               <button onClick={() => navigate(`/cases/${caseId}`)} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-md px-3.5 py-2.5 hover:bg-slate-50">Back to Case →</button>
               <button onClick={() => navigate(`/cases/${caseId}/edrs`)} className="flex-1 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2.5 hover:bg-[#3b4a35]/5">EDRS Entry →</button>

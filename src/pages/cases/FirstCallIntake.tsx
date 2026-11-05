@@ -454,6 +454,12 @@ export default function FirstCallIntake() {
           {smsMutation.isSuccess && <div className="text-xs text-emerald-700 mb-3">Text sent.</div>}
 
           <button
+            onClick={() => navigate(`/cases/${savedCaseId}/guide`)}
+            className="w-full text-base font-semibold text-white bg-[#3b4a35] rounded-md px-3.5 py-3.5 hover:bg-[#4d5f45] mb-2"
+          >
+            Continue — what’s next? →
+          </button>
+          <button
             onClick={() => navigate(`/cases/${savedCaseId}`)}
             className="w-full text-sm font-medium text-slate-600 border border-slate-200 rounded-md px-3.5 py-2.5 hover:bg-slate-50"
           >
