@@ -59,3 +59,8 @@ Run `src/db/spotify.sql` (creates the private `case-media` bucket and `case_medi
 1. Run `src/db/obituaries.sql` in Supabase.
 2. Deploy the `public-obituary` Edge Function with **Verify JWT OFF** (anyone on the internet reads published obituaries through it).
 3. In the OS: **Obituaries** (left menu) for the list and editor; a case's **Obituary page** button creates the obituary from the case. The public pages are `/obituaries` and `/obituaries/<name>`.
+
+## Website events (public Events page with sign-up)
+1. Run `src/db/site-events.sql` in Supabase.
+2. Re-deploy the `public-obituary` Edge Function (it now also serves events and sign-ups). Verify JWT stays OFF.
+3. In the OS: **Website events** in the left menu. Public page: `/events`.

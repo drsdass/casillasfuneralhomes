@@ -11,14 +11,18 @@ const Photo = ({ o, size, cls = '' }: { o: Pick<PublicObit, 'name' | 'photoUrl'>
   ? <img src={o.photoUrl} alt={o.name} style={{ width: size, height: size }} className={`shrink-0 rounded-full object-cover ${cls}`} />
   : <span style={{ width: size, height: size, fontSize: size * 0.34 }} className={`grid shrink-0 place-items-center rounded-full bg-stone-200 font-serif text-stone-600 ${cls}`}>{initials(o.name)}</span>
 
-function Shell({ orgName, children }: { orgName?: string | null; children: React.ReactNode }) {
+export function Shell({ orgName, children }: { orgName?: string | null; children: React.ReactNode }) {
   const b = brandFor(orgName)
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800">
       <header className="border-b border-stone-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4">
           <BrandLogo name={orgName ?? undefined} className="h-12 w-auto" />
-          {b.website && <a href={`https://${b.website}`} className="text-sm text-stone-500 hover:text-stone-800">{b.website}</a>}
+          <nav className="flex items-center gap-5 text-sm text-stone-600">
+            <Link to="/obituaries" className="hover:text-stone-900">Obituaries</Link>
+            <Link to="/events" className="hover:text-stone-900">Events</Link>
+            {b.website && <a href={`https://${b.website}`} className="hidden text-stone-400 hover:text-stone-800 sm:inline">{b.website}</a>}
+          </nav>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>

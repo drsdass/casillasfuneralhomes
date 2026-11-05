@@ -173,6 +173,7 @@ export const es: TranslationKeys = {
     reports: 'Informes',
     board: 'Pizarra de TV',
     obituaries: 'Obituarios',
+    siteEvents: 'Eventos del sitio',
     music: 'Música',
     admin: 'Administración',
     invoices: 'Facturas',

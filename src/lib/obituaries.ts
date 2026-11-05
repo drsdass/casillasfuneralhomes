@@ -144,7 +144,7 @@ export const obituaries = {
 }
 
 // ---------------- public side (no sign-in) ----------------
-async function callPublic<T>(body: Record<string, unknown>): Promise<T> {
+export async function callPublic<T>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${supabaseUrl}/functions/v1/public-obituary`, {
     method: 'POST', headers: { 'content-type': 'application/json', apikey: supabaseAnonKey!, authorization: `Bearer ${supabaseAnonKey}` }, body: JSON.stringify(body),
   })

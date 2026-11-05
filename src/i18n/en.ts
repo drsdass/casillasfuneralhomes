@@ -172,6 +172,7 @@ export const en = {
     reports: 'Reports',
     board: 'TV Board',
     obituaries: 'Obituaries',
+    siteEvents: 'Website events',
     music: 'Music',
     admin: 'Admin',
     invoices: 'Invoices',

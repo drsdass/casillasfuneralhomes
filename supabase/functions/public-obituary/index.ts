@@ -5,6 +5,8 @@
 //
 // Body: { action: 'list', org?, location?, q?, page? }            -> published obituaries (20 per page)
 //       { action: 'get', slug }                                   -> one published obituary + its approved tributes
+//       { action: 'events', org? }                                -> published events with how many have signed up
+//       { action: 'rsvp', eventId, name, email, phone, guests, hp } -> sign up for an event
 //       { action: 'tribute', slug, kind, name, message, hp }      -> leave a candle (shows at once) or a guest book message (staff approve)
 //
 // Deploy via the Supabase Dashboard, name it exactly "public-obituary", and turn OFF "Verify JWT".
@@ -69,6 +71,39 @@ Deno.serve(async (req) => {
       const { error } = await db.from('obituary_tributes').insert({ obituary_id: o.id, kind, name, message, approved: kind === 'candle' })
       if (error) return json({ error: error.message }, 500)
       return json({ ok: true, pending: kind === 'guestbook' })
+    }
+    if (b.action === 'events') {
+      let q = db.from('site_events').select('id, org_id, location_id, title, description, starts_at, ends_at, place, photo_url, capacity, rsvp_open').eq('status', 'published')
+      if (typeof b.org === 'string' && b.org) q = q.eq('org_id', b.org)
+      const { data, error } = await q.order('starts_at', { ascending: true }).limit(200)
+      if (error) return json({ error: error.message }, 500)
+      const ids = (data ?? []).map((e: any) => e.id)
+      const counts = new Map<string, number>()
+      if (ids.length) for (const r of (await db.from('site_event_rsvps').select('event_id, guests').in('event_id', ids)).data ?? []) counts.set(r.event_id, (counts.get(r.event_id) ?? 0) + Number(r.guests ?? 1))
+      const org = typeof b.org === 'string' && b.org ? (await db.from('organizations').select('name').eq('id', b.org).maybeSingle()).data?.name ?? null : null
+      return json({ items: (data ?? []).map((e: any) => ({ ...e, attending: counts.get(e.id) ?? 0 })), orgName: org })
+    }
+
+    if (b.action === 'rsvp') {
+      if (b.hp) return json({ ok: true })
+      const name = String(b.name ?? '').trim().slice(0, 80)
+      const email = String(b.email ?? '').trim().slice(0, 120)
+      const phone = String(b.phone ?? '').trim().slice(0, 30)
+      const guests = Math.min(10, Math.max(1, Math.floor(Number(b.guests) || 1)))
+      if (!name) return json({ error: 'Please enter your name.' }, 400)
+      if (!email && !phone) return json({ error: 'Please give an email or a phone number so we can reach you.' }, 400)
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'That email address does not look right.' }, 400)
+      const { data: ev } = await db.from('site_events').select('id, capacity, rsvp_open, starts_at').eq('id', String(b.eventId ?? '')).eq('status', 'published').maybeSingle()
+      if (!ev) return json({ error: 'This event was not found.' }, 404)
+      if (!ev.rsvp_open) return json({ error: 'Sign-up for this event is closed.' }, 400)
+      const taken = ((await db.from('site_event_rsvps').select('guests').eq('event_id', ev.id)).data ?? []).reduce((n: number, r: any) => n + Number(r.guests ?? 1), 0)
+      if (ev.capacity && taken + guests > ev.capacity) return json({ error: ev.capacity - taken > 0 ? `Only ${ev.capacity - taken} place(s) are left.` : 'This event is full.' }, 400)
+      const since = new Date(Date.now() - 3600_000).toISOString()
+      const { count } = await db.from('site_event_rsvps').select('id', { count: 'exact', head: true }).eq('event_id', ev.id).gte('created_at', since)
+      if ((count ?? 0) >= 60) return json({ error: 'Too many sign-ups right now. Please try again later.' }, 429)
+      const { error } = await db.from('site_event_rsvps').insert({ event_id: ev.id, name, email: email || null, phone: phone || null, guests })
+      if (error) return json({ error: error.message }, 500)
+      return json({ ok: true })
     }
     return json({ error: 'Unknown request.' }, 400)
   } catch (e) {
