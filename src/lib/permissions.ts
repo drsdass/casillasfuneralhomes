@@ -58,7 +58,8 @@ export function landingRouteFor(role: UserRole): string {
 /** Every nav key a role could see by default, before per-user overrides. */
 function roleDefaultNavKeys(role: UserRole): string[] {
   if (isRestrictedToInvoices(role)) return ['invoices']
-  const keys = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'calendar', 'staff-schedule', 'music', 'messages', 'inbox', 'financials', 'board']
+  const keys = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'calendar', 'staff-schedule', 'music', 'messages', 'inbox', 'financials', 'board', 'obituaries']
+  if (atLeast(role, 'manager')) keys.push('site-events')
   if (atLeast(role, 'supervisor')) keys.push('driver')
   if (canViewReports(role)) keys.push('reports')
   if (atLeast(role, 'admin')) keys.push('admin')
@@ -91,6 +92,8 @@ export const TOGGLEABLE_FEATURES: { key: string; label: string }[] = [
   { key: 'inbox', label: 'Email Inbox' },
   { key: 'financials', label: 'Financials / Accounting' },
   { key: 'reports', label: 'Reports' },
+  { key: 'obituaries', label: 'Obituaries (public pages)' },
+  { key: 'site-events', label: 'Website events' },
   { key: 'board', label: 'TV Board' },
   { key: 'admin', label: 'Admin' },
 ]
