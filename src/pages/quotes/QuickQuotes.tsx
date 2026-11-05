@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { Printer, Mail, Eye, X, Ban, Undo2, Plus, FolderPlus, FileText, ArrowLeft, Pencil, Columns3, Copy } from 'lucide-react'
+import { Printer, Mail, Eye, X, Ban, Undo2, Plus, FolderPlus, FileText, ArrowLeft, Pencil, Copy } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { shortLocationName, getCompanyName } from '@/lib/company'
@@ -81,7 +81,7 @@ function QuoteList({ onNew, onReuse, compare, setCompare }: { onNew: () => void;
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <input type="checkbox" checked={picked.includes(q.id)} onChange={() => setPicked((p) => (p.includes(q.id) ? p.filter((x) => x !== q.id) : [...p, q.id]))} title="Tick two or more quotes to print them side by side" aria-label="Pick for side by side" style={{ width: 17, height: 17, accentColor: '#3d5a80' }} />
+                    <input type="checkbox" checked={picked.includes(q.id)} onChange={() => setPicked((p) => (p.includes(q.id) ? p.filter((x) => x !== q.id) : [...p, q.id]))} title="Tick two or more quotes to print them together, each on its own page" aria-label="Pick to print together" style={{ width: 17, height: 17, accentColor: '#3d5a80' }} />
                     <span className="font-semibold text-slate-900">{q.forName || q.name || 'Quote'}</span>
                     <span className="text-xs text-slate-500">{q.label}</span>
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${badge[q.status]}`}>{q.status === 'sent' ? 'Sent' : q.status === 'void' ? 'Voided' : 'Not sent'}</span>
@@ -120,7 +120,7 @@ function QuoteList({ onNew, onReuse, compare, setCompare }: { onNew: () => void;
           <span className="text-sm text-slate-700">{picked.length} quotes picked</span>
           <div className="flex gap-2">
             <button type="button" onClick={() => setPicked([])} className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-600">Clear</button>
-            <button type="button" onClick={() => setCompare({ ids: picked, print: false })} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white"><Columns3 size={15} /> Show side by side</button>
+            <button type="button" onClick={() => setCompare({ ids: picked, print: false })} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white"><Printer size={15} /> Print each as its own form</button>
           </div>
         </div>
       )}
@@ -163,44 +163,9 @@ function Doc({ q, loc }: { q: QuickQuote; loc?: Parameters<typeof QuoteView>[0][
   return <QuoteView quote={q} label={q.label} prepared={{ name: q.forName, phone: q.contactPhone, email: q.contactEmail }} location={loc} />
 }
 
-/** Several quotes in columns, one row per item, so a family can see what each choice changes. Prints sideways. */
-function CompareSheet({ quotes, loc }: { quotes: QuickQuote[]; loc?: Parameters<typeof QuoteView>[0]['location'] }) {
-  const keyOf = (l: QuoteLine) => `${l.pkg ?? ''}|${l.name}`
-  const rows: { key: string; name: string }[] = []
-  for (const q of quotes) for (const l of q.lines) if (!rows.some((r) => r.key === keyOf(l))) rows.push({ key: keyOf(l), name: l.name })
-  const forName = quotes.find((q) => q.forName)?.forName
-  const th = 'border border-slate-300 bg-slate-100 px-2 py-1.5 text-right text-sm font-semibold align-bottom'
-  const td = 'border border-slate-200 px-2 py-1 text-right text-sm tabular-nums'
-  return (
-    <div className="bg-white p-4 text-slate-900">
-      <style>{'@media print { @page { size: landscape; margin: 12mm; } }'}</style>
-      <div className="mb-3 flex items-end justify-between gap-4">
-        <div><div className="text-xl font-semibold">{getCompanyName()}</div><div className="text-sm text-slate-600">Your choices side by side{forName ? ` — ${forName}` : ''}</div></div>
-        <div className="text-right text-xs text-slate-500">{format(new Date(), 'MMMM d, yyyy')}{loc?.phone ? <><br />{loc.phone}</> : null}</div>
-      </div>
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className={`${th} text-left`}>&nbsp;</th>
-            {quotes.map((q) => <th key={q.id} className={th}>{q.name || q.label}<div className="text-[11px] font-normal text-slate-500">{q.name ? q.label : ''}</div></th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key}>
-              <td className="border border-slate-200 px-2 py-1 text-left text-sm">{r.name}</td>
-              {quotes.map((q) => { const l = q.lines.find((x) => keyOf(x) === r.key); return <td key={q.id} className={td}>{l ? money(l.amount) : <span className="text-slate-300">—</span>}</td> })}
-            </tr>
-          ))}
-          <tr><td className="border border-slate-200 px-2 py-1 text-left text-sm font-medium">Subtotal</td>{quotes.map((q) => <td key={q.id} className={td}>{money(q.subtotal)}</td>)}</tr>
-          {quotes.some((q) => q.tax) && <tr><td className="border border-slate-200 px-2 py-1 text-left text-sm">Sales tax</td>{quotes.map((q) => <td key={q.id} className={td}>{money(q.tax)}</td>)}</tr>}
-          {quotes.some((q) => q.credit) && <tr><td className="border border-slate-200 px-2 py-1 text-left text-sm">Credit</td>{quotes.map((q) => <td key={q.id} className={td}>{q.credit ? `-${money(q.credit)}` : '—'}</td>)}</tr>}
-          <tr><td className="border border-slate-300 bg-slate-100 px-2 py-2 text-left text-base font-semibold">TOTAL</td>{quotes.map((q) => <td key={q.id} className="border border-slate-300 bg-slate-100 px-2 py-2 text-right text-base font-semibold tabular-nums">{money(q.total)}</td>)}</tr>
-        </tbody>
-      </table>
-      <p className="mt-3 text-[11px] text-slate-500">These are estimates for information only; the final charges are those actually selected and provided.{quotes.some((q) => q.validUntil) ? ` Good through ${format(parseISO(quotes.find((q) => q.validUntil)!.validUntil!), 'MMMM d, yyyy')}.` : ''}</p>
-    </div>
-  )
+/** Every picked quote as its own full statement form, one per page — the same form a family already gets. */
+function Stack({ quotes, loc }: { quotes: QuickQuote[]; loc?: Parameters<typeof QuoteView>[0]['location'] }) {
+  return <>{quotes.map((q, i) => <div key={q.id} style={i < quotes.length - 1 ? { breakAfter: 'page', pageBreakAfter: 'always' } : undefined} className={i > 0 ? 'mt-4 print:mt-0' : ''}><Doc q={q} loc={loc} /></div>)}</>
 }
 
 function CompareOverlay({ quotes, loc, autoPrint, onClose }: { quotes: QuickQuote[]; loc?: Parameters<typeof QuoteView>[0]['location']; autoPrint: boolean; onClose: () => void }) {
@@ -213,18 +178,18 @@ function CompareOverlay({ quotes, loc, autoPrint, onClose }: { quotes: QuickQuot
   return (
     <>
       <div className="no-print fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" onClick={onClose}>
-        <div className="my-4 w-full max-w-6xl rounded-xl bg-slate-100 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 w-full max-w-3xl rounded-xl bg-slate-100 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 rounded-t-xl">
-            <div className="font-semibold text-slate-800">Side by side</div>
+            <div className="font-semibold text-slate-800">{quotes.length} quotes — each prints on its own page</div>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3 py-1.5 text-sm font-semibold text-white"><Printer size={14} /> Print</button>
+              <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3 py-1.5 text-sm font-semibold text-white"><Printer size={14} /> Print all</button>
               <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={18} /></button>
             </div>
           </div>
-          <div className="overflow-x-auto p-3"><CompareSheet quotes={quotes} loc={loc} /></div>
+          <div className="p-3"><Stack quotes={quotes} loc={loc} /></div>
         </div>
       </div>
-      {createPortal(<div className="print-only print-target"><CompareSheet quotes={quotes} loc={loc} /></div>, document.body)}
+      {createPortal(<div className="print-only print-target"><Stack quotes={quotes} loc={loc} /></div>, document.body)}
     </>
   )
 }
@@ -301,7 +266,7 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
       </div>
 
       <div className="no-print rounded-md border border-slate-200 bg-white p-3">
-        <div className="mb-2 text-xs text-slate-500">Each option is its own quote for the same family. Price one, press <b>Add another option</b> to copy it, then change only the numbers.</div>
+        <div className="mb-2 text-xs text-slate-500">Each option is its own quote and prints as its own form. Price one, press <b>Add another option</b> to copy it, then change only the numbers.</div>
         <div className="flex flex-wrap items-center gap-2">
           {opts.map((o, i) => (
             <button key={o.id} type="button" onClick={() => setActive(i)} className={`rounded-md border px-3 py-1.5 text-left text-sm ${i === active ? 'border-[#3b4a35] bg-[#3b4a35]/10 font-semibold text-[#3b4a35]' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
@@ -401,7 +366,7 @@ function SaveDialog({ options, canUpdate, onClose, onSave }: { options: { id: st
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
           {canUpdate && <button type="button" disabled={save.isPending} onClick={() => save.mutate('update')} className="rounded-md border border-[#3b4a35] px-4 py-2 text-sm font-semibold text-[#3b4a35] disabled:opacity-50">Save changes to this quote</button>}
-          <button type="button" disabled={save.isPending} onClick={() => save.mutate('new')} className="rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{save.isPending ? 'Saving…' : many ? 'Save & print side by side' : canUpdate ? 'Save as a new quote' : 'Save quote'}</button>
+          <button type="button" disabled={save.isPending} onClick={() => save.mutate('new')} className="rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{save.isPending ? 'Saving…' : many ? 'Save & print all' : canUpdate ? 'Save as a new quote' : 'Save quote'}</button>
         </div>
       </div>
     </div>
