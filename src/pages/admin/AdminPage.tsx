@@ -8,8 +8,8 @@ import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
 import { TvScreensPanel } from '@/components/admin/TvScreensPanel'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
-import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES } from '@/lib/permissions'
-import { ROLE_LABELS, type UserRole, type VendorCategory, type CaseTask } from '@/types'
+import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES, featureTicked, toggleFeatureList } from '@/lib/permissions'
+import { ROLE_LABELS, type UserRole, type StaffMember, type VendorCategory, type CaseTask } from '@/types'
 import { format, parseISO } from 'date-fns'
 
 const allRoles: UserRole[] = ['super_admin', 'admin', 'manager', 'supervisor', 'staff_member']
@@ -124,9 +124,8 @@ export default function AdminPage() {
     locationsMutation.mutate({ staffId, locationIds: next })
   }
 
-  function toggleFeature(staffId: string, current: string[], key: string) {
-    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
-    featuresMutation.mutate({ staffId, disabledFeatures: next })
+  function toggleFeature(person: StaffMember, key: string) {
+    featuresMutation.mutate({ staffId: person.id, disabledFeatures: toggleFeatureList(person, key) })
   }
 
   return (
@@ -323,14 +322,14 @@ export default function AdminPage() {
                             <div>
                               <div className="text-xs font-semibold text-slate-700 mb-2">Feature Access</div>
                               <div className="space-y-1.5">
-                                {TOGGLEABLE_FEATURES.map((f) => {
-                                  const disabled = (s.disabledFeatures ?? []).includes(f.key)
+                                {TOGGLEABLE_FEATURES.filter((f) => !(s.role === 'staff_member' && f.key === 'admin')).map((f) => {
+                                  const disabled = !featureTicked(s, f.key)
                                   return (
                                     <label key={f.key} className="flex items-center gap-2 text-sm cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={!disabled}
-                                        onChange={() => toggleFeature(s.id, s.disabledFeatures ?? [], f.key)}
+                                        onChange={() => toggleFeature(s, f.key)}
                                         className="accent-[#3b4a35]"
                                       />
                                       {f.label}
@@ -338,7 +337,7 @@ export default function AdminPage() {
                                   )
                                 })}
                               </div>
-                              <p className="text-[11px] text-slate-400 mt-2">Unchecking a feature blocks it for this person even though their role would normally allow it.</p>
+                              <p className="text-[11px] text-slate-400 mt-2">{s.role === 'staff_member' ? 'Staff Members always get Invoices. Tick the other screens this person should see.' : 'Unchecking a feature blocks it for this person even though their role would normally allow it.'}</p>
                             </div>
                             {canAssign && s.id !== currentUser?.id && (
                               <div className="col-span-2 border-t border-slate-200 pt-3 flex flex-wrap items-center gap-3">

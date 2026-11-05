@@ -25,8 +25,51 @@ export function isRestrictedToInvoices(role: UserRole): boolean {
   return role === 'staff_member'
 }
 
-/** The only screens a staff_member may open. */
-export const STAFF_MEMBER_PATHS = ['/invoices', '/board', '/custody', '/driver']
+/**
+ * Staff Member is the lowest tier: Invoices always, plus whatever the super admin ticks for that person.
+ * The ticks are stored in the same `disabled_features` column as 'allow:<key>' entries (so no database change is needed);
+ * 'allow:set' marks that the super admin has chosen. Until then a Staff Member gets the default three below.
+ */
+export const STAFF_DEFAULT_KEYS = ['custody', 'driver', 'board']
+export const STAFF_GRANTABLE = (): string[] => TOGGLEABLE_FEATURES.filter((f) => f.key !== 'admin').map((f) => f.key)
+
+export function staffGrantedKeys(disabled: string[] | undefined): string[] {
+  const d = disabled ?? []
+  if (!d.includes('allow:set')) return STAFF_DEFAULT_KEYS
+  return d.filter((k) => k.startsWith('allow:') && k !== 'allow:set').map((k) => k.slice(6))
+}
+
+/** Is this feature ticked for this person (works for every role)? */
+export function featureTicked(user: Pick<StaffMember, 'role' | 'disabledFeatures'>, key: string): boolean {
+  if (isRestrictedToInvoices(user.role)) return staffGrantedKeys(user.disabledFeatures).includes(key)
+  return !(user.disabledFeatures ?? []).includes(key)
+}
+
+/** The new `disabled_features` list after the super admin ticks/unticks one feature for this person. */
+export function toggleFeatureList(user: Pick<StaffMember, 'role' | 'disabledFeatures'>, key: string): string[] {
+  if (isRestrictedToInvoices(user.role)) {
+    const granted = staffGrantedKeys(user.disabledFeatures)
+    const next = granted.includes(key) ? granted.filter((k) => k !== key) : [...granted, key]
+    return ['allow:set', ...next.map((k) => `allow:${k}`)]
+  }
+  const cur = user.disabledFeatures ?? []
+  return cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]
+}
+
+const PATH_KEYS: [string, string][] = [
+  ['/cases', 'cases'], ['/quotes', 'quotes'], ['/families', 'families'], ['/custody', 'custody'], ['/driver', 'driver'],
+  ['/calendar', 'calendar'], ['/staff-schedule', 'staff-schedule'], ['/music', 'music'], ['/chapel-tv', 'music'],
+  ['/messages', 'messages'], ['/inbox', 'inbox'], ['/financials', 'financials'], ['/reports', 'reports'],
+  ['/obituary-manager', 'obituaries'], ['/site-events', 'site-events'], ['/board', 'board'],
+]
+
+/** May this person open this page? Only Staff Members are limited (others see everything their role allows). */
+export function canOpenPath(user: Pick<StaffMember, 'role' | 'disabledFeatures'>, path: string): boolean {
+  if (!isRestrictedToInvoices(user.role)) return true
+  if (path === '/invoices' || path.startsWith('/invoices/')) return true
+  const hit = PATH_KEYS.find(([p]) => path === p || path.startsWith(p + '/'))
+  return !!hit && staffGrantedKeys(user.disabledFeatures).includes(hit[1])
+}
 
 /** Who can create/edit GPL items and full contracts (not just toggle paid status). */
 export function canEditFinancials(role: UserRole): boolean {
@@ -60,7 +103,7 @@ export function landingRouteFor(role: UserRole): string {
 
 /** Every nav key a role could see by default, before per-user overrides. */
 function roleDefaultNavKeys(role: UserRole): string[] {
-  if (isRestrictedToInvoices(role)) return ['invoices', 'custody', 'driver', 'board']
+  if (isRestrictedToInvoices(role)) return ['invoices']
   const keys = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'calendar', 'staff-schedule', 'music', 'messages', 'inbox', 'financials', 'board', 'obituaries']
   if (atLeast(role, 'manager')) keys.push('site-events')
   if (atLeast(role, 'supervisor')) keys.push('driver')
@@ -76,6 +119,10 @@ function roleDefaultNavKeys(role: UserRole): string[] {
  * features" control from the Admin page.
  */
 export function visibleNavKeys(user: Pick<StaffMember, 'role' | 'disabledFeatures'>): string[] {
+  if (isRestrictedToInvoices(user.role)) {
+    const granted = staffGrantedKeys(user.disabledFeatures)
+    return ['invoices', ...granted.filter((k) => STAFF_GRANTABLE().includes(k))]
+  }
   const defaults = roleDefaultNavKeys(user.role)
   const disabled = new Set(user.disabledFeatures ?? [])
   return defaults.filter((k) => !disabled.has(k))
