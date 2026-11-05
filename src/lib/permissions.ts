@@ -20,10 +20,13 @@ export function canManageAccess(role: UserRole): boolean {
   return role === 'super_admin'
 }
 
-/** staff_member is restricted to the Invoices screen (print + paid toggle only). */
+/** staff_member is restricted to a short list of screens: Invoices (print + paid toggle), the TV Board, Chain of Custody and the Driver phone view. */
 export function isRestrictedToInvoices(role: UserRole): boolean {
   return role === 'staff_member'
 }
+
+/** The only screens a staff_member may open. */
+export const STAFF_MEMBER_PATHS = ['/invoices', '/board', '/custody', '/driver']
 
 /** Who can create/edit GPL items and full contracts (not just toggle paid status). */
 export function canEditFinancials(role: UserRole): boolean {
@@ -57,7 +60,7 @@ export function landingRouteFor(role: UserRole): string {
 
 /** Every nav key a role could see by default, before per-user overrides. */
 function roleDefaultNavKeys(role: UserRole): string[] {
-  if (isRestrictedToInvoices(role)) return ['invoices']
+  if (isRestrictedToInvoices(role)) return ['invoices', 'custody', 'driver', 'board']
   const keys = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'calendar', 'staff-schedule', 'music', 'messages', 'inbox', 'financials', 'board', 'obituaries']
   if (atLeast(role, 'manager')) keys.push('site-events')
   if (atLeast(role, 'supervisor')) keys.push('driver')
