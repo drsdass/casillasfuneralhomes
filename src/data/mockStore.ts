@@ -864,7 +864,7 @@ export const mockStore = {
     changedBy: StaffMember
   ): SignatureRequest {
     const req: SignatureRequest = {
-      ...input, id: newId('sig'), status: 'sent', sentAt: new Date().toISOString(),
+      ...input, id: newId('sig'), status: 'sent', sentAt: new Date().toISOString(), token: `mock-token-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
       signRequestId: `sr-mock-${Math.floor(Math.random() * 100000)}`,
     }
     signatureRequestStore = [...signatureRequestStore, req]

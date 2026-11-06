@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { FileSignature, Upload, Tablet, Download, RefreshCw } from 'lucide-react'
+import { FileSignature, Upload, Tablet, Download, RefreshCw, Copy } from 'lucide-react'
 import { api } from '@/lib/api'
 import { USE_MOCK } from '@/lib/supabase'
 import { Card } from '@/components/ui/Primitives'
@@ -37,11 +37,14 @@ export function SignaturesCard({ caseObj: c, canEdit, currentUser }: { caseObj: 
               <FileSignature size={15} className="shrink-0 text-slate-400" />
               <div className="min-w-0 flex-1">
                 <div className="text-slate-800">{sig.documentName}</div>
-                <div className="text-xs text-slate-400">To {sig.signerName} · {sig.mode === 'inperson' ? 'signing in the office' : 'emailed'}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, h:mm a')}`}{sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, h:mm a')}`}</div>
+                <div className="text-xs text-slate-400">To {sig.signerName} · {sig.mode === 'inperson' ? 'signing in the office' : 'link sent'}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, h:mm a')}`}{sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, h:mm a')}`}</div>
               </div>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${sig.status === 'signed' ? 'bg-emerald-100 text-emerald-800' : sig.status === 'declined' || sig.status === 'expired' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{sig.status === 'sent' ? 'Waiting to be signed' : sig.status}</span>
               {sig.status === 'signed' && sig.signedDocumentUrl && <button type="button" onClick={() => openCopy(sig.signedDocumentUrl!)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><Download size={12} /> Signed copy</button>}
-              {canEdit && sig.embedUrl && (sig.status === 'sent' || sig.status === 'viewed') && <a href={sig.embedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md bg-[#3b4a35] px-2 py-1 text-xs font-semibold text-white"><Tablet size={12} /> Open signing screen</a>}
+              {canEdit && sig.token && (sig.status === 'sent' || sig.status === 'viewed') && (<>
+                <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/sign/${sig.token}`)} title="Copy the signing link" className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><Copy size={12} /> Copy link</button>
+                <a href={`/sign/${sig.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-md bg-[#3b4a35] px-2 py-1 text-xs font-semibold text-white"><Tablet size={12} /> Open signing screen</a>
+              </>)}
               {USE_MOCK && canEdit && sig.status === 'sent' && <button type="button" onClick={() => demoSign.mutate(sig.id)} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50">Simulate signed (demo)</button>}
             </div>
           ))}

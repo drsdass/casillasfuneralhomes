@@ -384,6 +384,8 @@ export function rowToSignatureRequest(row: any): SignatureRequest {
     signedDocumentUrl: row.signed_document_url ?? undefined,
     mode: row.mode ?? 'email',
     embedUrl: row.embed_url ?? undefined,
+    token: row.token ?? undefined,
+    expiresAt: row.expires_at ?? undefined,
   }
 }
 

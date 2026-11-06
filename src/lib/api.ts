@@ -227,6 +227,18 @@ async function syncCaseCalendarEvent(
   }
 }
 
+/** Calls the public signing function and turns its error message into a readable one. */
+async function esignCall(body: Record<string, unknown>) {
+  const { data, error } = await supabase!.functions.invoke('esign', { body })
+  if (error) {
+    const context = (error as { context?: Response }).context
+    let msg: string | undefined
+    if (context) { try { msg = (await context.clone().json())?.error } catch { /* not JSON */ } }
+    throw msg ? new Error(msg) : error
+  }
+  return data
+}
+
 export const api = {
   // -------------------------------------------------------------------
   // Locations / staff / roles / access
@@ -1620,8 +1632,8 @@ export const api = {
     })
     if (uploadErr) throw uploadErr
 
-    const { data, error } = await supabase!.functions.invoke('send-signature-request', {
-      body: { ...input, documentStoragePath: path },
+    const { data, error } = await supabase!.functions.invoke('esign', {
+      body: { ...input, action: 'create', documentStoragePath: path },
     })
     if (error) {
       // supabase-js's default error for a non-2xx Edge Function response is
@@ -1646,6 +1658,26 @@ export const api = {
       summary: `Sent "${input.documentName}" to ${input.signerName} for signature`, changedBy: changedBy.id,
     })
     return rowToSignatureRequest(data)
+  },
+
+  /** The signing page a family member sees — no login; the secret in their link is the key. */
+  esignPublic: {
+    async get(token: string): Promise<{ documentName: string; signerName: string; status: string; orgName: string; pdfUrl?: string; signedUrl?: string; signedAt?: string }> {
+      if (USE_MOCK) {
+        const r = mockStore.getSignatureRequests().find((x) => x.token === token)
+        if (!r) throw new Error('This signing link is not valid.')
+        return { documentName: r.documentName, signerName: r.signerName, status: r.status === 'sent' ? 'viewed' : r.status, orgName: 'Casillas Funeral Home', signedAt: r.signedAt }
+      }
+      return esignCall({ action: 'get', token })
+    },
+    async sign(token: string, name: string, signature: string): Promise<{ signedUrl?: string }> {
+      if (USE_MOCK) { const r = mockStore.getSignatureRequests().find((x) => x.token === token); if (r) mockStore.simulateSignatureComplete(r.id); return {} }
+      return esignCall({ action: 'sign', token, name, signature, consent: true })
+    },
+    async decline(token: string): Promise<void> {
+      if (USE_MOCK) return
+      await esignCall({ action: 'decline', token })
+    },
   },
 
   /** A short-lived link to open the signed copy (or any saved signature file). Older rows hold a full web address already. */

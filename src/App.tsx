@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import SignPage from '@/pages/sign/SignPage'
 import DriverView from '@/pages/driver/DriverView'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="/watch/:token" element={<WatchPage />} />
             <Route path="/remote/:token" element={<RemotePage />} />
             <Route path="/tv/:token" element={<TvScreenPage />} />
+            <Route path="/sign/:token" element={<SignPage />} />
             <Route path="/obituaries" element={<PublicObituaries />} />
             <Route path="/events" element={<PublicEvents />} />
             <Route path="/obituaries/:slug" element={<PublicObituaryPage />} />

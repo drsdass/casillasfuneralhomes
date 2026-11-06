@@ -313,53 +313,21 @@ doable through the Supabase **Dashboard** — no command line needed.
 Dashboard → **Storage** → **New bucket** → name it exactly `case-documents`
 → Private (not public) → Create.
 
-### 2. Deploy the two Edge Functions (via the Dashboard editor, no CLI)
+### 2. Deploy the `esign` Edge Function
 
-For each of `send-signature-request` and `signrequest-webhook`:
+Signing is built into the OS (no outside service). Dashboard -> **Edge Functions** ->
+deploy a new function named exactly `esign`, paste `supabase/functions/esign/index.ts`,
+and turn **off** "Verify JWT" (the family member signing is not logged in; the function
+checks the staff login itself). Also run `src/db/esign.sql` once in the SQL editor.
+No secrets are needed. (`SLACK_WEBHOOK_URL`, if set, announces each signature.)
 
-1. Dashboard → **Edge Functions** → **Deploy a new function** → **Via Editor**
-2. Name it exactly `send-signature-request` (or `signrequest-webhook` for
-   the second one)
-3. Delete the placeholder template code, paste in the full contents of
-   `supabase/functions/send-signature-request/index.ts` (or the webhook
-   file for the second function)
-4. Click **Deploy**
+### 3. Test it
 
-For `signrequest-webhook` specifically: after deploying, go to that
-function's **Settings** and turn **off** "Verify JWT" — this endpoint is
-called by SignRequest, not by a logged-in user, so it can't require a
-Supabase session token.
-
-### 3. Set the secrets
-
-Dashboard → **Edge Functions** → **Manage secrets** (or **Settings** →
-**Edge Functions**), add:
-- `SIGNREQUEST_API_KEY` — from your SignRequest Business account settings
-- `SIGNREQUEST_TEAM` — your SignRequest team subdomain
-- `SIGNREQUEST_WEBHOOK_SECRET` — make up any random string yourself; it's
-  just how the webhook function verifies a callback is really from
-  SignRequest and not someone else hitting the URL
-
-### 4. The webhook (nothing to set up inside SignRequest)
-
-Every request the OS sends already carries the address of `signrequest-webhook`
-(with the secret), so SignRequest reports back by itself. Just make sure
-`signrequest-webhook` is deployed with "Verify JWT" **off** and that
-`SIGNREQUEST_WEBHOOK_SECRET` is set. Also run `src/db/signatures.sql` once
-(adds the in-office signing columns).
-
-### 5. Test it
-
-Open a case, generate one of the three real forms, click **Send for
-Signature** (only visible once a form is generated and the primary
-contact has an email on file). It should: turn the on-screen form into a
-PDF, upload it, and hand off to SignRequest for real. The status tracker
-on the case will show "sent" until SignRequest's webhook reports back
-"signed."
-
-At Casillas's volume (roughly 3 forms × 20–30 cases/month), expect **~$50–65/month**
-in SignRequest API costs on top of the Business plan subscription — see the
-per-document pricing on SignRequest's site for current rates.
+Open a practice case -> Documents -> **Send a PDF for signature** (or open any form or
+quote and press Send for Signature). Choose **Continue**, then **Open signing screen**,
+draw a signature and sign. The case shows "signed", with a **Signed copy** button, and the
+signed PDF (with an added signature page) appears under Documents. There is no per-document
+fee.
 
 ## Deploying
 
