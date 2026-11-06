@@ -1,90 +1,73 @@
 // supabase/functions/signrequest-webhook/index.ts
 //
-// Public endpoint SignRequest calls when a document's status changes
-// (viewed, signed, declined). Configure this URL in SignRequest's team
-// settings under "Integrations" as the webhook target — SignRequest
-// supports a shared-secret query param for verification, which this
-// checks before trusting the payload.
+// SignRequest calls this when someone views, signs or declines a document. We never trust the message itself:
+// it only tells us WHICH document changed, and then we ask SignRequest directly what the document's status is.
 //
-// Deploy: supabase functions deploy signrequest-webhook --no-verify-jwt
-// (--no-verify-jwt because SignRequest, not a logged-in user, calls this)
-//
-// Set the webhook URL in SignRequest as:
-//   https://<project>.supabase.co/functions/v1/signrequest-webhook?secret=<WEBHOOK_SECRET>
-//
-// Required secrets (supabase secrets set):
-//   SIGNREQUEST_WEBHOOK_SECRET — a random string you choose, must match the
-//                                 ?secret= param configured in SignRequest
-//   SUPABASE_SERVICE_ROLE_KEY  — set automatically by Supabase
+// Deploy via the Supabase Dashboard: name it exactly "signrequest-webhook" and turn OFF "Verify JWT".
+// Secrets: SIGNREQUEST_API_KEY, SIGNREQUEST_WEBHOOK_SECRET (the same random string used by send-signature-request).
+// The send function adds the callback address to every request, so nothing needs to be set up inside SignRequest.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
+const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+const ok = (b: unknown = { ok: true }) => new Response(JSON.stringify(b), { headers: { 'content-type': 'application/json' } })
 
-// SignRequest's event "status" values: sent, viewed, signed, declined, ...
-const statusMap: Record<string, string> = {
-  sent: 'sent',
-  viewed: 'viewed',
-  signed: 'signed',
-  declined: 'declined',
-  expired: 'expired',
-}
+// SignRequest document status codes -> ours
+const STATUS: Record<string, string> = { se: 'sent', vi: 'viewed', si: 'signed', sd: 'signed', do: 'signed', de: 'declined', ca: 'declined', xp: 'expired' }
 
 Deno.serve(async (req) => {
-  const url = new URL(req.url)
-  const secret = url.searchParams.get('secret')
-  if (secret !== (Deno.env.get('SIGNREQUEST_WEBHOOK_SECRET') ?? '').trim()) {
-    return new Response('Unauthorized', { status: 401 })
-  }
-
+  const secret = (Deno.env.get('SIGNREQUEST_WEBHOOK_SECRET') ?? '').trim()
+  if (!secret || new URL(req.url).searchParams.get('secret') !== secret) return new Response('Unauthorized', { status: 401 })
+  const key = (Deno.env.get('SIGNREQUEST_API_KEY') ?? '').trim()
   try {
-    const payload = await req.json()
-    // SignRequest's webhook payload shape: { uuid, status, document: {...}, signer: {...} }
-    const signRequestId = payload.uuid
-    const mappedStatus = statusMap[payload.status] ?? null
-    if (!signRequestId || !mappedStatus) {
-      return new Response(JSON.stringify({ ignored: true }), { headers: { 'content-type': 'application/json' } })
-    }
+    const raw = await req.text()
+    console.log('signrequest event', raw.slice(0, 800))
+    const found = [...new Set(raw.match(UUID) ?? [])]
+    // deno-lint-ignore no-explicit-any
+    let payload: any = {}
+    try { payload = JSON.parse(raw) } catch { /* ignore */ }
+    const external = payload?.document?.external_id ?? payload?.event_payload?.document?.external_id
 
-    const patch: Record<string, unknown> = { status: mappedStatus }
-    if (mappedStatus === 'signed') {
+    let q = db.from('signature_requests').select('*').in('sign_request_id', found.length ? found : ['none'])
+    let { data: rows } = await q
+    if ((!rows || rows.length === 0) && external) rows = (await db.from('signature_requests').select('*').eq('id', external)).data
+    const row = rows?.[0]
+    if (!row) return ok({ ignored: true })
+
+    // Ask SignRequest for the truth.
+    const r = await fetch(`https://signrequest.com/api/v1/documents/${row.sign_request_id}/`, { headers: { Authorization: `Token ${key}` } })
+    if (!r.ok) throw new Error(`SignRequest document lookup failed: ${r.status}`)
+    const doc = await r.json()
+    const status = STATUS[String(doc.status)] ?? null
+    if (!status || status === row.status) return ok({ unchanged: true })
+
+    const patch: Record<string, unknown> = { status }
+    if (status === 'signed') {
       patch.signed_at = new Date().toISOString()
-
-      // Download the signed PDF from SignRequest and store it in Supabase
-      // Storage so it lives alongside the case's other documents.
-      if (payload.document?.download_url) {
-        const fileRes = await fetch(payload.document.download_url, {
-          headers: { Authorization: `Token ${Deno.env.get('SIGNREQUEST_API_KEY')}` },
-        })
-        if (fileRes.ok) {
-          const bytes = new Uint8Array(await fileRes.arrayBuffer())
-          const path = `signed/${signRequestId}.pdf`
-          await supabase.storage.from('case-documents').upload(path, bytes, { contentType: 'application/pdf', upsert: true })
-          const { data: publicUrl } = supabase.storage.from('case-documents').getPublicUrl(path)
-          patch.signed_document_url = publicUrl.publicUrl
+      const pdfUrl: string | undefined = doc.pdf ?? doc.signing_log?.pdf
+      if (pdfUrl) {
+        let f = await fetch(pdfUrl, { headers: { Authorization: `Token ${key}` } })
+        if (!f.ok) f = await fetch(pdfUrl)
+        if (f.ok) {
+          const path = `signed/${row.case_id}/${row.sign_request_id}.pdf`
+          const up = await db.storage.from('case-documents').upload(path, new Uint8Array(await f.arrayBuffer()), { contentType: 'application/pdf', upsert: true })
+          if (!up.error) {
+            patch.signed_document_url = path
+            // Also file it with the case's other documents.
+            const exists = await db.from('case_documents').select('id').eq('case_id', row.case_id).eq('storage_path', path).maybeSingle()
+            if (!exists.data) await db.from('case_documents').insert({ case_id: row.case_id, name: `Signed — ${row.document_name}`, category: 'contract', storage_path: path, uploaded_by: row.sent_by, signed: true })
+          }
         }
       }
     }
+    await db.from('signature_requests').update(patch).eq('id', row.id)
 
-    const { error } = await supabase.from('signature_requests').update(patch).eq('sign_request_id', signRequestId)
-    if (error) throw error
-
-    if (mappedStatus === 'signed') {
-      const webhookUrl = (Deno.env.get('SLACK_WEBHOOK_URL') ?? '').trim()
-      if (webhookUrl) {
-        const { data: sig } = await supabase.from('signature_requests').select('document_name, signer_name').eq('sign_request_id', signRequestId).single()
-        fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: `✅ Signed: *${sig?.document_name ?? 'Document'}* by ${sig?.signer_name ?? 'signer'}` }),
-        }).catch((e) => console.error('Slack notify failed:', e))
-      }
+    if (status === 'signed') {
+      const hook = (Deno.env.get('SLACK_WEBHOOK_URL') ?? '').trim()
+      if (hook) fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: `✅ Signed: *${row.document_name}* by ${row.signer_name}` }) }).catch(() => {})
     }
-
-    return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+    return ok()
   } catch (err) {
     console.error(err)
     return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { 'content-type': 'application/json' } })

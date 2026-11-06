@@ -382,6 +382,8 @@ export function rowToSignatureRequest(row: any): SignatureRequest {
     sentAt: row.sent_at ?? undefined,
     signedAt: row.signed_at ?? undefined,
     signedDocumentUrl: row.signed_document_url ?? undefined,
+    mode: row.mode ?? 'email',
+    embedUrl: row.embed_url ?? undefined,
   }
 }
 

@@ -340,12 +340,13 @@ Dashboard → **Edge Functions** → **Manage secrets** (or **Settings** →
   just how the webhook function verifies a callback is really from
   SignRequest and not someone else hitting the URL
 
-### 4. Point SignRequest at the webhook
+### 4. The webhook (nothing to set up inside SignRequest)
 
-In SignRequest's team settings → Integrations/Webhooks, set the URL to:
-```
-https://kduvajnzussalxihgyfv.supabase.co/functions/v1/signrequest-webhook?secret=<the SIGNREQUEST_WEBHOOK_SECRET you just set>
-```
+Every request the OS sends already carries the address of `signrequest-webhook`
+(with the secret), so SignRequest reports back by itself. Just make sure
+`signrequest-webhook` is deployed with "Verify JWT" **off** and that
+`SIGNREQUEST_WEBHOOK_SECRET` is set. Also run `src/db/signatures.sql` once
+(adds the in-office signing columns).
 
 ### 5. Test it
 

@@ -1,3 +1,5 @@
+import { SignaturesCard } from '@/components/signatures/SignaturesCard'
+import { SignDialog } from '@/components/signatures/SignDialog'
 import { deriveServicePatch, deriveVitalEvents } from '@/lib/vitalToCase'
 import { CustodyTimeline } from '@/components/cases/CustodyTimeline'
 import { CaseEventsPanel } from '@/components/cases/CaseEventsPanel'
@@ -299,28 +301,7 @@ export default function CaseDetail() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case', caseId] }),
   })
 
-  const sendForSignatureMutation = useMutation({
-    mutationFn: async (documentName: string) => {
-      const contact = c?.contacts[0]
-      let pdfBlob: Blob | undefined
-      if (formPreviewRef.current) {
-        const { pdfFromElement } = await import('@/lib/pdfGenerator')
-        pdfBlob = await pdfFromElement(formPreviewRef.current)
-      }
-      return api.createSignatureRequest({
-        caseId: caseId!, documentName,
-        signerName: contact?.name ?? 'Family Contact',
-        signerEmail: contact?.email ?? '',
-        sentBy: currentUser!.id,
-      }, currentUser!, pdfBlob)
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signature-requests', caseId] }),
-  })
-
-  const simulateSignedMutation = useMutation({
-    mutationFn: (requestId: string) => api.simulateSignatureComplete(requestId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signature-requests', caseId] }),
-  })
+  const [signing, setSigning] = useState<string | null>(null)
 
   if (!c) return <div className="text-slate-400 text-sm">Loading case…</div>
 
@@ -1129,45 +1110,12 @@ export default function CaseDetail() {
                 <span className="text-xs text-slate-400">Stored in-session only until Supabase Storage is connected</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                To send a form for signature, open it from the Print center above — "Send for Signature" appears in the preview.
+                To send a form for signature, open it from the Print center above — "Send for Signature" appears in the preview. Signed copies are filed here automatically.
               </p>
             </Card>
           )}
 
-          {signatureRequests.length > 0 && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium text-slate-800 mb-3">Signature Requests</h3>
-              <div className="space-y-2">
-                {signatureRequests.map((sig) => (
-                  <div key={sig.id} className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-slate-50 text-sm">
-                    <FileSignature size={15} className="text-slate-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-slate-800">{sig.documentName}</div>
-                      <div className="text-xs text-slate-400">
-                        To {sig.signerName}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, HH:mm')}`}
-                        {sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, HH:mm')}`}
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                      sig.status === 'signed' ? 'bg-emerald-100 text-emerald-800'
-                        : sig.status === 'declined' || sig.status === 'expired' ? 'bg-red-100 text-red-700'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {sig.status}
-                    </span>
-                    {canEdit && sig.status === 'sent' && (
-                      <button
-                        onClick={() => simulateSignedMutation.mutate(sig.id)}
-                        className="text-xs font-medium text-slate-500 border border-slate-200 rounded-md px-2 py-1 hover:bg-slate-50"
-                      >
-                        Simulate Signed (demo)
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
+          <SignaturesCard caseObj={c} canEdit={canEdit} currentUser={currentUser!} />
 
           <Card className="p-5">
             {documents.length === 0 ? (
@@ -1251,28 +1199,17 @@ export default function CaseDetail() {
               )}
               {canEdit && (
                 <button
-                  onClick={() => sendForSignatureMutation.mutate(templateLabels[previewTemplate])}
-                  disabled={sendForSignatureMutation.isPending || !c.contacts[0]?.email}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 disabled:opacity-40"
-                  title={!c.contacts[0]?.email ? 'Add an email to the primary contact first' : undefined}
+                  onClick={() => setSigning(templateLabels[previewTemplate])}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5"
                 >
-                  <FileSignature size={15} /> {sendForSignatureMutation.isPending ? 'Sending…' : 'Send for Signature'}
+                  <FileSignature size={15} /> Send for Signature
                 </button>
               )}
             </div>
           </div>
-          {!c.contacts[0]?.email && (
-            <p className="no-print text-xs text-amber-600 mb-3 text-right">Add an email address to the primary contact before sending for signature.</p>
-          )}
-          {sendForSignatureMutation.isError && (
-            <div className="no-print text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-              Couldn't send for signature: {getErrorMessage(sendForSignatureMutation.error)}
-            </div>
-          )}
-          {sendForSignatureMutation.isSuccess && (
-            <div className="no-print text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 mb-3">
-              Sent successfully — check the Signature Requests list below the Documents tab.
-            </div>
+          {signing && currentUser && (
+            <SignDialog caseObj={c} documentName={signing} currentUser={currentUser} onClose={() => setSigning(null)}
+              getPdf={async () => { const { pdfFromElement } = await import('@/lib/pdfGenerator'); if (!formPreviewRef.current) throw new Error('Open the form first.'); return pdfFromElement(formPreviewRef.current) }} />
           )}
           <div className="print-target doc-fit" ref={formPreviewRef}>
             <Card className="p-8 max-w-2xl">

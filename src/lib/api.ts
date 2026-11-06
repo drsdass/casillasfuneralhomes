@@ -1648,6 +1648,12 @@ export const api = {
     return rowToSignatureRequest(data)
   },
 
+  /** A short-lived link to open the signed copy (or any saved signature file). Older rows hold a full web address already. */
+  async getSignedCopyUrl(pathOrUrl: string): Promise<string> {
+    if (/^https?:/i.test(pathOrUrl)) return pathOrUrl
+    return this.getDocumentSignedUrl(pathOrUrl)
+  },
+
   /** Mock-only helper for demoing the flow without a real SignRequest webhook. */
   async simulateSignatureComplete(requestId: string): Promise<SignatureRequest[]> {
     if (USE_MOCK) return delay(mockStore.simulateSignatureComplete(requestId))

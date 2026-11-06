@@ -659,7 +659,9 @@ export interface SignatureRequest {
   sentBy: string
   sentAt?: string
   signedAt?: string
-  signedDocumentUrl?: string // populated once signed, downloaded from SignRequest and stored
+  signedDocumentUrl?: string // populated once signed: the storage path of the signed copy (older rows may hold a full web address)
+  mode?: 'email' | 'inperson' // emailed link, or signed on a tablet in the office
+  embedUrl?: string // the in-office signing page
 }
 
 // ---------------------------------------------------------------------------
