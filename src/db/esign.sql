@@ -11,5 +11,6 @@ alter table signature_requests add column if not exists signer_agent text;
 alter table signature_requests add column if not exists document_sha256 text;                        -- fingerprint of the PDF that was shown
 alter table signature_requests add column if not exists embed_url text;
 alter table signature_requests add column if not exists external_ref text;
+alter table signature_requests add column if not exists fields jsonb;                               -- boxes placed on the document: signature, initials, date, name, text, checkbox
 create unique index if not exists signature_requests_token_idx on signature_requests (token) where token is not null;
 notify pgrst, 'reload schema';

@@ -1662,17 +1662,17 @@ export const api = {
 
   /** The signing page a family member sees — no login; the secret in their link is the key. */
   esignPublic: {
-    async get(token: string): Promise<{ documentName: string; signerName: string; status: string; orgName: string; pdfUrl?: string; signedUrl?: string; signedAt?: string }> {
+    async get(token: string): Promise<{ documentName: string; signerName: string; status: string; orgName: string; pdfUrl?: string; signedUrl?: string; signedAt?: string; fields?: import('./esignFields').SignField[] }> {
       if (USE_MOCK) {
         const r = mockStore.getSignatureRequests().find((x) => x.token === token)
         if (!r) throw new Error('This signing link is not valid.')
-        return { documentName: r.documentName, signerName: r.signerName, status: r.status === 'sent' ? 'viewed' : r.status, orgName: 'Casillas Funeral Home', signedAt: r.signedAt }
+        return { documentName: r.documentName, signerName: r.signerName, status: r.status === 'sent' ? 'viewed' : r.status, orgName: 'Casillas Funeral Home', signedAt: r.signedAt, fields: r.fields }
       }
       return esignCall({ action: 'get', token })
     },
-    async sign(token: string, name: string, signature: string): Promise<{ signedUrl?: string }> {
+    async sign(token: string, name: string, signature: string | null, values?: Record<string, string>): Promise<{ signedUrl?: string }> {
       if (USE_MOCK) { const r = mockStore.getSignatureRequests().find((x) => x.token === token); if (r) mockStore.simulateSignatureComplete(r.id); return {} }
-      return esignCall({ action: 'sign', token, name, signature, consent: true })
+      return esignCall({ action: 'sign', token, name, signature, values, consent: true })
     },
     async decline(token: string): Promise<void> {
       if (USE_MOCK) return

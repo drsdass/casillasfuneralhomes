@@ -664,6 +664,7 @@ export interface SignatureRequest {
   embedUrl?: string // older SignRequest rows only
   token?: string // the secret in the signing link
   expiresAt?: string
+  fields?: import('@/lib/esignFields').SignField[] // the boxes staff placed for the signer to fill in
 }
 
 // ---------------------------------------------------------------------------

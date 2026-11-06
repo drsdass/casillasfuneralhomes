@@ -1,8 +1,9 @@
 // supabase/functions/esign/index.ts
 //
 // The electronic-signature service built into Casillas OS. One function, two audiences:
-//   staff (logged in):   { action: 'create', caseId, documentName, documentStoragePath, signerName, signerEmail, mode }
-//   the signer (public): { action: 'get', token } · { action: 'sign', token, name, signature, consent } · { action: 'decline', token }
+//   staff (logged in):   { action: 'create', caseId, documentName, documentStoragePath, signerName, signerEmail, mode, fields? }
+//                         fields = boxes placed on the pages: signature, initials, date, name, text, checkbox
+//   the signer (public): { action: 'get', token } · { action: 'sign', token, name, signature?, values?, consent } · { action: 'decline', token }
 //
 // The signer never needs a login: the long secret token in their link is what lets them in, for 14 days, for one document.
 // When they sign, a signature page (their drawn signature, typed name, date and time, network address, device and a fingerprint
@@ -32,6 +33,21 @@ function newToken(): string {
   const b = crypto.getRandomValues(new Uint8Array(24))
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
+const FIELD_TYPES = ['signature', 'initials', 'date', 'name', 'text', 'checkbox']
+// deno-lint-ignore no-explicit-any
+function cleanFields(raw: any, pageCount: number) {
+  if (!Array.isArray(raw)) return []
+  const num = (v: unknown) => Math.min(1, Math.max(0, Number(v) || 0))
+  return raw.slice(0, 120).filter((f) => f && FIELD_TYPES.includes(f.type) && Number.isInteger(f.page) && f.page >= 0 && f.page < pageCount).map((f) => ({
+    id: String(f.id ?? '').slice(0, 20) || crypto.randomUUID().slice(0, 8), type: f.type, page: f.page, x: num(f.x), y: num(f.y), w: Math.max(0.01, num(f.w)), h: Math.max(0.01, num(f.h)),
+    label: typeof f.label === 'string' ? f.label.slice(0, 80) : undefined, required: f.required !== false && f.type !== 'checkbox',
+  }))
+}
+const pngBytes = (v: unknown): Uint8Array | null => {
+  const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(v ?? ''))
+  return m && m[1].length <= 600_000 ? Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0)) : null
+}
+const winAnsi = (t: string) => t.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
 const pacific = (d: Date) => d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'long', timeStyle: 'long' })
 
 Deno.serve(async (req) => {
@@ -53,11 +69,12 @@ Deno.serve(async (req) => {
       const { data: file, error: dlErr } = await db.storage.from(BUCKET).download(path)
       if (dlErr || !file) return reply({ error: `Could not read the document: ${dlErr?.message ?? 'missing'}` }, 400)
       const bytes = new Uint8Array(await file.arrayBuffer())
-      try { await PDFDocument.load(bytes, { ignoreEncryption: true }) } catch { return reply({ error: 'That file is not a readable PDF.' }, 400) }
+      let pageCount = 0
+      try { pageCount = (await PDFDocument.load(bytes, { ignoreEncryption: true })).getPageCount() } catch { return reply({ error: 'That file is not a readable PDF.' }, 400) }
       const { data: row, error } = await db.from('signature_requests').insert({
         case_id: theCase.id, document_name: String(b.documentName ?? 'Document').slice(0, 150), status: 'sent', signer_name: String(b.signerName ?? '').trim() || 'Family Contact',
         signer_email: signerEmail, sent_by: u.user.id, sent_at: new Date().toISOString(), mode: b.mode === 'inperson' ? 'inperson' : 'email', document_path: path,
-        token: newToken(), expires_at: new Date(Date.now() + DAYS * 86400_000).toISOString(), document_sha256: await sha256(bytes),
+        token: newToken(), expires_at: new Date(Date.now() + DAYS * 86400_000).toISOString(), document_sha256: await sha256(bytes), fields: cleanFields(b.fields, pageCount),
       }).select().single()
       if (error) throw error
       return reply(row)
@@ -74,7 +91,7 @@ Deno.serve(async (req) => {
     if (expired && (row.status === 'sent' || row.status === 'viewed')) { await db.from('signature_requests').update({ status: 'expired' }).eq('id', row.id); row.status = 'expired' }
 
     if (b.action === 'get') {
-      const out: Record<string, unknown> = { documentName: row.document_name, signerName: row.signer_name, status: row.status, orgName, signedAt: row.signed_at }
+      const out: Record<string, unknown> = { documentName: row.document_name, signerName: row.signer_name, status: row.status, orgName, signedAt: row.signed_at, fields: row.fields ?? [] }
       if (row.status === 'sent' || row.status === 'viewed') {
         if (row.status === 'sent') await db.from('signature_requests').update({ status: 'viewed', viewed_at: new Date().toISOString() }).eq('id', row.id)
         out.pdfUrl = (await db.storage.from(BUCKET).createSignedUrl(row.document_path, 60 * 30)).data?.signedUrl
@@ -93,9 +110,22 @@ Deno.serve(async (req) => {
       const name = String(b.name ?? '').trim().slice(0, 100)
       if (name.length < 2) return reply({ error: 'Please type your full name.' }, 400)
       if (b.consent !== true) return reply({ error: 'Please tick the box to agree to sign electronically.' }, 400)
-      const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.signature ?? ''))
-      if (!m || m[1].length > 600_000) return reply({ error: 'Please draw your signature.' }, 400)
-      const sigBytes = Uint8Array.from(atob(m[1]), (c) => c.charCodeAt(0))
+      // deno-lint-ignore no-explicit-any
+      const fields: any[] = Array.isArray(row.fields) ? row.fields : []
+      const values: Record<string, string> = b.values && typeof b.values === 'object' ? b.values : {}
+      let certSig: Uint8Array | null
+      if (fields.length) {
+        for (const f of fields) {
+          if (!f.required) continue
+          if ((f.type === 'signature' || f.type === 'initials') && !pngBytes(values[f.id])) return reply({ error: 'Please fill in every highlighted box.' }, 400)
+          if (f.type === 'text' && !String(values[f.id] ?? '').trim()) return reply({ error: 'Please fill in every highlighted box.' }, 400)
+        }
+        const firstSig = fields.find((f) => f.type === 'signature' && pngBytes(values[f.id]))
+        certSig = pngBytes(firstSig ? values[firstSig.id] : b.signature)
+      } else {
+        certSig = pngBytes(b.signature)
+        if (!certSig) return reply({ error: 'Please draw your signature.' }, 400)
+      }
 
       const { data: file } = await db.storage.from(BUCKET).download(row.document_path)
       if (!file) throw new Error('The document could not be found.')
@@ -106,16 +136,41 @@ Deno.serve(async (req) => {
       const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown'
       const agent = (req.headers.get('user-agent') ?? '').slice(0, 200)
       const pdf = await PDFDocument.load(original, { ignoreEncryption: true })
-      const page = pdf.addPage([612, 792])
       const font = await pdf.embedFont(StandardFonts.Helvetica)
       const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
       const ink = rgb(0.1, 0.12, 0.15)
+
+      // Put what they filled in exactly where the staff placed the boxes.
+      const pages = pdf.getPages()
+      const dateStr = when.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', year: 'numeric' })
+      for (const f of fields) {
+        const pg = pages[f.page]
+        if (!pg) continue
+        const W = pg.getWidth(), H = pg.getHeight()
+        const bx = f.x * W, bw = f.w * W, bh = f.h * H, by = H - (f.y + f.h) * H
+        if (f.type === 'signature' || f.type === 'initials') {
+          const bytes = pngBytes(values[f.id])
+          if (!bytes) continue
+          const img = await pdf.embedPng(bytes)
+          const sc = Math.min(bw / img.width, bh / img.height)
+          pg.drawImage(img, { x: bx + (bw - img.width * sc) / 2, y: by + (bh - img.height * sc) / 2, width: img.width * sc, height: img.height * sc })
+          continue
+        }
+        const text = f.type === 'date' ? dateStr : f.type === 'name' ? name : f.type === 'text' ? String(values[f.id] ?? '').slice(0, 200) : f.type === 'checkbox' && values[f.id] ? 'X' : ''
+        if (!text) continue
+        const size = Math.max(7, Math.min(12, bh * 0.7))
+        pg.drawText(winAnsi(text), { x: bx + 2, y: by + bh / 2 - size * 0.35, size, font, color: ink })
+      }
+
+      const page = pdf.addPage([612, 792])
       page.drawText('Electronic Signature', { x: 54, y: 730, size: 22, font: bold, color: ink })
       page.drawText(`${orgName} — signed electronically`, { x: 54, y: 708, size: 11, font, color: rgb(0.35, 0.38, 0.42) })
-      const png = await pdf.embedPng(sigBytes)
-      let w = Math.min(300, png.width), h = (png.height * w) / png.width
-      if (h > 100) { w = (w * 100) / h; h = 100 }
-      page.drawImage(png, { x: 54, y: 630, width: w, height: h })
+      if (certSig) {
+        const png = await pdf.embedPng(certSig)
+        let w = Math.min(300, png.width), h = (png.height * w) / png.width
+        if (h > 100) { w = (w * 100) / h; h = 100 }
+        page.drawImage(png, { x: 54, y: 630, width: w, height: h })
+      }
       page.drawLine({ start: { x: 54, y: 628 }, end: { x: 400, y: 628 }, thickness: 0.8, color: ink })
       page.drawText(name, { x: 54, y: 612, size: 13, font: bold, color: ink })
       const lines: [string, string][] = [

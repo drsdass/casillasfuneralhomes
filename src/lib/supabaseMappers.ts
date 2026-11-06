@@ -386,6 +386,7 @@ export function rowToSignatureRequest(row: any): SignatureRequest {
     embedUrl: row.embed_url ?? undefined,
     token: row.token ?? undefined,
     expiresAt: row.expires_at ?? undefined,
+    fields: row.fields ?? undefined,
   }
 }
 

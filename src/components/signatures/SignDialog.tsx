@@ -1,37 +1,93 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, FileSignature, Mail, Tablet, Copy, Check } from 'lucide-react'
+import { X, FileSignature, Mail, Tablet, Copy, Check, ArrowLeft } from 'lucide-react'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
 import { api } from '@/lib/api'
+import { USE_MOCK } from '@/lib/supabase'
+import { FieldPlacer } from './FieldPlacer'
+import type { SignField } from '@/lib/esignFields'
 import type { FuneralCase, SignatureRequest, StaffMember } from '@/types'
 
 const inputCls = 'mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base bg-white'
 
-/** "Send for signature": who signs, and whether they get an email link or sign right here on a tablet. Used for forms, quotes and uploaded PDFs. */
+/**
+ * "Send for signature" in three steps: who signs -> where on the document they sign, initial and date -> the link.
+ * Used for forms, quotes, uploaded PDFs and several documents together.
+ */
 export function SignDialog({ caseObj: c, documentName, getPdf, currentUser, onClose }: { caseObj: FuneralCase; documentName: string; getPdf: () => Promise<Blob>; currentUser: StaffMember; onClose: () => void }) {
   const qc = useQueryClient()
   const first = c.contacts[0]
   const [name, setName] = useState(first?.name ?? '')
   const [email, setEmail] = useState(first?.email ?? '')
   const [mode, setMode] = useState<'email' | 'inperson'>('email')
+  const [step, setStep] = useState<'who' | 'place' | 'done'>('who')
+  const [blob, setBlob] = useState<Blob | null>(null)
+  const [url, setUrl] = useState('')
+  const [pages, setPages] = useState(0)
+  const [fields, setFields] = useState<SignField[]>([])
   const [sent, setSent] = useState<SignatureRequest | null>(null)
   const [emailing, setEmailing] = useState(false)
   const [copied, setCopied] = useState(false)
-  const send = useMutation({
-    mutationFn: async () => api.createSignatureRequest({ caseId: c.id, documentName, signerName: name.trim() || 'Family Contact', signerEmail: email.trim(), sentBy: currentUser.id, mode }, currentUser, await getPdf()),
-    onSuccess: (r) => { setSent(r); qc.invalidateQueries({ queryKey: ['signature-requests', c.id] }) },
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
+
+  const prepare = useMutation({
+    mutationFn: async () => { const b = await getPdf(); return b },
+    onSuccess: (b) => { setBlob(b); setUrl(URL.createObjectURL(b)); setStep('place') },
   })
-  const msg = send.error instanceof Error ? send.error.message : send.error ? String(send.error) : ''
+  const send = useMutation({
+    mutationFn: async () => api.createSignatureRequest({ caseId: c.id, documentName, signerName: name.trim() || 'Family Contact', signerEmail: email.trim(), sentBy: currentUser.id, mode, fields }, currentUser, blob!),
+    onSuccess: (r) => { setSent(r); setStep('done'); qc.invalidateQueries({ queryKey: ['signature-requests', c.id] }) },
+  })
+  const msg = (e: unknown) => (e instanceof Error ? e.message : e ? String(e) : '')
   const pick = (id: string) => { const p = c.contacts.find((x) => x.id === id); if (p) { setName(p.name); setEmail(p.email ?? '') } }
+  const wide = step === 'place'
+
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="no-print fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={onClose}>
+      <div className={`my-6 w-full rounded-2xl bg-white p-6 shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-md'}`} onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div><h2 className="text-lg font-semibold text-slate-900">Send for signature</h2><p className="text-sm text-slate-500">{documentName}</p></div>
+          <div><h2 className="text-lg font-semibold text-slate-900">{step === 'place' ? 'Where do they sign?' : 'Send for signature'}</h2><p className="text-sm text-slate-500">{documentName}</p></div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
         </div>
-        {sent ? (() => {
+
+        {step === 'who' && (
+          <>
+            {c.contacts.length > 1 && (
+              <label className="mb-3 block text-sm font-medium text-slate-700">Who signs
+                <select onChange={(e) => pick(e.target.value)} defaultValue={first?.id} className={inputCls}>{c.contacts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+              </label>
+            )}
+            <div className="mb-3 grid grid-cols-1 gap-3">
+              <label className="block text-sm font-medium text-slate-700">Name<input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></label>
+              <label className="block text-sm font-medium text-slate-700">Email <span className="font-normal text-slate-400">(they get the signed copy here)</span><input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" className={inputCls} /></label>
+            </div>
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setMode('email')} className={`rounded-md border p-3 text-left text-sm ${mode === 'email' ? 'border-[#3b4a35] bg-[#3b4a35]/10' : 'border-slate-300'}`}><Mail size={16} className="mb-1" /><b>Email a link</b><span className="block text-xs text-slate-500">They sign on their own phone</span></button>
+              <button type="button" onClick={() => setMode('inperson')} className={`rounded-md border p-3 text-left text-sm ${mode === 'inperson' ? 'border-[#3b4a35] bg-[#3b4a35]/10' : 'border-slate-300'}`}><Tablet size={16} className="mb-1" /><b>Sign here</b><span className="block text-xs text-slate-500">They sign on this device now</span></button>
+            </div>
+            {prepare.isError && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{msg(prepare.error)}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
+              <button type="button" disabled={prepare.isPending || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())} onClick={() => prepare.mutate()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><FileSignature size={15} /> {prepare.isPending ? 'Preparing the document…' : 'Next: choose where they sign'}</button>
+            </div>
+          </>
+        )}
+
+        {step === 'place' && (
+          <>
+            {url ? <FieldPlacer url={url} pages={pages} setPages={setPages} fields={fields} setFields={setFields} />
+              : USE_MOCK ? <p className="rounded-md border border-dashed border-slate-300 p-8 text-center text-slate-400">The document appears here.</p> : null}
+            <p className="mt-2 text-xs text-slate-500">{fields.length === 0 ? 'No boxes yet. If you add none, a signature page is added to the end of the document for them.' : `${fields.length} box${fields.length === 1 ? '' : 'es'} placed. They fill each in, one by one.`}</p>
+            {send.isError && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{msg(send.error)}</p>}
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button type="button" onClick={() => setStep('who')} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={14} /> Back</button>
+              <button type="button" disabled={send.isPending} onClick={() => send.mutate()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><FileSignature size={15} /> {send.isPending ? 'Creating…' : 'Create the signing link'}</button>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && sent && (() => {
           const link = `${window.location.origin}/sign/${sent.token}`
           return (
             <div className="space-y-3">
@@ -51,28 +107,7 @@ export function SignDialog({ caseObj: c, documentName, getPdf, currentUser, onCl
               )}
             </div>
           )
-        })() : (
-          <>
-            {c.contacts.length > 1 && (
-              <label className="mb-3 block text-sm font-medium text-slate-700">Who signs
-                <select onChange={(e) => pick(e.target.value)} defaultValue={first?.id} className={inputCls}>{c.contacts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-              </label>
-            )}
-            <div className="mb-3 grid grid-cols-1 gap-3">
-              <label className="block text-sm font-medium text-slate-700">Name<input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></label>
-              <label className="block text-sm font-medium text-slate-700">Email <span className="font-normal text-slate-400">(they get the signed copy here)</span><input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" className={inputCls} /></label>
-            </div>
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setMode('email')} className={`rounded-md border p-3 text-left text-sm ${mode === 'email' ? 'border-[#3b4a35] bg-[#3b4a35]/10' : 'border-slate-300'}`}><Mail size={16} className="mb-1" /><b>Email a link</b><span className="block text-xs text-slate-500">They sign on their own phone</span></button>
-              <button type="button" onClick={() => setMode('inperson')} className={`rounded-md border p-3 text-left text-sm ${mode === 'inperson' ? 'border-[#3b4a35] bg-[#3b4a35]/10' : 'border-slate-300'}`}><Tablet size={16} className="mb-1" /><b>Sign here</b><span className="block text-xs text-slate-500">They sign on this device now</span></button>
-            </div>
-            {msg && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{msg}</p>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
-              <button type="button" disabled={send.isPending || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())} onClick={() => send.mutate()} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><FileSignature size={15} /> {send.isPending ? 'Preparing…' : 'Continue'}</button>
-            </div>
-          </>
-        )}
+        })()}
       </div>
     </div>
   )
