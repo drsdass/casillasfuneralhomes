@@ -18,7 +18,25 @@ export async function pdfFromElements(els: HTMLElement[]): Promise<Blob> {
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
   for (let i = 0; i < els.length; i++) {
-    const canvas = await html2canvas(els[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+    const canvas = await html2canvas(els[i], {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      // html2canvas clips the text inside <input> boxes (the bottoms of letters get cut off).
+      // In the captured copy only, swap each box for plain text so nothing is clipped.
+      onclone: (doc) => {
+        doc.querySelectorAll('input, textarea').forEach((node) => {
+          const el = node as HTMLInputElement | HTMLTextAreaElement
+          if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) return
+          const cs = doc.defaultView!.getComputedStyle(el)
+          const span = doc.createElement('div')
+          span.textContent = el.value || ''
+          span.className = el.className
+          span.style.cssText += `;display:block;box-sizing:border-box;height:auto;min-height:${Math.max(el.offsetHeight, 24)}px;line-height:1.4;padding-top:2px;padding-bottom:3px;white-space:pre-wrap;overflow:visible;font:${cs.font};color:${cs.color};background:transparent;`
+          el.parentNode?.replaceChild(span, el)
+        })
+      },
+    })
     const imgData = canvas.toDataURL('image/png')
     const imgWidth = pageWidth
     const imgHeight = (canvas.height * imgWidth) / canvas.width
