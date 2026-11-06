@@ -16,6 +16,7 @@ interface ActivityPanelProps {
   entityId?: string
   title?: string
   limit?: number
+  sticky?: boolean
 }
 
 /**
@@ -25,7 +26,7 @@ interface ActivityPanelProps {
  * unfiltered Audit Log (Admin tab) stays Admin+ only, same as before;
  * this panel just links there for anyone who can see it.
  */
-export function ActivityPanel({ caseId, entityType, entityId, title = 'Activity', limit = 8 }: ActivityPanelProps) {
+export function ActivityPanel({ caseId, entityType, entityId, title = 'Activity', limit = 8, sticky = true }: ActivityPanelProps) {
   const { currentUser } = useSession()
   const canSeeFullLog = currentUser ? canViewAuditLog(currentUser.role) : false
   const canSeePanel = currentUser ? canEditCases(currentUser.role) : false
@@ -41,7 +42,7 @@ export function ActivityPanel({ caseId, entityType, entityId, title = 'Activity'
   const filtered = (entityId ? entries.filter((e) => e.entityId === entityId) : entries).slice(0, limit)
 
   return (
-    <Card className="p-4 sticky top-6">
+    <Card className={`p-4 ${sticky ? 'sticky top-6' : ''}`}>
       <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
         <History size={13} /> {title}
       </div>

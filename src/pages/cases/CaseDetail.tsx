@@ -302,6 +302,7 @@ export default function CaseDetail() {
   })
 
   const [signing, setSigning] = useState<string | null>(null)
+  const [signingDoc, setSigningDoc] = useState<CaseDocument | null>(null)
 
   if (!c) return <div className="text-slate-400 text-sm">Loading case…</div>
 
@@ -1116,6 +1117,10 @@ export default function CaseDetail() {
           )}
 
           <SignaturesCard caseObj={c} canEdit={canEdit} currentUser={currentUser!} />
+          {signingDoc && currentUser && (
+            <SignDialog caseObj={c} documentName={signingDoc.name.replace(/\.pdf$/i, '')} currentUser={currentUser} onClose={() => setSigningDoc(null)}
+              getPdf={async () => { const r = await fetch(await api.getDocumentSignedUrl(signingDoc.url)); if (!r.ok) throw new Error('Could not open that file.'); return r.blob() }} />
+          )}
 
           <Card className="p-5">
             {documents.length === 0 ? (
@@ -1139,6 +1144,9 @@ export default function CaseDetail() {
                       >
                         View
                       </button>
+                    )}
+                    {canEdit && d.url && /\.pdf$/i.test(d.url) && (
+                      <button onClick={() => setSigningDoc(d)} title="Send for signature" className="text-slate-400 hover:text-[#3b4a35] p-1"><FileSignature size={14} /></button>
                     )}
                     {canEdit && vendors.length > 0 && (
                       <button

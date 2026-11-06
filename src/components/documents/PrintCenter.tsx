@@ -1,14 +1,16 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { Printer, FileText, Receipt, Route, ClipboardList, ScrollText, FilePlus2, BookOpen, Wallet, X } from 'lucide-react'
+import { Printer, FileText, Receipt, Route, ClipboardList, ScrollText, FilePlus2, BookOpen, Wallet, X, FileSignature } from 'lucide-react'
 import { api } from '@/lib/api'
 import { quotes, quoteLabel, money } from '@/lib/quotes'
 import { CaseInvoiceForms, lockInvoiceRep } from '@/components/quote/StatementForms'
 import { QuoteView } from '@/components/quote/QuoteView'
 import { CustodyRecord } from '@/components/cases/CustodyTimeline'
 import { CaseSummarySheet } from './CaseSummarySheet'
+import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm } from './FormTemplates'
+import { SignDialog } from '@/components/signatures/SignDialog'
 import { ServiceProgram, PaymentReceipt, type ProgramText } from './ProgramAndReceipt'
 import type { FuneralCase, StaffMember } from '@/types'
 
@@ -44,6 +46,10 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
   const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: () => api.getContracts() })
   const { data: family } = useQuery({ queryKey: ['family-activity', c.id], queryFn: () => api.getFamilyActivity(c.id) })
   const [progOpen, setProgOpen] = useState(false)
+  const [pickOpen, setPickOpen] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
+  const [signItems, setSignItems] = useState<{ id: string; label: string; node: ReactNode }[] | null>(null)
+  const capRef = useRef<HTMLDivElement>(null)
   const [prog, setProg] = useState<ProgramText>({ obituary: '', officiant: '', music: '', pallbearers: '', interment: '', closing: 'Thank you for celebrating the life of our loved one.' })
   useEffect(() => { if (family?.obituary?.body) setProg((p) => (p.obituary ? p : { ...p, obituary: family.obituary!.body })) }, [family])
   const contract = contracts.find((k) => k.caseId === c.id)
@@ -70,6 +76,21 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
   else if (job?.kind === 'contract') doc = <CaseInvoiceForms caseObj={c} fallback={null} />
   else if (job?.kind === 'quote') { const q = list.find((x) => x.id === job.id); if (q) doc = <QuoteView quote={q} label={quoteLabel(c, q)} caseObj={c} location={location} /> }
 
+  // Everything that can be sent for signature — one document or several together, as one signing link and one signed PDF.
+  const signables: { id: string; label: string; group: string; node: ReactNode }[] = [
+    ...(hasContract ? [{ id: 'contract', label: 'Statement of Funeral Goods & Services', group: 'Contract & prices', node: <CaseInvoiceForms caseObj={c} fallback={null} /> }] : []),
+    ...list.filter((q) => q.status !== 'void').map((q) => ({ id: `quote-${q.id}`, label: `Quote ${quoteLabel(c, q)}${q.name ? ` — ${q.name}` : ''}`, group: 'Contract & prices', node: <QuoteView quote={q} label={quoteLabel(c, q)} caseObj={c} location={location} /> })),
+    { id: 'release', label: 'Authorization for Release of Human Remains', group: 'Forms & authorizations', node: <ReleaseAuthorizationForm c={c} /> },
+    { id: 'embalming', label: 'Authorization to Accept or Decline Embalming', group: 'Forms & authorizations', node: <EmbalmingAuthorizationForm c={c} /> },
+    { id: 'preneed', label: 'Disclosure of Preneed Funeral Agreement', group: 'Forms & authorizations', node: <PreneedDisclosureForm c={c} locationLicense={location?.licenseNumber ?? ''} /> },
+    { id: 'first_call', label: 'First Call Sheet', group: 'Records', node: <FirstCallForm c={c} /> },
+    { id: 'receipt', label: 'Payment receipt', group: 'Records', node: <PaymentReceipt c={c} contract={contract} payments={payments} location={location} preparedBy={currentUser.name} /> },
+    { id: 'custody', label: 'Chain of Custody record', group: 'Records', node: <CustodyRecord c={c} log={log} location={location} preparedBy={currentUser.name} /> },
+    { id: 'summary', label: 'Case summary sheet', group: 'Records', node: <CaseSummarySheet c={c} location={location} events={events.filter((e) => e.caseId === c.id)} orders={orders} staff={staff} preparedBy={currentUser.name} /> },
+  ]
+  const groups = [...new Set(signables.map((x) => x.group))]
+  const signName = (items: { label: string }[]) => (items.length === 1 ? items[0].label : `${items.length} documents: ${items.map((i) => i.label).join(', ')}`.slice(0, 140))
+
   const tile = 'flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-[#3b4a35]/50 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white transition'
   const Tile = ({ icon, title, note, onClick, disabled, action = 'Print' }: { icon: ReactNode; title: string; note: string; onClick: () => void; disabled?: boolean; action?: string }) => (
     <button type="button" onClick={onClick} disabled={disabled} className={tile}>
@@ -87,6 +108,7 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
       <div>
         <h3 className="text-sm font-semibold text-slate-800">Print center</h3>
         <p className="text-xs text-slate-500">Every printable document for this case in one place. Each one is built from what is on the case right now.</p>
+        {canEdit && <button type="button" onClick={() => setPickOpen(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[#3b4a35]/40 bg-[#3b4a35]/5 px-3 py-2 text-sm font-semibold text-[#3b4a35] hover:bg-[#3b4a35]/10"><FileSignature size={15} /> Send documents for signature</button>}
       </div>
 
       <div>
@@ -126,6 +148,41 @@ export function PrintCenter({ caseObj: c, canEdit, currentUser, onOpenForm, onGo
             {FORMS.map((f) => <Tile key={f.key} icon={<FilePlus2 size={16} />} title={f.title} note={f.note} onClick={() => onOpenForm(f.key)} action="Open" />)}
           </div>
         </div>
+      )}
+
+      {pickOpen && (
+        <div className="no-print fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6" onClick={() => setPickOpen(false)}>
+          <div className="my-4 w-full max-w-xl rounded-xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between"><h3 className="font-semibold text-slate-800">Send for signature</h3><button type="button" aria-label="Close" onClick={() => setPickOpen(false)} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100"><X size={18} /></button></div>
+            <p className="mb-3 text-xs text-slate-500">Tick one or more. Everything you tick goes in one signing link: the family reads each document, signs once, and gets one signed PDF.</p>
+            {groups.map((g) => (
+              <div key={g} className="mb-3">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{g}</div>
+                {signables.filter((x) => x.group === g).map((x) => (
+                  <label key={x.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-800 hover:bg-slate-50">
+                    <input type="checkbox" checked={picked.includes(x.id)} onChange={() => setPicked((p) => (p.includes(x.id) ? p.filter((i) => i !== x.id) : [...p, x.id]))} style={{ width: 17, height: 17, accentColor: '#3d5a80' }} /> {x.label}
+                  </label>
+                ))}
+              </div>
+            ))}
+            {!hasContract && <p className="mb-3 text-xs text-slate-400">The Statement of Funeral Goods &amp; Services appears here once it's built on the Orders tab.</p>}
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setPickOpen(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700">Cancel</button>
+              <button type="button" disabled={picked.length === 0} onClick={() => { setSignItems(signables.filter((x) => picked.includes(x.id))); setPickOpen(false) }} className="rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Continue with {picked.length || ''} {picked.length === 1 ? 'document' : 'documents'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {signItems && (
+        <>
+          {/* Drawn off-screen so each document can be turned into the PDF that is sent. */}
+          <div ref={capRef} aria-hidden style={{ position: 'fixed', left: -10000, top: 0, width: 816 }}>
+            {signItems.map((x) => <div key={x.id} data-sign-item className="bg-white p-6">{x.node}</div>)}
+          </div>
+          <SignDialog caseObj={c} documentName={signName(signItems)} currentUser={currentUser} onClose={() => { setSignItems(null); setPicked([]) }}
+            getPdf={async () => { await new Promise((r) => setTimeout(r, 1200)); const { pdfFromElements } = await import('@/lib/pdfGenerator'); const els = [...(capRef.current?.querySelectorAll<HTMLElement>('[data-sign-item]') ?? [])]; if (!els.length) throw new Error('Could not prepare the documents.'); return pdfFromElements(els) }} />
+        </>
       )}
 
       {progOpen && (

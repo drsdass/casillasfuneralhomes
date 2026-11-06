@@ -250,14 +250,14 @@ export default function CalendarPage() {
         </div>
 
         {canEdit && (
-          <div className="space-y-5">
+          <div className="space-y-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
             {canDragAssign && (
               <StaffPanel
                 staff={allStaff} timeOff={timeOff} anchor={anchor}
                 draggedStaffId={draggedStaffId} onDragStart={setDraggedStaffId} onDragEnd={() => setDraggedStaffId(null)}
               />
             )}
-            <ActivityPanel entityType="event" title="Calendar Activity" />
+            <ActivityPanel entityType="event" title="Calendar Activity" sticky={false} />
           </div>
         )}
       </div>
@@ -438,7 +438,7 @@ function StaffPanel({
   }
 
   return (
-    <Card className="p-3 sticky top-6">
+    <Card className="p-3">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-1 mb-2">Staff</div>
       <div className="space-y-1">
         {staff.filter((s) => s.active).map((s) => {
