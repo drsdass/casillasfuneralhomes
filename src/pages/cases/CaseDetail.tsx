@@ -116,6 +116,10 @@ export default function CaseDetail() {
     mutationFn: (boardDisp: string) => api.updateCase(caseId!, { boardDisp }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
   })
+  const setBoardPlaceMutation = useMutation({
+    mutationFn: (boardPlace: string) => api.updateCase(caseId!, { boardPlace }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
+  })
   const setBoardExtraMutation = useMutation({
     mutationFn: (patch: { boardFlowers?: string; boardBirds?: string; boardEscort?: string }) => api.updateCase(caseId!, patch, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
@@ -372,6 +376,16 @@ export default function CaseDetail() {
               <select value={c.boardDisp ?? ''} onChange={(e) => setBoardDispMutation.mutate(e.target.value)} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
                 <option value="">— not set —</option>
                 {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+          )}
+          {canEdit && (
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+              Position (TV Board)
+              <select value={c.boardPlace ?? ''} onChange={(e) => setBoardPlaceMutation.mutate(e.target.value)} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                <option value="">Automatic</option>
+                <option value="bottom">Move to bottom (services done, waiting on items)</option>
+                <option value="top">Keep at top</option>
               </select>
             </label>
           )}

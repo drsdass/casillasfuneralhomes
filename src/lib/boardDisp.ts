@@ -30,7 +30,7 @@ export function boardOrder<T extends { visits: { start: string }[]; services: { 
 }
 
 type Ev = { start: string; end: string; staff: string[]; label?: string; place?: string }
-interface EvRow { visits: Ev[]; services: Ev[]; visitationDate?: string; visitationEnd?: string; visitationLocation?: string; serviceDate?: string; serviceLocation?: string }
+interface EvRow { boardDisp?: string; boardPlace?: string; visits: Ev[]; services: Ev[]; visitationDate?: string; visitationEnd?: string; visitationLocation?: string; serviceDate?: string; serviceLocation?: string }
 
 /** The visitations and services to show: the calendar events when there are any, otherwise the date saved on the case itself. */
 export function boardEventsOf(r: EvRow): { visits: Ev[]; services: Ev[] } {
@@ -45,6 +45,9 @@ export function boardEventsOf(r: EvRow): { visits: Ev[]; services: Ev[] } {
  * and cases whose services are all over but which are still open — waiting on cremation, shipping, burial, ashes ...
  * The second group is shown at the bottom, longest-waiting first.
  */
+/** DISP codes where there is normally no service here, so a finished visitation means the case is just waiting on shipping. */
+export const NO_SERVICE_DISPS = ['SHIP-OUT', 'CR/SHIP-OUT']
+
 export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], now: Date): { current: T[]; waiting: T[]; doneAt: Map<T, string> } {
   const current: T[] = [], waiting: T[] = []
   const doneAt = new Map<T, string>()
@@ -52,10 +55,16 @@ export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], no
     const { visits, services } = boardEventsOf(r)
     const all = [...visits, ...services]
     const lastEnd = all.map((e) => (new Date(e.end) > new Date(e.start) ? e.end : e.start)).sort().pop()
-    // "done" = something happened (a service, or at least a visitation) and nothing is still ahead
-    if (all.length > 0 && lastEnd && new Date(lastEnd) <= now) { waiting.push(r); doneAt.set(r, lastEnd) } else current.push(r)
+    const allOver = all.length > 0 && !!lastEnd && new Date(lastEnd) <= now
+    // Staff can pin a case: 'bottom' always waits, 'top' always stays in the main list.
+    // Otherwise: done = a service happened and nothing is ahead, or (no service on the case) the visitation is over
+    // and the DISP says the body is being shipped, so no service is coming.
+    let done = allOver && (services.length > 0 || NO_SERVICE_DISPS.includes(r.boardDisp ?? ''))
+    if (r.boardPlace === 'bottom') done = true
+    else if (r.boardPlace === 'top') done = false
+    if (done) { waiting.push(r); doneAt.set(r, lastEnd ?? now.toISOString()) } else current.push(r)
   }
-  waiting.sort((a, b) => (doneAt.get(a) as string).localeCompare(doneAt.get(b) as string))
+  waiting.sort((a, b) => (doneAt.get(a) as string).localeCompare(doneAt.get(b) as string) || a.lastName.localeCompare(b.lastName))
   return { current: boardOrder(current), waiting, doneAt }
 }
 

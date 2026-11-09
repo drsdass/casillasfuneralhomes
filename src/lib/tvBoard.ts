@@ -6,7 +6,7 @@ export type OrderState = 'confirmed' | 'ordered' | 'pending' | 'delivered' | nul
 export interface BoardEvent { start: string; end: string; staff: string[]; label?: string; place?: string }
 export interface BoardRowData {
   id: string; locationId: string; caseNumber: string; firstName: string; lastName: string; color?: string
-  disposition: string; visitationLocation?: string; serviceLocation?: string; boardDisp?: string; boardFlowers?: string; boardBirds?: string; boardEscort?: string; serviceDate?: string; visitationDate?: string; visitationEnd?: string
+  disposition: string; visitationLocation?: string; serviceLocation?: string; boardDisp?: string; boardPlace?: string; boardFlowers?: string; boardBirds?: string; boardEscort?: string; serviceDate?: string; visitationDate?: string; visitationEnd?: string
   /** Every visitation and every service on the case, soonest first. */
   visits: BoardEvent[]; services: BoardEvent[]
   flowers: OrderState; birds: OrderState; escort: OrderState
@@ -33,7 +33,7 @@ export async function loadBoardData(): Promise<BoardData> {
     const casketLines = contracts.filter((k) => k.caseId === c.id).flatMap((k) => k.lineItems.map((li) => li.name))
     return {
       id: c.id, locationId: c.locationId, caseNumber: c.caseNumber, firstName: c.decedent.firstName, lastName: c.decedent.lastName, color: c.color,
-      disposition: c.disposition, boardDisp: c.boardDisp, boardFlowers: c.boardFlowers, boardBirds: c.boardBirds, boardEscort: c.boardEscort, serviceDate: c.serviceDate, serviceLocation: c.serviceLocation, visitationLocation: c.visitationLocation, visitationDate: c.visitationDate, visitationEnd: c.visitationEnd, visits: evs('visitation'), services: evs('service'),
+      disposition: c.disposition, boardDisp: c.boardDisp, boardPlace: c.boardPlace, boardFlowers: c.boardFlowers, boardBirds: c.boardBirds, boardEscort: c.boardEscort, serviceDate: c.serviceDate, serviceLocation: c.serviceLocation, visitationLocation: c.visitationLocation, visitationDate: c.visitationDate, visitationEnd: c.visitationEnd, visits: evs('visitation'), services: evs('service'),
       custodyStage: c.custodyStage,
       flowers: st(/flower/i), birds: st(/dove|bird/i), escort: st(/escort|carriage/i), casketLines,
       specials: notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((n) => n.body),

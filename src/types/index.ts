@@ -350,6 +350,7 @@ export interface FuneralCase {
   serviceDate?: string
   serviceLocation?: string
   boardFlowers?: string; boardBirds?: string; boardEscort?: string // 'no' | 'yes' | 'confirmed' on the TV Board; blank = worked out from the Orders
+  boardPlace?: string // 'bottom' = pinned to the waiting section, 'top' = pinned to the main list, empty = automatic
   boardDisp?: string // DISP code shown on the TV Board (CVC, DMP, RNC, SHIP-OUT, ...)
   color?: string // whiteboard color coding
   custodyStage: CustodyStage

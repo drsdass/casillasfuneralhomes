@@ -35,6 +35,7 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if ('serviceDate' in c) row.service_date = c.serviceDate ?? null
   if ('serviceLocation' in c) row.service_location = c.serviceLocation ?? null
   if (c.boardDisp !== undefined) row.board_disp = c.boardDisp || null
+  if (c.boardPlace !== undefined) row.board_place = c.boardPlace || null
   if (c.boardFlowers !== undefined) row.board_flowers = c.boardFlowers || null
   if (c.boardBirds !== undefined) row.board_birds = c.boardBirds || null
   if (c.boardEscort !== undefined) row.board_escort = c.boardEscort || null
@@ -99,6 +100,7 @@ export function rowToCase(row: any): FuneralCase {
     serviceDate: row.service_date ?? undefined,
     serviceLocation: row.service_location ?? undefined,
     boardDisp: row.board_disp ?? undefined,
+    boardPlace: row.board_place ?? undefined,
     boardFlowers: row.board_flowers ?? undefined, boardBirds: row.board_birds ?? undefined, boardEscort: row.board_escort ?? undefined,
     color: row.color ?? undefined,
     custodyStage: row.custody_stage,
