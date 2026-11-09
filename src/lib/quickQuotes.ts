@@ -88,6 +88,12 @@ export const quickQuotes = {
     }).eq('id', id)
     if (error) throw error
   },
+  /** Permanently removes a quote (used to tidy up quotes that already became a case). */
+  async remove(id: string): Promise<void> {
+    if (USE_MOCK) { mock = mock.filter((q) => q.id !== id); return }
+    const { error } = await supabase!.from('quick_quotes').delete().eq('id', id)
+    if (error) throw error
+  },
   async update(id: string, patch: Partial<Pick<QuickQuote, 'status' | 'sentAt' | 'sentTo' | 'convertedCaseId'>>): Promise<void> {
     if (USE_MOCK) { mock = mock.map((q) => (q.id === id ? { ...q, ...patch } : q)); return }
     const row: Record<string, unknown> = {}

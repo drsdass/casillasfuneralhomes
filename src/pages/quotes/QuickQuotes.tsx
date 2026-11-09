@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { Printer, Mail, Eye, X, Ban, Undo2, Plus, FolderPlus, FileText, ArrowLeft, Pencil, Copy } from 'lucide-react'
+import { Printer, Mail, Eye, X, Ban, Undo2, Plus, FolderPlus, FileText, ArrowLeft, Pencil, Copy, Trash2 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { shortLocationName, getCompanyName } from '@/lib/company'
@@ -45,6 +45,8 @@ function QuoteList({ onNew, onReuse, compare, setCompare }: { onNew: () => void;
   const locOf = (q: QuickQuote) => locations.find((l) => l.id === q?.locationId)
   const refresh = () => qc.invalidateQueries({ queryKey: ['quick-quotes'] })
   const patch = useMutation({ mutationFn: ({ id, p }: { id: string; p: Parameters<typeof quickQuotes.update>[1] }) => quickQuotes.update(id, p), onSuccess: refresh })
+
+  const del = useMutation({ mutationFn: (id: string) => quickQuotes.remove(id), onSuccess: refresh })
 
   useEffect(() => {
     if (!viewing || !autoPrint) return
@@ -106,6 +108,7 @@ function QuoteList({ onNew, onReuse, compare, setCompare }: { onNew: () => void;
                 {canEdit && q.status !== 'void' && <button type="button" onClick={() => onReuse(q)} title="Open this quote's prices again to change them, add the family's details, or make another version" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"><Pencil size={14} /> Edit / use this quote</button>}
                 {canEdit && q.status !== 'void' && <button type="button" onClick={() => setEmailing(q)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"><Mail size={14} /> Email</button>}
                 {canEdit && q.status !== 'void' && !q.convertedCaseId && <button type="button" onClick={() => navigate(`/cases/new?fromQuote=${q.id}`)} className="inline-flex items-center gap-1.5 rounded-md bg-[#3b4a35] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#4d5f45]"><FolderPlus size={14} /> Make this a case</button>}
+                {canEdit && q.convertedCaseId && <button type="button" onClick={() => { if (confirm('Delete this quote from the list? It already became a case, and the case keeps its own copy of the pricing.')) del.mutate(q.id) }} className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"><Trash2 size={14} /> Delete</button>}
                 {canEdit && (q.status === 'void'
                   ? <button type="button" onClick={() => patch.mutate({ id: q.id, p: { status: q.sentAt ? 'sent' : 'draft' } })} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"><Undo2 size={14} /> Restore</button>
                   : <button type="button" onClick={() => { if (confirm('Void this quote? It stays on the list, marked as voided, so there is still a record of it.')) patch.mutate({ id: q.id, p: { status: 'void' } }) }} className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-50"><Ban size={14} /> Void</button>)}

@@ -52,8 +52,8 @@ export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], no
     const { visits, services } = boardEventsOf(r)
     const all = [...visits, ...services]
     const lastEnd = all.map((e) => (new Date(e.end) > new Date(e.start) ? e.end : e.start)).sort().pop()
-    // "done" = at least one service (or burial) happened and nothing is still ahead
-    if (services.length > 0 && lastEnd && new Date(lastEnd) <= now) { waiting.push(r); doneAt.set(r, lastEnd) } else current.push(r)
+    // "done" = something happened (a service, or at least a visitation) and nothing is still ahead
+    if (all.length > 0 && lastEnd && new Date(lastEnd) <= now) { waiting.push(r); doneAt.set(r, lastEnd) } else current.push(r)
   }
   waiting.sort((a, b) => (doneAt.get(a) as string).localeCompare(doneAt.get(b) as string))
   return { current: boardOrder(current), waiting, doneAt }
