@@ -54,7 +54,7 @@ export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], no
   for (const r of rows) {
     const { visits, services } = boardEventsOf(r)
     const all = [...visits, ...services]
-    const lastEnd = all.map((e) => (new Date(e.end) > new Date(e.start) ? e.end : e.start)).sort().pop()
+    const lastEnd = all.map((e) => (new Date(e.end) > new Date(e.start) ? e.end : e.start)).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()).pop()
     const allOver = all.length > 0 && !!lastEnd && new Date(lastEnd) <= now
     // Staff can pin a case: 'bottom' always waits, 'top' always stays in the main list.
     // Otherwise: done = a service happened and nothing is ahead, or (no service on the case) the visitation is over

@@ -143,7 +143,10 @@ export interface VitalSheetInfo {
   occupation?: string
   kindOfBusiness?: string
   yearsInOccupation?: string
-  residenceAddress?: string
+  residenceAddress?: string // the whole street line, kept in step with the three boxes below
+  residenceStreetNumber?: string
+  residenceStreetName?: string
+  residenceUnit?: string
   residenceCity?: string
   residenceCounty?: string
   residenceZip?: string

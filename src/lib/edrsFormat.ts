@@ -434,8 +434,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
             : /^(\d+|unk|-)$/i.test(plain.trim()) ? [] : [note('warn', 'Must be a number, UNK, or a dash')])
         break
       case 'residence': {
-        const a = splitStreet(plain)
-        const check = plain ? note('info', `Split from "${plain}" — check`) : undefined
+        // Entered in separate boxes → use them as typed; older cases are split from the single line (and flagged to check).
+        const sep = vs.residenceStreetNumber !== undefined || vs.residenceStreetName !== undefined || vs.residenceUnit !== undefined
+        const a = sep ? { number: (vs.residenceStreetNumber ?? '').trim(), name: (vs.residenceStreetName ?? '').trim(), unit: (vs.residenceUnit ?? '').trim() } : splitStreet(plain)
+        const check = plain && !sep ? note('info', `Split from "${plain}" — check`) : undefined
         add('res-number', '20', "DECEDENT'S RESIDENCE", 'residence', a.number, [check], { hint: 'street number', hideWhenEmpty: true })
         add('res-name', '20', "DECEDENT'S RESIDENCE", 'residence', a.name, a.name ? [] : [note('error', 'Street name is required — enter UNK if unknown')], { hint: 'street name' })
         add('res-unit', '20', "DECEDENT'S RESIDENCE", 'residence', a.unit, [], { hint: 'apt / suite / unit', hideWhenEmpty: true })

@@ -13,7 +13,7 @@ import {
   EDRS_MARITAL, EDRS_EDUCATION, EDRS_RACES, EDRS_RELATIONSHIPS, EDRS_DISPOSITIONS, PLACE_OF_DEATH_TYPES,
   normalizeMarital, normalizeEducation, normalizeRace, normalizeDisposition,
 } from '@/lib/edrsFormat'
-import { buildEdrsRows, readiness, splitSuffix, EDRS_SUFFIXES, type EdrsNote } from '@/lib/edrsFormat'
+import { buildEdrsRows, readiness, splitSuffix, splitStreet, EDRS_SUFFIXES, type EdrsNote } from '@/lib/edrsFormat'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check, ListChecks, Eye } from 'lucide-react'
 import type { VitalSheetInfo, Decedent, FuneralCase } from '@/types'
@@ -159,6 +159,19 @@ export default function VitalSheetIntake() {
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(key, e.target.value as never),
     className: inputClass,
   })
+
+  /** #20 is three boxes (number / street / apt-suite-unit) so it lands in EDRS as-is; the whole line is kept in step for everything else. */
+  const resParts = (() => {
+    const has = f.residenceStreetNumber !== undefined || f.residenceStreetName !== undefined || f.residenceUnit !== undefined
+    if (has) return { number: f.residenceStreetNumber ?? '', name: f.residenceStreetName ?? '', unit: f.residenceUnit ?? '' }
+    return splitStreet(f.residenceAddress)
+  })()
+  function setResPart(part: 'number' | 'name' | 'unit', value: string) {
+    const next = { ...resParts, [part]: value }
+    const unit = next.unit.trim().replace(/^(apt\.?|apartment|unit|ste\.?|suite|#)\s*#?\s*/i, '')
+    const line = [next.number.trim(), next.name.trim()].filter(Boolean).join(' ') + (unit ? ` #${unit}` : '')
+    setF((prev) => ({ ...prev, residenceStreetNumber: next.number, residenceStreetName: next.name, residenceUnit: next.unit, residenceAddress: line }))
+  }
 
   async function revealSsn() {
     setSsnLoading(true)
@@ -399,7 +412,13 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>RESIDENCE</div>
           <div className="p-4 space-y-3">
-            <L id="residence"><input {...text('residenceAddress')} /></L>
+            <L id="residence">
+              <div className="grid grid-cols-6 gap-3">
+                <div className="col-span-2 sm:col-span-1"><input value={resParts.number} onChange={(e) => setResPart('number', e.target.value)} placeholder="Street #" aria-label="Street number" className={inputClass} /></div>
+                <div className="col-span-4 sm:col-span-3"><input value={resParts.name} onChange={(e) => setResPart('name', e.target.value)} placeholder="Street name" aria-label="Street name" className={inputClass} /></div>
+                <div className="col-span-6 sm:col-span-2"><input value={resParts.unit} onChange={(e) => setResPart('unit', e.target.value)} placeholder="Apt / suite / unit" aria-label="Apartment, suite or unit" className={inputClass} /></div>
+              </div>
+            </L>
             <div data-group className="grid grid-cols-5 gap-3">
               <L id="residenceCity"><input {...text('residenceCity')} /></L>
               <L id="residenceCounty"><input {...text('residenceCounty')} /></L>
