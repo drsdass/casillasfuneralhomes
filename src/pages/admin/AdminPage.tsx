@@ -422,7 +422,7 @@ export default function AdminPage() {
                   </tr>
                 ))}
                 {vendors.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-10 text-center text-slate-400">No vendors yet.</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">No vendors yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -505,7 +505,8 @@ export default function AdminPage() {
               <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Who</th>
-                <th className="px-4 py-3 font-medium">Entity</th>
+                <th className="px-4 py-3 font-medium">Device</th>
+                <th className="px-4 py-3 font-medium">Case</th>
                 <th className="px-4 py-3 font-medium">What happened</th>
               </tr>
             </thead>
@@ -514,7 +515,8 @@ export default function AdminPage() {
                 <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{format(parseISO(entry.timestamp), 'MMM d, HH:mm:ss')}</td>
                   <td className="px-4 py-3 text-slate-700">{entry.changedByName}</td>
-                  <td className="px-4 py-3 text-slate-500 capitalize">{entry.entityType}</td>
+                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{entry.device ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{entry.caseName ? <>{entry.caseName}<span className="block text-xs text-slate-400">{entry.caseNumber}</span></> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-800">{entry.summary}</td>
                 </tr>
               ))}

@@ -80,6 +80,14 @@ async function ssnEncryptionReady(): Promise<boolean> {
 
 function formatMoneyPlain(n: number) { return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
 
+/** "iPhone · Safari", "Windows · Chrome" ... a plain description of the device making the change. */
+function deviceLabel(): string {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux' : 'Unknown'
+  const browser = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /(Chrome|CriOS)\//.test(ua) ? 'Chrome' : /(Firefox|FxiOS)\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  return `${os} · ${browser}`
+}
+
 async function logAuditReal(entry: {
   entityType: AuditLogEntry['entityType']
   entityId: string
@@ -89,10 +97,13 @@ async function logAuditReal(entry: {
   changedBy: string
 }): Promise<void> {
   try {
-    await supabase!.from('audit_log').insert({
+    const row = {
       entity_type: entry.entityType, entity_id: entry.entityId, case_id: entry.caseId ?? null,
       action: entry.action, summary: entry.summary, changed_by: entry.changedBy,
-    })
+    }
+    const { error } = await supabase!.from('audit_log').insert({ ...row, device: deviceLabel() })
+    // If the "device" column isn't in the database yet, still record the change without it.
+    if (error) await supabase!.from('audit_log').insert(row)
   } catch (err) {
     console.error('Failed to write audit log entry:', err)
   }
@@ -1094,7 +1105,7 @@ export const api = {
 
   async getCustodyLog(caseId?: string): Promise<CustodyLogEntry[]> {
     if (USE_MOCK) return delay(mockStore.getCustodyLog(caseId))
-    let query = supabase!.from('custody_log').select('*, staff_members(name)').order('timestamp', { ascending: true })
+    let query = supabase!.from('custody_log').select('*, staff_members(name), cases(case_number, decedent_first_name, decedent_last_name)').order('timestamp', { ascending: true })
     if (caseId) query = query.eq('case_id', caseId)
     const { data, error } = await query
     if (error) throw error

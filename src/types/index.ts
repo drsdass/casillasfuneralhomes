@@ -496,6 +496,9 @@ export interface AuditLogEntry {
   summary: string // human-readable description, e.g. "Marked task 'Confirm casket' complete"
   changedBy: string // staffId
   changedByName: string
+  caseName?: string // the decedent, looked up when the log is shown
+  caseNumber?: string
+  device?: string // e.g. 'iPhone · Safari'
   timestamp: string
 }
 

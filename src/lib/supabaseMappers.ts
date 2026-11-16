@@ -406,6 +406,9 @@ export function rowToAuditLogEntry(row: any): AuditLogEntry {
     summary: row.summary,
     changedBy: row.changed_by,
     changedByName: row.staff_members?.name ?? (row.changed_by ? 'Unknown' : 'The family'),
+    caseName: row.cases ? [row.cases.decedent_first_name, row.cases.decedent_last_name].filter(Boolean).join(' ') || undefined : undefined,
+    caseNumber: row.cases?.case_number ?? undefined,
+    device: row.device ?? undefined,
     timestamp: row.timestamp,
   }
 }
