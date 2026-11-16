@@ -7,6 +7,7 @@ import { useSession } from '@/context/SessionContext'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
 import { TvScreensPanel } from '@/components/admin/TvScreensPanel'
+import { StaffDaySummary } from '@/components/admin/StaffDaySummary'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES, featureTicked, toggleFeatureList } from '@/lib/permissions'
 import { ROLE_LABELS, type UserRole, type StaffMember, type VendorCategory, type CaseTask } from '@/types'
@@ -31,6 +32,7 @@ export default function AdminPage() {
   const [showAddStaff, setShowAddStaff] = useState(false)
   const canAssign = currentUser ? canAssignRoles(currentUser.role) : false
   const canManage = currentUser ? canManageAccess(currentUser.role) : false
+  const [auditView, setAuditView] = useState<'summary' | 'log'>('summary')
   const canViewAudit = currentUser ? canViewAuditLog(currentUser.role) : false
 
   const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.getLocations })
@@ -492,6 +494,13 @@ export default function AdminPage() {
 
       {subTab === 'audit' && (
         <>
+        <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+          {([['summary', 'Daily summary'], ['log', 'Full log']] as const).map(([k, label]) => (
+            <button key={k} type="button" onClick={() => setAuditView(k)} className={`px-3 py-1.5 rounded-md ${auditView === k ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+          ))}
+        </div>
+        {auditView === 'summary' && <StaffDaySummary entries={auditLog} />}
+        {auditView === 'log' && <>
         {organizations.length > 1 && activeOrg && (
           <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
             Audit trail for
@@ -526,6 +535,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         </Card>
+        </>}
         </>
       )}
 
