@@ -1,3 +1,5 @@
+import { installPacificClock } from './lib/pacificClock'
+installPacificClock()   // every time in the app is Pacific, whatever the device's own zone is
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
