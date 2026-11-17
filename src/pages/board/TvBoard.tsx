@@ -73,6 +73,10 @@ export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?
   }, [])
   const colors = boardLocColors(data.locations)
   const split = boardSplit(data.rows, now)
+  // Cases with nothing scheduled yet (no visitation, no service) share a compact block instead of a full row each.
+  const hasEvents = (r: BoardRowData) => { const e = boardEventsOf(r); return e.visits.length > 0 || e.services.length > 0 }
+  const scheduled = split.current.filter(hasEvents)
+  const awaiting = split.current.filter((r) => !hasEvents(r))
   const locName = (id: string) => shortLocationName(data.locations.find((l) => l.id === id)?.name ?? '')
   const used = data.locations.filter((l) => data.rows.some((r) => r.locationId === l.id))
   const here = data.screen?.locationId ? shortLocationName(data.locations.find((l) => l.id === data.screen!.locationId)?.name ?? '') : ''
@@ -117,9 +121,19 @@ export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?
             </tr>
           </thead>
           <tbody className="text-base">
-            {split.current.map((r) => (
+            {scheduled.map((r) => (
               <BoardRow key={r.id} r={r} now={now} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
+            {awaiting.length > 0 && (
+              <tr>
+                <td colSpan={11} className="px-3 pt-3 pb-2 border-b border-white/10">
+                  <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-[#d9c78f]">Awaiting arrangements — nothing scheduled yet <span className="font-semibold text-slate-400">({awaiting.length})</span></div>
+                  <div className="grid grid-cols-3 gap-x-8 gap-y-1.5">
+                    {awaiting.map((r) => <AwaitingChip key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />)}
+                  </div>
+                </td>
+              </tr>
+            )}
             {split.waiting.length > 0 && (
               <>
                 <tr>
@@ -231,5 +245,29 @@ function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color
         )
       })}
     </>
+  )
+}
+
+/** One case with nothing scheduled yet: name, where, DISP, casket, any flowers/birds/escort, and its special requests — in a few short lines. */
+function AwaitingChip({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
+  const casket = (r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? ''
+  const extras: [string, BoardExtra][] = [
+    ['Flowers', extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)],
+    ['Birds', extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)],
+    ['Escort', extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)],
+  ]
+  return (
+    <div className="pl-3 leading-tight" style={{ boxShadow: `inset 4px 0 0 ${color}` }}>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="font-semibold whitespace-nowrap">{r.lastName}, {r.firstName}</span>
+        <span className="text-[11px] font-semibold rounded px-1.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+        {r.boardDisp && <span className="text-sm font-semibold text-slate-100">{r.boardDisp}</span>}
+        {casket && <span className="text-sm text-slate-300">{casket}</span>}
+        {extras.filter(([, s]) => s !== 'no').map(([label, s]) => (
+          <span key={label} className={`text-xs font-semibold ${s === 'confirmed' ? 'text-emerald-400' : 'text-amber-300'}`}>{label}{s === 'confirmed' ? ' ✓' : ''}</span>
+        ))}
+      </div>
+      {r.specials.length > 0 && <div className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{r.specials.join(' · ')}</div>}
+    </div>
   )
 }
