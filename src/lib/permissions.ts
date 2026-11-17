@@ -153,9 +153,9 @@ export function canEditPriceList(role: UserRole): boolean {
   return role === 'super_admin'
 }
 
-/** Permanently deleting a case is admin-only (matches the database rule). */
+/** Permanently deleting a case: managers and above (managers only at their own locations — the database enforces that; see db/manager-delete.sql). */
 export function canDeleteCases(role: UserRole): boolean {
-  return atLeast(role, 'admin')
+  return atLeast(role, 'manager')
 }
 
 /** Correcting or removing an entry in a case's custody history (e.g. while old files are being entered): manager and above. */
