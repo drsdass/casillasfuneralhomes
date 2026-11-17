@@ -10,6 +10,8 @@ export const boardClock = (iso: string) => format(parseISO(iso), 'h:mm a')
 export function boardRange(startIso: string, endIso?: string): string {
   if (!endIso || endIso === startIso) return boardClock(startIso)
   const a = parseISO(startIso), b = parseISO(endIso)
+  // All-night visitation: say which day it ends ("6:00 PM – Wed 8:00 AM").
+  if (format(a, 'yyyy-MM-dd') !== format(b, 'yyyy-MM-dd')) return `${format(a, 'h:mm a')} – ${format(b, 'EEE h:mm a')}`
   const sameHalf = format(a, 'a') === format(b, 'a')
   return sameHalf ? `${format(a, 'h:mm')}–${format(b, 'h:mm a')}` : `${format(a, 'h:mm a')}–${format(b, 'h:mm a')}`
 }

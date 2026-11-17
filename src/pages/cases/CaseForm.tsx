@@ -100,6 +100,8 @@ export default function CaseForm() {
   const [visitationDate, setVisitationDate] = useState(isoToLocalInput(existing?.visitationDate))
   const [visitationLocation, setVisitationLocation] = useState(existing?.visitationLocation ?? '')
   const [visitationEndTime, setVisitationEndTime] = useState(isoToLocalInput(existing?.visitationEnd).slice(11, 16))
+  // All-night visitation: the end time is on the day after the start.
+  const [visitationOvernight, setVisitationOvernight] = useState(() => { const s = isoToLocalInput(existing?.visitationDate).slice(0, 10), e = isoToLocalInput(existing?.visitationEnd).slice(0, 10); return !!s && !!e && e > s })
   const [serviceDate, setServiceDate] = useState(isoToLocalInput(existing?.serviceDate))
   const [serviceLocation, setServiceLocation] = useState(existing?.serviceLocation ?? '')
   const [contactName, setContactName] = useState(existing?.contacts[0]?.name ?? extracted?.contactName ?? '')
@@ -143,6 +145,7 @@ export default function CaseForm() {
     setVisitationDate(isoToLocalInput(existing.visitationDate))
     setVisitationLocation(existing.visitationLocation ?? '')
     setVisitationEndTime(isoToLocalInput(existing.visitationEnd).slice(11, 16))
+    { const s = isoToLocalInput(existing.visitationDate).slice(0, 10), e = isoToLocalInput(existing.visitationEnd).slice(0, 10); setVisitationOvernight(!!s && !!e && e > s) }
     setServiceDate(isoToLocalInput(existing.serviceDate))
     setServiceLocation(existing.serviceLocation ?? '')
     setContactName(existing.contacts[0]?.name ?? '')
@@ -152,12 +155,13 @@ export default function CaseForm() {
   }, [existing])
 
   // The end time is a time on the same day as the visitation start.
-  const visitationEndIso = visitationDate && visitationEndTime ? localInputToIso(`${visitationDate.slice(0, 10)}T${visitationEndTime}`) : undefined
+  const nextDay = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10) }
+  const visitationEndIso = visitationDate && visitationEndTime ? localInputToIso(`${visitationOvernight ? nextDay(visitationDate.slice(0, 10)) : visitationDate.slice(0, 10)}T${visitationEndTime}`) : undefined
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (quoteStart && !firstName.trim() && !lastName.trim() && !contactName.trim()) throw new Error('Enter the name of the person asking for the quote (or the patient\'s name).')
-      if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time.')
+      if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time. For an all-night visitation that ends the next day, tick "All-night visitation".')
       const colorPalette = ['#3d5a80', '#6b7c8f', '#6b88ad', '#8a97a6', '#2f5d7c']
       const contacts = contactName
         ? [{ id: existing?.contacts[0]?.id ?? `c-${Date.now()}`, name: contactName, relationship: contactRelationship, phone: contactPhone, email: contactEmail, isPrimary: true, isAuthorizingAgent: true }]
@@ -387,6 +391,10 @@ export default function CaseForm() {
                 <span className="text-xs font-medium text-slate-600">Visitation ends (24-hour)</span>
                 <Time24 label="Visitation end" value={visitationEndTime} onChange={setVisitationEndTime} />
               </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={visitationOvernight} onChange={(e) => setVisitationOvernight(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+                All-night visitation — ends the next day{visitationOvernight && visitationDate && visitationEndTime ? ` (${new Date(nextDay(visitationDate.slice(0, 10)) + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${visitationEndTime})` : ''}
+              </label>
             </div>
             <div>
               <label className={labelClass}>Visitation Location</label>
