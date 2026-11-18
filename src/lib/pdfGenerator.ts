@@ -12,8 +12,28 @@ export async function pdfFromElement(el: HTMLElement): Promise<Blob> {
   return pdfFromElements([el])
 }
 
+/**
+ * The page's fonts load a weight at a time, only once something uses it. Photographing a form before its bold (or italic)
+ * font has arrived measures the words with a stand-in font and draws them with the real one, so words run together.
+ * Make sure every weight the forms use is loaded first, then give the browser a moment to re-lay everything out.
+ */
+async function waitForFonts(): Promise<void> {
+  try {
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts
+    if (!fonts) return
+    const faces: string[] = []
+    for (const family of ['"Open Sans"', '"Playfair Display"']) for (const w of [400, 500, 600, 700]) { faces.push(`${w} 16px ${family}`); faces.push(`italic ${w} 16px ${family}`) }
+    await Promise.race([
+      Promise.all(faces.map((f) => fonts.load(f, 'AaBbCc 0123 &').catch(() => []))).then(() => fonts.ready),
+      new Promise((r) => setTimeout(r, 8000)),   // never hang on a slow connection
+    ])
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))))
+  } catch { /* capture anyway */ }
+}
+
 /** Several documents in one PDF: each starts on a fresh page. */
 export async function pdfFromElements(els: HTMLElement[]): Promise<Blob> {
+  await waitForFonts()
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
