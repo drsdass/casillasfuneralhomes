@@ -112,6 +112,16 @@ export function StatementSheet({ sheet, saved, defaults, canEdit, onChange, onSu
     onChange(editing, entry)
     // typing a price into a line that was un-ticked ticks it again
     if (lineByKey.has(editing) && saved[FLAG + editing] !== undefined && Number(saved[FLAG + editing]) === 0 && typeof entry === 'number' && entry !== 0) onChange(FLAG + editing, 1)
+    // changing the quantity (e.g. copies of the death certificate) on a line that was un-ticked ticks it again, so the new amount reaches the total
+    if (typeof entry === 'number' && entry > 0) {
+      const [er, ec] = editing.split(',').map(Number)
+      const ref = new RegExp(`(^|[^A-Z0-9])${colLetter(ec)}${er}(?!\\d)`)
+      for (const l of summary.lines) {
+        if (l.key === editing || l.checked || Number(saved[FLAG + l.key]) !== 0) continue
+        const f = sheet.cells[l.key]?.f?.replace(/\$/g, '')
+        if (f && ref.test(f)) onChange(FLAG + l.key, 1)
+      }
+    }
     setEditing(null)
   }
 
