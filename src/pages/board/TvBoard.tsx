@@ -34,7 +34,8 @@ export function FitToScreen({ children, safe = 2 }: { children: ReactNode; safe?
       if (!W || !H) return
       let best = 0.2
       // From full size downwards, find the largest size where the board (re-wrapped to the wider space) fits.
-      for (let sc = 1; sc >= 0.2; sc = Math.round((sc - 0.025) * 1000) / 1000) {
+      // It also grows past normal size (up to 1.8x) when there is room, so a lighter day is easier to read from across the room.
+      for (let sc = 1.8; sc >= 0.2; sc = Math.round((sc - (sc > 1.05 ? 0.05 : 0.025)) * 1000) / 1000) {
         el.style.width = `${W / sc}px`
         if (el.scrollHeight * sc <= H && el.scrollWidth * sc <= W + 1) { best = sc; break }
       }
@@ -215,8 +216,8 @@ function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color
             {i === 0 && (
               <td rowSpan={n} className="py-3 px-3 pl-5 font-semibold whitespace-nowrap align-top border-b border-white/10" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
                 <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
-                {r.lastName}, {r.firstName}
-                <span className="ml-2 align-middle inline-block text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+                <span className="text-2xl font-bold align-middle leading-tight">{r.lastName}, {r.firstName}</span>
+                <div className="mt-0.5"><span className="inline-block text-xs font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span></div>
                 {waitingSince && (
                   <div className="mt-1 text-xs font-semibold text-amber-300">
                     <span className="rounded bg-amber-300/20 px-1.5 py-0.5">Waiting: {wait}</span>
@@ -259,7 +260,7 @@ function AwaitingChip({ r, color, loc }: { r: BoardRowData; color: string; loc: 
   return (
     <div className="pl-3 leading-tight" style={{ boxShadow: `inset 4px 0 0 ${color}` }}>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="font-semibold whitespace-nowrap">{r.lastName}, {r.firstName}</span>
+        <span className="text-xl font-bold whitespace-nowrap">{r.lastName}, {r.firstName}</span>
         <span className="text-[11px] font-semibold rounded px-1.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
         {r.boardDisp && <span className="text-sm font-semibold text-slate-100">{r.boardDisp}</span>}
         {casket && <span className="text-sm text-slate-300">{casket}</span>}
