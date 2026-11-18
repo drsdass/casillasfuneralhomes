@@ -117,6 +117,7 @@ export default function VitalSheetIntake() {
   const [ssnDirty, setSsnDirty] = useState(false)
   const [ssnLoading, setSsnLoading] = useState(false)
   const [ssnNotice, setSsnNotice] = useState<string | null>(null)
+  const onFile = !!(c?.decedent.ssnOnFile || c?.decedent.ssn)
 
   const [initialized, setInitialized] = useState(false)
   const [sendMethod, setSendMethod] = useState<'text' | 'email' | null>(null)
@@ -358,7 +359,7 @@ export default function VitalSheetIntake() {
                   <input
                     value={ssn}
                     onChange={(e) => { setSsn(e.target.value); setSsnDirty(true) }}
-                    placeholder="Leave blank to keep what's on file"
+                    placeholder={onFile ? 'On file — leave blank to keep it' : 'Not entered yet'}
                     autoComplete="off"
                     className={inputClass}
                   />
@@ -366,7 +367,9 @@ export default function VitalSheetIntake() {
                     <Eye size={14} />
                   </button>
                 </div>
-                {ssnNotice && <div className="text-[11px] text-amber-600 mt-1">{ssnNotice}</div>}
+                {ssnNotice
+                  ? <div className="text-[11px] text-amber-600 mt-1">{ssnNotice}</div>
+                  : <div className={`text-[11px] mt-1 ${onFile || ssn.trim() ? 'text-emerald-700' : 'text-slate-400'}`}>{ssnDirty && ssn.trim() ? 'Press Save to store it (it is encrypted).' : onFile ? '✓ Saved and encrypted. Press the eye to look at it.' : 'No Social Security number saved yet.'}</div>}
               </L>
               <L id="armedForces">
                 <div className="flex items-center gap-4 h-[38px]">

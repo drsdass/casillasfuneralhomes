@@ -90,6 +90,7 @@ export function rowToCase(row: any): FuneralCase {
       sex: row.decedent_sex ?? undefined,
       maritalStatus: row.decedent_marital_status ?? undefined,
       veteran: row.decedent_veteran ?? undefined,
+      ssnOnFile: !!row.decedent_ssn_encrypted,   // only whether one is saved — the number itself is never put on the case
     },
     contacts: (row.case_contacts ?? []).map(rowToContact),
     assignedDirectorId: row.assigned_director_id ?? undefined,

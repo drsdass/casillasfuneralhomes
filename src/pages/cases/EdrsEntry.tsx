@@ -184,9 +184,12 @@ export default function EdrsEntry() {
                       <div className="shrink-0 w-24 text-right pt-0.5">
                         {isSsn ? (
                           ssn === undefined || ssnError ? (
+                            <>
                             <button onClick={(e) => { e.stopPropagation(); loadSsn(true) }} disabled={ssnLoading} className="inline-flex items-center gap-1 text-xs font-medium text-[#3b4a35] hover:underline disabled:opacity-50">
                               <Eye size={12} /> {ssnLoading ? 'Loading…' : 'Show & copy'}
                             </button>
+                            <div className={`mt-0.5 text-[11px] ${c.decedent.ssnOnFile || c.decedent.ssn ? 'text-emerald-700' : 'text-amber-600'}`}>{c.decedent.ssnOnFile || c.decedent.ssn ? '✓ On file' : 'Not entered yet'}</div>
+                            </>
                           ) : r.value ? (
                             <button onClick={(e) => { e.stopPropagation(); copy('ssn', r.value) }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800">
                               {copiedKey === 'ssn' ? <><Check size={12} className="text-emerald-600" /> Copied</> : <><Copy size={12} /> Copy</>}

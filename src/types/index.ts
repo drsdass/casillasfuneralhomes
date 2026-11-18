@@ -93,6 +93,8 @@ export interface Decedent {
   dateOfDeath?: string
   placeOfDeath?: string
   ssn?: string // stored encrypted at rest in real deployment
+  /** True when a Social Security number is saved (the number itself is only read through the audited function). */
+  ssnOnFile?: boolean
   sex?: 'male' | 'female' | 'unknown' | 'nonbinary'
   maritalStatus?: string
   veteran?: boolean
