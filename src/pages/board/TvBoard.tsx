@@ -121,14 +121,14 @@ export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?
               <th className="py-1.5 px-3">Special Requests</th>
             </tr>
           </thead>
-          <tbody className="text-base">
+          <tbody className="text-xl">
             {scheduled.map((r) => (
               <BoardRow key={r.id} r={r} now={now} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
             ))}
             {awaiting.length > 0 && (
               <tr>
                 <td colSpan={11} className="px-3 pt-3 pb-2 border-b border-white/10">
-                  <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-[#d9c78f]">Awaiting arrangements — nothing scheduled yet <span className="font-semibold text-slate-400">({awaiting.length})</span></div>
+                  <div className="mb-1.5 text-sm font-bold uppercase tracking-wider text-[#d9c78f]">Awaiting arrangements — nothing scheduled yet <span className="font-semibold text-slate-400">({awaiting.length})</span></div>
                   <div className="grid grid-cols-3 gap-x-8 gap-y-1.5">
                     {awaiting.map((r) => <AwaitingChip key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />)}
                   </div>
@@ -187,8 +187,8 @@ function EventLine({ e, range, now }: { e: BoardEvent; range: boolean; now: Date
         <span className={phase === 'done' ? 'text-slate-400' : ''}>{boardDay(e.start)} · {range ? boardRange(e.start, e.end) : boardClock(e.start)}</span>
         {phase === 'now' && <span className="rounded bg-emerald-400/20 px-1.5 text-[11px] font-bold tracking-wider text-emerald-300">NOW</span>}
         {phase === 'today' && <span className="rounded bg-yellow-300/20 px-1.5 text-[11px] font-bold tracking-wider text-yellow-200">TODAY</span>}
+        {sub && <span className="text-base text-slate-400">· {sub}</span>}
       </div>
-      {sub && <div className="text-xs text-slate-400">{sub}</div>}
     </div>
   )
 }
@@ -212,12 +212,12 @@ function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color
         const v = visits[i], sv = services[i]
         const last = i === n - 1
         return (
-          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} ${tint} ${dim} hover:bg-white/5 [&>td]:!py-1.5`}>
+          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} ${tint} ${dim} hover:bg-white/5 [&>td]:!py-1`}>
             {i === 0 && (
               <td rowSpan={n} className="py-3 px-3 pl-5 font-semibold whitespace-nowrap align-top border-b border-white/10" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
                 <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
                 <span className="text-2xl font-bold align-middle leading-tight">{r.lastName}, {r.firstName}</span>
-                <div className="mt-0.5"><span className="inline-block text-xs font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span></div>
+                <span className="ml-3 align-middle inline-block text-sm font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
                 {waitingSince && (
                   <div className="mt-1 text-xs font-semibold text-amber-300">
                     <span className="rounded bg-amber-300/20 px-1.5 py-0.5">Waiting: {wait}</span>
@@ -227,16 +227,16 @@ function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color
               </td>
             )}
             <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range now={now} /> : i === 0 ? '—' : ''}</td>
-            <td className="py-3 px-3 text-slate-200 text-sm align-top">{v || i === 0 ? <Staff e={v} /> : null}</td>
+            <td className="py-3 px-3 text-slate-200 text-base align-top">{v || i === 0 ? <Staff e={v} /> : null}</td>
             <td className="py-3 px-3 text-slate-200 align-top">{sv ? <EventLine e={sv} range={false} now={now} /> : i === 0 ? '—' : ''}</td>
-            <td className="py-3 px-3 text-slate-200 text-sm align-top">{sv || i === 0 ? <Staff e={sv} /> : null}</td>
+            <td className="py-3 px-3 text-slate-200 text-base align-top">{sv || i === 0 ? <Staff e={sv} /> : null}</td>
             {i === 0 && (<>
               <td rowSpan={n} className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap align-top border-b border-white/10">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
               <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)} /></td>
               <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)} /></td>
               <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)} /></td>
               <td rowSpan={n} className="py-3 px-3 text-slate-200 align-top border-b border-white/10">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
-              <td rowSpan={n} className="py-3 px-3 text-slate-300 text-sm min-w-[220px] break-words [overflow-wrap:anywhere] align-top border-b border-white/10">
+              <td rowSpan={n} className="py-3 px-3 text-slate-300 text-base min-w-[220px] break-words [overflow-wrap:anywhere] align-top border-b border-white/10">
                 {specialNotes.length > 0
                   ? <ul className="space-y-1">{specialNotes.map((x, k) => <li key={k} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{x}</li>)}</ul>
                   : <span className="text-slate-500">—</span>}
@@ -261,14 +261,14 @@ function AwaitingChip({ r, color, loc }: { r: BoardRowData; color: string; loc: 
     <div className="pl-3 leading-tight" style={{ boxShadow: `inset 4px 0 0 ${color}` }}>
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="text-xl font-bold whitespace-nowrap">{r.lastName}, {r.firstName}</span>
-        <span className="text-[11px] font-semibold rounded px-1.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
-        {r.boardDisp && <span className="text-sm font-semibold text-slate-100">{r.boardDisp}</span>}
-        {casket && <span className="text-sm text-slate-300">{casket}</span>}
+        <span className="text-xs font-semibold rounded px-1.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+        {r.boardDisp && <span className="text-base font-semibold text-slate-100">{r.boardDisp}</span>}
+        {casket && <span className="text-base text-slate-300">{casket}</span>}
         {extras.filter(([, s]) => s !== 'no').map(([label, s]) => (
-          <span key={label} className={`text-xs font-semibold ${s === 'confirmed' ? 'text-emerald-400' : 'text-amber-300'}`}>{label}{s === 'confirmed' ? ' ✓' : ''}</span>
+          <span key={label} className={`text-sm font-semibold ${s === 'confirmed' ? 'text-emerald-400' : 'text-amber-300'}`}>{label}{s === 'confirmed' ? ' ✓' : ''}</span>
         ))}
       </div>
-      {r.specials.length > 0 && <div className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{r.specials.join(' · ')}</div>}
+      {r.specials.length > 0 && <div className="text-base text-slate-300 break-words [overflow-wrap:anywhere]">{r.specials.join(' · ')}</div>}
     </div>
   )
 }
