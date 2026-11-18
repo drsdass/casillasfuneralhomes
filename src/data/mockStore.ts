@@ -692,7 +692,7 @@ export const mockStore = {
     const keep = new Set<string>()
     for (const it of items) {
       const ex = mine.find((e) => e.label === it.label)
-      if (ex) { keep.add(ex.id); eventStore = eventStore.map((e) => (e.id === ex.id ? { ...e, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place } : e)) }
+      if (ex) { keep.add(ex.id); eventStore = eventStore.map((e) => (e.id === ex.id ? { ...e, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place, placeConfirmed: e.placeConfirmed && e.location === it.place } : e)) }
       else {
         const created: CalendarEvent = { id: newId('evt'), orgId: c.orgId, locationId: c.locationId, caseId: c.id, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place, participantIds: [], label: it.label, source: 'vital' }
         eventStore = [...eventStore, created]; keep.add(created.id)

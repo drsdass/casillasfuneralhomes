@@ -570,6 +570,8 @@ export interface CalendarEvent {
   notes?: string
   /** What this visitation/service is: Private, Public, Rosary, Mass, Graveside ... */
   label?: string
+  /** The church / place has been confirmed with them (shows a check mark on the TV Board). */
+  placeConfirmed?: boolean
   /** null/'case' = the case's main one, 'vital' = from the Vital Sheet, 'extra' = added by hand */
   source?: 'case' | 'vital' | 'extra'
 }

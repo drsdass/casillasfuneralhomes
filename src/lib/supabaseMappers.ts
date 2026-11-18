@@ -204,6 +204,7 @@ export function eventToRow(e: Partial<CalendarEvent>): Record<string, unknown> {
   if (e.location !== undefined) row.location_text = e.location ?? null
   if (e.notes !== undefined) row.notes = e.notes ?? null
   if (e.label !== undefined) row.label = e.label || null
+  if (e.placeConfirmed !== undefined) row.place_confirmed = e.placeConfirmed
   if (e.source !== undefined) row.source = e.source
   return row
 }
@@ -222,6 +223,7 @@ export function rowToEvent(row: any): CalendarEvent {
     location: row.location_text ?? undefined,
     notes: row.notes ?? undefined,
     label: row.label ?? undefined,
+    placeConfirmed: row.place_confirmed ?? undefined,
     source: row.source ?? undefined,
     participantIds: (row.event_participants ?? []).map((p: { staff_id: string }) => p.staff_id),
   }

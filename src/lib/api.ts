@@ -205,7 +205,7 @@ async function syncCaseCalendarEvent(
 ): Promise<void> {
   const { data: existing } = await supabase!
     .from('calendar_events')
-    .select('id')
+    .select('*')
     .eq('case_id', caseId)
     .eq('type', type)
     .or('source.is.null,source.eq.case') // only the case's main one — extra visitations/services are managed on their own
@@ -229,6 +229,8 @@ async function syncCaseCalendarEvent(
   if (existing) {
     await supabase!.from('calendar_events').update({
       start_at: startAt, end_at: endAt, location_text: eventLocation ?? null, title,
+      // a different church / place is not confirmed yet
+      ...(existing.place_confirmed && (existing.location_text ?? null) !== (eventLocation ?? null) ? { place_confirmed: false } : {}),
     }).eq('id', existing.id)
   } else {
     await supabase!.from('calendar_events').insert({
@@ -1304,13 +1306,17 @@ export const api = {
   async syncVitalEvents(c: FuneralCase, items: import('@/lib/vitalToCase').VitalEventItem[], changedBy: StaffMember): Promise<void> {
     const name = `${c.decedent.firstName} ${c.decedent.lastName}`
     if (USE_MOCK) { mockStore.syncVitalEvents(c, items, changedBy); return }
-    const { data: existing, error } = await supabase!.from('calendar_events').select('id, label').eq('case_id', c.id).eq('source', 'vital')
+    const { data: existing, error } = await supabase!.from('calendar_events').select('*').eq('case_id', c.id).eq('source', 'vital')
     if (error) throw error
     const left = new Map((existing ?? []).map((e: { id: string; label: string | null }) => [e.label ?? '', e.id]))
+    const was = new Map((existing ?? []).map((e: { id: string; location_text: string | null; place_confirmed?: boolean }) => [e.id, e]))
     for (const it of items) {
       const row = { title: `${name} — ${it.label}`, type: it.type, start_at: it.start, end_at: it.end, location_text: it.place ?? null, label: it.label }
       const id = left.get(it.label)
-      if (id) { await supabase!.from('calendar_events').update(row).eq('id', id); left.delete(it.label) }
+      if (id) {
+        const old = was.get(id)
+        await supabase!.from('calendar_events').update({ ...row, ...(old?.place_confirmed && (old.location_text ?? null) !== (it.place ?? null) ? { place_confirmed: false } : {}) }).eq('id', id); left.delete(it.label)
+      }
       else await supabase!.from('calendar_events').insert({ ...row, org_id: c.orgId, location_id: c.locationId, case_id: c.id, source: 'vital' })
     }
     for (const id of left.values()) { await supabase!.from('event_participants').delete().eq('event_id', id); await supabase!.from('calendar_events').delete().eq('id', id) }

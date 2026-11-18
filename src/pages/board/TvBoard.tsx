@@ -188,6 +188,7 @@ function EventLine({ e, range, now }: { e: BoardEvent; range: boolean; now: Date
         {phase === 'now' && <span className="rounded bg-emerald-400/20 px-1.5 text-[11px] font-bold tracking-wider text-emerald-300">NOW</span>}
         {phase === 'today' && <span className="rounded bg-yellow-300/20 px-1.5 text-[11px] font-bold tracking-wider text-yellow-200">TODAY</span>}
         {sub && <span className="text-base text-slate-400">· {sub}</span>}
+        {sub && e.confirmed && <Check size={18} strokeWidth={3} className="text-emerald-400" aria-label="Confirmed" />}
       </div>
     </div>
   )

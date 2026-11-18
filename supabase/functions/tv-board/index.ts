@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     const evsFor = (caseId: string, type: string) => (events ?? [])
       .filter((x: any) => x.case_id === caseId && (x.type === type || (type === 'service' && x.type === 'burial'))) // burial times show with the services
       .sort((a: any, b: any) => String(a.start_at).localeCompare(String(b.start_at)))
-      .map((e: any) => ({ start: e.start_at, end: e.end_at, label: e.label ?? undefined, place: e.location_text ?? undefined, staff: (e.event_participants ?? []).map((p: any) => staffName.get(p.staff_id)).filter(Boolean) }))
+      .map((e: any) => ({ start: e.start_at, end: e.end_at, label: e.label ?? undefined, place: e.location_text ?? undefined, confirmed: e.place_confirmed ?? undefined, staff: (e.event_participants ?? []).map((p: any) => staffName.get(p.staff_id)).filter(Boolean) }))
     const status = (caseId: string, re: RegExp) => {
       const o = (orders ?? []).find((x: any) => x.case_id === caseId && re.test(x.item))
       return o ? o.status : null

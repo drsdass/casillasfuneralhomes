@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format, parseISO } from 'date-fns'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Time24 } from '@/components/ui/DateTime24'
 import type { CalendarEvent, FuneralCase, StaffMember } from '@/types'
@@ -14,7 +14,7 @@ const localDate = (iso: string) => format(parseISO(iso), 'yyyy-MM-dd')
 const localTime = (iso: string) => format(parseISO(iso), 'HH:mm')
 const toIso = (date: string, time: string) => new Date(`${date}T${time}:00`).toISOString()
 
-interface Draft { id?: string; type: 'visitation' | 'service' | 'burial'; label: string; date: string; start: string; end: string; place: string; staff: string[]; main: boolean }
+interface Draft { id?: string; type: 'visitation' | 'service' | 'burial'; label: string; date: string; start: string; end: string; place: string; staff: string[]; main: boolean; confirmed: boolean; origPlace: string; origConfirmed: boolean }
 
 /** Every visitation and service for this case. Several can be added (private + public, rosary, mass, graveside ...); all of them show on the Calendar and the TV Board. */
 export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj: FuneralCase; canEdit: boolean; currentUser: StaffMember }) {
@@ -37,7 +37,7 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
       const title = `${who} — ${d.label.trim() || KIND[d.type]}`
       const place = d.place.trim() || undefined
       if (d.id) {
-        await api.updateEvent(d.id, { type: d.type, title, start, end, location: place ?? '', label: d.label.trim(), participantIds: d.staff }, currentUser)
+        await api.updateEvent(d.id, { type: d.type, title, start, end, location: place ?? '', label: d.label.trim(), participantIds: d.staff, ...(d.confirmed !== d.origConfirmed ? { placeConfirmed: d.confirmed } : {}) }, currentUser)
         // The case's main visitation / service also lives on the case itself; keep the two the same.
         if (d.main) await api.updateCase(c.id, d.type === 'visitation' ? { visitationDate: start, visitationEnd: end, visitationLocation: place } : { serviceDate: start, serviceLocation: place }, currentUser)
       } else {
@@ -46,6 +46,10 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
     },
     onSuccess: () => { setDraft(null); setErr(''); refresh() },
     onError: (e) => setErr(e instanceof Error ? e.message : 'Could not save.'),
+  })
+  const confirmPlace = useMutation({
+    mutationFn: (e: CalendarEvent) => api.updateEvent(e.id, { placeConfirmed: !e.placeConfirmed }, currentUser),
+    onSuccess: refresh,
   })
   const remove = useMutation({
     mutationFn: async (e: CalendarEvent) => {
@@ -58,8 +62,8 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
   const open = (e?: CalendarEvent) => {
     setErr('')
     setDraft(e
-      ? { id: e.id, type: e.type as 'visitation' | 'service' | 'burial', label: e.label ?? '', date: localDate(e.start), start: localTime(e.start), end: localTime(e.end), place: e.location ?? '', staff: e.participantIds, main: isMain(e) }
-      : { type: 'visitation', label: '', date: '', start: '', end: '', place: '', staff: [], main: false })
+      ? { id: e.id, type: e.type as 'visitation' | 'service' | 'burial', label: e.label ?? '', date: localDate(e.start), start: localTime(e.start), end: localTime(e.end), place: e.location ?? '', staff: e.participantIds, main: isMain(e), confirmed: !!e.placeConfirmed, origPlace: e.location ?? '', origConfirmed: !!e.placeConfirmed }
+      : { type: 'visitation', label: '', date: '', start: '', end: '', place: '', staff: [], main: false, confirmed: false, origPlace: '', origConfirmed: false })
   }
 
   return (
@@ -79,6 +83,9 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
               <span className="font-medium text-slate-900">{e.label || (isMain(e) ? 'Main' : '')}</span>
               <span className="text-slate-700">{format(parseISO(e.start), 'EEE M/d · h:mm a')}{e.type === 'visitation' || new Date(e.end) > new Date(e.start) ? ` – ${format(parseISO(e.end), 'h:mm a')}` : ''}</span>
               {e.location && <span className="text-slate-500">{e.location}</span>}
+              {e.location && (canEdit
+                ? <button type="button" onClick={() => confirmPlace.mutate(e)} title={e.placeConfirmed ? 'Confirmed — click to undo' : 'Click when the church / place is confirmed. A check mark then shows on the TV Board.'} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${e.placeConfirmed ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>{e.placeConfirmed ? <><Check size={12} strokeWidth={3} /> Confirmed</> : 'Confirm place'}</button>
+                : e.placeConfirmed && <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><Check size={12} strokeWidth={3} /> Confirmed</span>)}
               <span className="text-xs text-slate-400">{e.participantIds.length ? e.participantIds.map((id) => names.get(id)).filter(Boolean).join(', ') : 'no attendant yet'}</span>
               {canEdit && (
                 <span className="ml-auto flex gap-1">
@@ -112,7 +119,8 @@ export function CaseEventsPanel({ caseObj: c, canEdit, currentUser }: { caseObj:
               <div className="text-sm font-medium text-slate-700">Starts<div className="mt-1"><Time24 label="Start" value={draft.start} onChange={(v) => setDraft({ ...draft, start: v })} /></div></div>
               <div className="text-sm font-medium text-slate-700">Ends <span className="font-normal text-slate-400">(optional)</span><div className="mt-1"><Time24 label="End" value={draft.end} onChange={(v) => setDraft({ ...draft, end: v })} /></div></div>
             </div>
-            <label className="mb-3 block text-sm font-medium text-slate-700">Place<input value={draft.place} onChange={(e) => setDraft({ ...draft, place: e.target.value })} placeholder="e.g. DHS, Our Lady of Soledad, Coachella Cemetery" className={input} /></label>
+            <label className="mb-3 block text-sm font-medium text-slate-700">Place<input value={draft.place} onChange={(e) => setDraft({ ...draft, place: e.target.value, confirmed: e.target.value.trim() === draft.origPlace.trim() ? draft.origConfirmed : false })} placeholder="e.g. DHS, Our Lady of Soledad, Coachella Cemetery" className={input} /></label>
+            {draft.place.trim() && <label className="-mt-1 mb-3 flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={draft.confirmed} onChange={(e) => setDraft({ ...draft, confirmed: e.target.checked })} style={{ width: 17, height: 17, accentColor: '#3d5a80' }} /> Place is confirmed <span className="text-xs text-slate-400">(shows a check mark on the TV Board)</span></label>}
             <div className="mb-3">
               <div className="text-sm font-medium text-slate-700">Funeral attendants</div>
               <div className="mt-1 flex flex-wrap gap-1.5">

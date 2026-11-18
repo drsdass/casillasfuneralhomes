@@ -3,7 +3,7 @@ import { api } from './api'
 import { isCaseDone, isPreNeed } from './caseDone'
 
 export type OrderState = 'confirmed' | 'ordered' | 'pending' | 'delivered' | null
-export interface BoardEvent { start: string; end: string; staff: string[]; label?: string; place?: string }
+export interface BoardEvent { start: string; end: string; staff: string[]; label?: string; place?: string; confirmed?: boolean }
 export interface BoardRowData {
   id: string; locationId: string; caseNumber: string; firstName: string; lastName: string; color?: string
   disposition: string; visitationLocation?: string; serviceLocation?: string; boardDisp?: string; boardPlace?: string; boardFlowers?: string; boardBirds?: string; boardEscort?: string; serviceDate?: string; visitationDate?: string; visitationEnd?: string
@@ -28,7 +28,7 @@ export async function loadBoardData(): Promise<BoardData> {
     const [orders, notes] = await Promise.all([api.getOrders(c.id), api.getCaseNotes(c.id)])
     // Burial / committal times sit in the Service column with the other services.
     const evs = (type: string): BoardEvent[] => events.filter((x) => x.caseId === c.id && (x.type === type || (type === 'service' && x.type === 'burial'))).sort((a, b) => a.start.localeCompare(b.start))
-      .map((e) => ({ start: e.start, end: e.end, label: e.label, place: e.location, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] }))
+      .map((e) => ({ start: e.start, end: e.end, label: e.label, place: e.location, confirmed: e.placeConfirmed, staff: e.participantIds.map((id) => names.get(id)).filter(Boolean) as string[] }))
     const st = (re: RegExp) => (orders.find((o) => re.test(o.item))?.status ?? null) as OrderState
     const casketLines = contracts.filter((k) => k.caseId === c.id).flatMap((k) => k.lineItems.map((li) => li.name))
     return {
