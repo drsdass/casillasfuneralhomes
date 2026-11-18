@@ -12,6 +12,19 @@ export async function pdfFromElement(el: HTMLElement): Promise<Blob> {
   return pdfFromElements([el])
 }
 
+/** What a form box says on paper. A date box holds 2026-11-17 inside; on the page it must read 11/17/2026 (and times as 3:30 PM). */
+function inputText(el: HTMLInputElement | HTMLTextAreaElement): string {
+  const v = el.value || ''
+  // (the copy being photographed lives in another document, so instanceof would never match — go by the tag)
+  if (el.tagName !== 'INPUT' || !v) return v
+  const type = (el as HTMLInputElement).type
+  if (type === 'date') { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); return m ? `${m[2]}/${m[3]}/${m[1]}` : v }
+  const time = (t: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(t); if (!m) return t; const h = +m[1]; return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}` }
+  if (type === 'time') return time(v)
+  if (type === 'datetime-local') { const [d, t] = v.split('T'); const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d); return `${m ? `${m[2]}/${m[3]}/${m[1]}` : d}${t ? ' ' + time(t) : ''}` }
+  return v
+}
+
 /**
  * The page's fonts load a weight at a time, only once something uses it. Photographing a form before its bold (or italic)
  * font has arrived measures the words with a stand-in font and draws them with the real one, so words run together.
@@ -47,10 +60,10 @@ export async function pdfFromElements(els: HTMLElement[]): Promise<Blob> {
       onclone: (doc) => {
         doc.querySelectorAll('input, textarea').forEach((node) => {
           const el = node as HTMLInputElement | HTMLTextAreaElement
-          if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) return
+          if (el.tagName === 'INPUT' && ((el as HTMLInputElement).type === 'checkbox' || (el as HTMLInputElement).type === 'radio')) return
           const cs = doc.defaultView!.getComputedStyle(el)
           const span = doc.createElement('div')
-          span.textContent = el.value || ''
+          span.textContent = inputText(el)
           span.className = el.className
           span.style.cssText += `;display:block;box-sizing:border-box;height:auto;min-height:${Math.max(el.offsetHeight, 24)}px;line-height:1.4;padding-top:2px;padding-bottom:3px;white-space:pre-wrap;overflow:visible;font:${cs.font};color:${cs.color};background:transparent;`
           el.parentNode?.replaceChild(span, el)
