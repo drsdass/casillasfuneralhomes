@@ -8,7 +8,7 @@ import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } fro
 import { format } from 'date-fns'
 import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
 import { boardSplit, boardEventsOf, eventPhase, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
-import { ArrowLeft, Check, Clock } from 'lucide-react'
+import { ArrowLeft, Check, Clock, Printer } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
 import { shortLocationName } from '@/lib/company'
@@ -52,8 +52,8 @@ export function FitToScreen({ children, safe = 2 }: { children: ReactNode; safe?
   }, [])
 
   return (
-    <div ref={box} className="flex-1 min-h-0 overflow-hidden" style={{ padding: `${safe * 0.5}vh ${safe}vw ${safe}vh` }}>
-      <div ref={inner} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
+    <div ref={box} className="board-fit flex-1 min-h-0 overflow-hidden" style={{ padding: `${safe * 0.5}vh ${safe}vw ${safe}vh` }}>
+      <div ref={inner} className="board-inner" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
     </div>
   )
 }
@@ -80,10 +80,19 @@ export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?
   const awaiting = split.current.filter((r) => !hasEvents(r))
   const locName = (id: string) => shortLocationName(data.locations.find((l) => l.id === id)?.name ?? '')
   const used = data.locations.filter((l) => data.rows.some((r) => r.locationId === l.id))
+  // Prints on white with black text (the dark screen look would use up the toner); landscape, a few pages at most.
+  const printBoard = () => {
+    const st = document.createElement('style')
+    st.textContent = '@page { size: landscape; margin: 0.4in; }'
+    document.head.appendChild(st)
+    const done = () => { st.remove(); window.removeEventListener('afterprint', done) }
+    window.addEventListener('afterprint', done)
+    window.print()
+  }
   const here = data.screen?.locationId ? shortLocationName(data.locations.find((l) => l.id === data.screen!.locationId)?.name ?? '') : ''
 
   return (
-    <div className="h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
+    <div className="board-print print-target h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
       <div className="no-print flex items-center justify-between px-6 py-1.5 bg-black/20 gap-4">
         {backTo ? (
           <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white"><ArrowLeft size={15} /> Back</Link>
@@ -93,6 +102,9 @@ export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?
           <span className="font-display text-base font-semibold tracking-wide">{getCompanyName()}</span>
         </div>
         <div className="flex items-center gap-5">
+          {backTo && (
+            <button type="button" onClick={printBoard} className="inline-flex items-center gap-1.5 rounded-md border border-white/30 px-3 py-1 text-sm text-slate-100 hover:bg-white/10"><Printer size={15} /> Print</button>
+          )}
           <div className="flex items-center gap-3 text-sm">
             {used.map((l) => (
               <span key={l.id} className="inline-flex items-center gap-1.5 text-slate-200">

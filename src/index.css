@@ -82,3 +82,18 @@ html.easy main input[type='checkbox'], html.easy main input[type='radio'] { widt
 .doc-fit, .doc-fit * { min-width: 0; overflow-wrap: anywhere; }
 .doc-fit img, .doc-fit svg { overflow-wrap: normal; }
 @media print { .doc-fit input { border-radius: 0; } }
+
+/* TV board printout: white paper, black text, no scaling tricks. */
+@media print {
+  html body .board-print.board-print.board-print { background: #fff !important; background-color: #fff !important; }
+  .board-print { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+  .board-print .board-fit { overflow: visible !important; height: auto !important; padding: 0 !important; }
+  .board-print .board-inner { transform: none !important; zoom: 0.6; width: 100% !important; }
+  .board-print, .board-print * { transition: none !important; animation: none !important; }
+  .board-print *:not([style*="background"]) { background: transparent !important; }
+  html body .board-print.board-print, html body .board-print.board-print * { color: #000 !important; border-color: #888 !important; text-shadow: none !important; opacity: 1 !important; }
+  .board-print td, .board-print th, .board-print td * { white-space: normal !important; }
+  .board-print tr { break-inside: avoid; page-break-inside: avoid; }
+  .board-print thead { display: table-header-group; }
+  .board-print .board-pulse { animation: none !important; }
+}
