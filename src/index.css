@@ -19,7 +19,7 @@
   --color-slate-900: #161b22;
 }
 
-html { font-size: 17px; }
+html { font-size: 15px; }
 
 body {
   font-family: var(--font-sans);
@@ -60,7 +60,7 @@ body {
 }
 
 /* Easy view: everything a little larger and easier to hit. Turned on per person from the top bar. */
-html.easy { font-size: 19px; }
+html.easy { font-size: 17px; }
 html.easy main button:not([data-compact]),
 html.easy main input:not([type='checkbox']):not([type='radio']):not([type='range']),
 html.easy main select { min-height: 2.75rem; }
