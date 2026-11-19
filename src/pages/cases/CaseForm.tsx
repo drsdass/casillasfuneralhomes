@@ -156,7 +156,9 @@ export default function CaseForm() {
 
   // The end time is a time on the same day as the visitation start.
   const nextDay = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10) }
-  const visitationEndIso = visitationDate && visitationEndTime ? localInputToIso(`${visitationOvernight ? nextDay(visitationDate.slice(0, 10)) : visitationDate.slice(0, 10)}T${visitationEndTime}`) : undefined
+  // All-night with no end time typed: ends the next morning at 8:00 AM (never the 2-hour default).
+  const effEndTime = visitationEndTime || (visitationOvernight ? '08:00' : '')
+  const visitationEndIso = visitationDate && effEndTime ? localInputToIso(`${visitationOvernight ? nextDay(visitationDate.slice(0, 10)) : visitationDate.slice(0, 10)}T${effEndTime}`) : undefined
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -392,8 +394,8 @@ export default function CaseForm() {
                 <Time24 label="Visitation end" value={visitationEndTime} onChange={setVisitationEndTime} />
               </div>
               <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
-                <input type="checkbox" checked={visitationOvernight} onChange={(e) => setVisitationOvernight(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
-                All-night visitation — ends the next day{visitationOvernight && visitationDate && visitationEndTime ? ` (${new Date(nextDay(visitationDate.slice(0, 10)) + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${visitationEndTime})` : ''}
+                <input type="checkbox" checked={visitationOvernight} onChange={(e) => { setVisitationOvernight(e.target.checked); if (e.target.checked && !visitationEndTime) setVisitationEndTime('08:00') }} className="h-4 w-4 rounded border-slate-300" />
+                All-night visitation — ends the next day{visitationOvernight && visitationDate && effEndTime ? ` (${new Date(nextDay(visitationDate.slice(0, 10)) + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${effEndTime})` : ''}
               </label>
             </div>
             <div>
