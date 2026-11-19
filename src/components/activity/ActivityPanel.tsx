@@ -49,11 +49,11 @@ export function ActivityPanel({ caseId, entityType, entityId, title = 'Activity'
       {filtered.length === 0 ? (
         <div className="text-sm text-slate-400 text-center py-6">Nothing recorded yet.</div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {filtered.map((entry) => (
-            <div key={entry.id} className="text-sm">
+            <div key={entry.id} className="text-xs leading-snug">
               <div className="text-slate-700">{entry.summary}</div>
-              <div className="text-xs text-slate-400 mt-0.5">
+              <div className="text-[11px] text-slate-400 mt-0.5">
                 {entry.changedByName} · {formatDistanceToNow(parseISO(entry.timestamp), { addSuffix: true })}
               </div>
             </div>
