@@ -1,5 +1,6 @@
 """Exports Ashlie's quote workbook (7 tabs) to src/data/statementSheets.json + public/statement-logo.png.
-Usage: python3 scripts/export_statements.py path/to/ASHLIES_QUOTES.xlsx"""
+Columns A..AH (34) are the printed form; anything in AI and beyond is kept as a per-tab "notes" list (shown beside that tab only).
+Usage: python3 scripts/export_statements.py path/to/QUOTES.xlsx [out.json]"""
 import sys, json, colorsys, re, zipfile, datetime
 import openpyxl
 from openpyxl.styles.colors import COLOR_INDEX
@@ -7,6 +8,9 @@ from openpyxl.utils import get_column_letter
 
 src = sys.argv[1]
 wb = openpyxl.load_workbook(src)
+wbv = openpyxl.load_workbook(src, data_only=True)
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'src/data/statementSheets.json'
+FORM_COLS = 34
 
 # ---- theme colours ----
 theme = []
@@ -55,7 +59,18 @@ def px_col(w): return round((w if w else 8.43) * 7 + 5)
 
 out = []
 for ws in wb.worksheets:
-    maxr, maxc = ws.max_row, ws.max_column
+    maxr, maxc = ws.max_row, min(ws.max_column, FORM_COLS)
+    notes = []
+    wv = wbv[ws.title]
+    for r in range(1, ws.max_row + 1):
+        parts = []
+        for c in range(FORM_COLS + 1, ws.max_column + 1):
+            v = wv.cell(r, c).value
+            if v is None or (isinstance(v, str) and not v.strip()): continue
+            if isinstance(v, float): v = round(v, 2)
+            if isinstance(v, (datetime.datetime, datetime.date)): v = str(v)[:10]
+            parts.append(str(v).strip())
+        if parts: notes.append(parts)
     # column widths (dimensions may cover ranges)
     cols = [px_col(ws.sheet_format.defaultColWidth or 8.43)] * maxc
     for k, d in ws.column_dimensions.items():
@@ -68,7 +83,7 @@ for ws in wb.worksheets:
         d = ws.row_dimensions.get(r)
         h = d.height if d is not None and d.height else dh
         rows.append(0 if (d is not None and d.hidden) else round(h * 96 / 72))
-    merges = [[m.min_row, m.min_col, m.max_row, m.max_col] for m in ws.merged_cells.ranges]
+    merges = [[m.min_row, m.min_col, m.max_row, min(m.max_col, FORM_COLS)] for m in ws.merged_cells.ranges if m.min_col <= FORM_COLS]
     mmap = {}
     for r1, c1, r2, c2 in merges: mmap[(r1, c1)] = (r2, c2)
     styles, sidx, cells = [], {}, {}
@@ -118,19 +133,19 @@ for ws in wb.worksheets:
             img = None
     # which cells hold the person / decedent details (found next to their labels) so the app can fill them from the case
     fields = {}
-    want = {'Name:': 'name', 'Relationship:': 'rel', 'Address:': 'addr', 'Phone:': 'phone', 'Decedent:': 'dec', 'Date of Death:': 'dod'}
+    want = {'Name:': 'name', 'Relationship:': 'rel', 'Address:': 'addr', 'Phone:': 'phone', 'Decedent:': 'dec', "Decedent's Name:": 'dec', 'Date of Death:': 'dod'}
     for k, e in cells.items():
         v = e.get('v')
-        if isinstance(v, str) and v.strip() in want:
+        if isinstance(v, str) and ' '.join(v.split()) in want:
             r, c = map(int, k.split(','))
             end = mmap.get((r, c), (r, c))[1]
             for c2 in range(end + 1, maxc + 1):
                 e2 = cells.get('%d,%d' % (r, c2))
                 if e2 and ('v' in e2 or 'f' in e2 or styles[e2['s']].get('bb')):
-                    fields[want[v.strip()]] = '%d,%d' % (r, c2); break
+                    fields[want[' '.join(v.split())]] = '%d,%d' % (r, c2); break
     ref = [f for f in out if f['fields']]
     if len(fields) < 6 and ref:   # same layout on every tab: fall back to the same offset from the label column
-        labcol = {w: int(k.split(',')[1]) for k, e in cells.items() for w in [want.get(str(e.get('v')).strip())] if w}
+        labcol = {w: int(k.split(',')[1]) for k, e in cells.items() for w in [want.get(' '.join(str(e.get('v')).split()))] if w}
         for key, off in (('name', 4), ('rel', 4), ('addr', 4), ('phone', 4), ('dec', 5), ('dod', 5)):
             if key not in fields and key in labcol:
                 row = int(ref[0]['fields'][key].split(',')[0])
@@ -144,9 +159,9 @@ for ws in wb.worksheets:
     cols, rows = cols[:usedc], rows[:usedr]
     cells = {k: e for k, e in cells.items() if int(k.split(',')[0]) <= usedr and int(k.split(',')[1]) <= usedc}
     merges = [[a, b, min(c, usedr), min(d, usedc)] for a, b, c, d in merges if a <= usedr and b <= usedc]
-    out.append({'name': ws.title.strip(), 'fields': fields, 'cols': cols, 'rows': rows, 'merges': merges, 'styles': styles, 'cells': cells, 'image': img})
+    out.append({'name': ws.title.strip(), 'fields': fields, 'cols': cols, 'rows': rows, 'merges': merges, 'styles': styles, 'cells': cells, 'image': img, 'notes': notes, 'tpl': 2})
 
-json.dump(out, open('src/data/statementSheets.json', 'w'), separators=(',', ':'))
+json.dump(out, open(OUT, 'w'), separators=(',', ':'))
 z = zipfile.ZipFile(src)
 media = [n for n in z.namelist() if n.startswith('xl/media/')]
 if media:

@@ -15,6 +15,10 @@ export interface SheetDef {
   styles: SheetStyle[]
   cells: Record<string, SheetCell>
   image: { from: number[]; to: number[] } | null
+  /** 2 = QUOTES 2026 forms; absent on the earlier forms. */
+  tpl?: number
+  /** Whatever sat beyond column AH in the workbook, kept as notes for this tab only. */
+  notes?: string[][]
 }
 
 export const colLetter = (c: number): string => { let s = ''; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26) }; return s }

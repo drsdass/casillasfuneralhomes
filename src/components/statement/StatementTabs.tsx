@@ -8,10 +8,13 @@ import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
 import { freezeDates } from '@/lib/quoteForms'
+import { resolveSheets, stamp, type SheetBook } from '@/lib/statementSheets'
+import { TabNotes } from './TabNotes'
 import { quotes, defaultValidUntil, money as fmt, type QuoteLine } from '@/lib/quotes'
 
-let sheetsPromise: Promise<SheetDef[]> | null = null
-export const loadSheets = () => (sheetsPromise ??= import('@/data/statementSheets.json').then((m) => m.default as unknown as SheetDef[]))
+let bookPromise: Promise<SheetBook> | null = null
+/** Both editions of the order forms: the QUOTES 2026 tabs and the earlier tabs that old cases and quotes still use. */
+export const loadBook = () => (bookPromise ??= Promise.all([import('@/data/statementSheets.json'), import('@/data/statementSheetsLegacy.json')]).then(([a, b]) => ({ current: a.default as unknown as SheetDef[], legacy: b.default as unknown as SheetDef[] })))
 
 export const ORDERS_VIEW = 'Orders & Price List'
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -42,8 +45,11 @@ export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase, repName?: st
 export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser, onQuoteSaved }: { caseObj: FuneralCase; view: string; onView: (v: string) => void; canEdit: boolean; currentUser: StaffMember; onQuoteSaved?: () => void }) {
   const qc = useQueryClient()
   const [quoting, setQuoting] = useState(false)
-  const { data: sheets } = useQuery({ queryKey: ['statement-sheets'], queryFn: loadSheets, staleTime: Infinity })
+  const { data: book } = useQuery({ queryKey: ['statement-book'], queryFn: loadBook, staleTime: Infinity })
   const { data: savedAll } = useQuery({ queryKey: ['case-statements', caseObj.id], queryFn: () => api.getCaseStatements(caseObj.id) })
+  // Tabs already typed on the earlier forms keep those forms; everything else uses the 2026 forms.
+  const sheets = useMemo(() => (book && savedAll ? resolveSheets(book, savedAll) : undefined), [book, savedAll])
+  const sheetsRef = useRef(sheets); sheetsRef.current = sheets
   const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: api.getContracts })
   const contract = contracts.find((c) => c.caseId === caseObj.id)
 
@@ -52,7 +58,7 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
   const timers = useRef<Record<string, number>>({})
   const [savedFlash, setSavedFlash] = useState(false)
   const save = useMutation({
-    mutationFn: ({ sheet, data }: { sheet: string; data: Record<string, string | number> }) => api.saveCaseStatement(caseObj.id, sheet, data, currentUser),
+    mutationFn: ({ sheet, data }: { sheet: string; data: Record<string, string | number> }) => api.saveCaseStatement(caseObj.id, sheet, Object.keys(data).length ? stamp(sheetsRef.current?.find((x) => x.name === sheet), data) : data, currentUser),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['case-statements', caseObj.id] }); setSavedFlash(true); window.setTimeout(() => setSavedFlash(false), 1500) },
   })
   const onChange = useCallback((sheetName: string, key: string, value: Raw) => {
@@ -176,6 +182,7 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
           <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
             <StatementSheet sheet={withTaxRate(sheet, taxRate)} saved={cur.saved} defaults={cur.defaults} canEdit={canEdit} onChange={(k, v) => onChange(view, k, v)} />
           </div>
+          <TabNotes sheet={sheet} />
           <div className="no-print rounded-md border border-slate-200 bg-white p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <h3 className="text-sm font-semibold text-slate-800">Invoice for this family</h3>
@@ -246,7 +253,7 @@ function SaveQuoteDialog({ names, current, perSheet, sheets, taxRate, caseObj, c
     setPicked(next)
   }
   const save = useMutation({
-    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, taxRate, forms: Object.fromEntries(chosen.map((n) => { const sh = sheets.find((x) => x.name === n)!; const rk = repKey(sh); return [n, freezeDates(sh, { ...perSheet.get(n)!.defaults, ...perSheet.get(n)!.saved, ...(rk ? { [rk]: currentUser.name.toUpperCase() } : {}) })] })), validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
+    mutationFn: () => quotes.create(caseObj.id, { name: name.trim(), packages: chosen, lines, tax, credit, taxRate, forms: Object.fromEntries(chosen.map((n) => { const sh = sheets.find((x) => x.name === n)!; const rk = repKey(sh); return [n, stamp(sh, freezeDates(sh, { ...perSheet.get(n)!.defaults, ...perSheet.get(n)!.saved, ...(rk ? { [rk]: currentUser.name.toUpperCase() } : {}) }))] })), validUntil: days > 0 ? defaultValidUntil(days) : undefined, note: note.trim() || undefined }, currentUser),
     onSuccess: onSaved,
   })
   return (

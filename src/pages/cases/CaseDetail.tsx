@@ -17,7 +17,7 @@ import { useSession } from '@/context/SessionContext'
 import { Card, CaseStatusBadge, CustodyChip, formatCurrency } from '@/components/ui/Primitives'
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { canEditCases, canDeleteCases, canEditCustodyHistory } from '@/lib/permissions'
 import { DeleteCaseDialog } from '@/components/cases/DeleteCaseDialog'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
@@ -31,6 +31,7 @@ import { computeWorkflow } from '@/lib/workflow'
 import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
 import { PrintCenter } from '@/components/documents/PrintCenter'
 import { FamilyMedia } from '@/components/media/FamilyMedia'
+import { noteCaseOpened } from '@/lib/caseShortcuts'
 import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
 import { CaseQuotes } from '@/components/quote/CaseQuotes'
 import { quotes as quotesApi } from '@/lib/quotes'
@@ -127,6 +128,7 @@ export default function CaseDetail() {
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
 
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
+  useEffect(() => { if (c && currentUser) noteCaseOpened(currentUser.id, c.id) }, [c?.id, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const { data: linkedFamily } = useQuery({ queryKey: ['family', c?.familyId], queryFn: () => api.getFamily(c!.familyId!), enabled: !!c?.familyId })
   const { data: tasks = [] } = useQuery({ queryKey: ['case-tasks', caseId], queryFn: () => api.getCaseTasks(caseId!), enabled: !!caseId })
   const { data: notes = [] } = useQuery({ queryKey: ['case-notes', caseId], queryFn: () => api.getCaseNotes(caseId!), enabled: !!caseId })

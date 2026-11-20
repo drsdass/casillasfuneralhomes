@@ -5,7 +5,9 @@ import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
 import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
-import { Search, Upload, Phone } from 'lucide-react'
+import { Search, Upload, Phone, Star } from 'lucide-react'
+import { useCaseShortcuts } from '@/lib/caseShortcuts'
+import { RecentCases } from '@/components/cases/RecentCases'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import type { CaseStatus } from '@/types'
 import { FilePlus2, Copy } from 'lucide-react'
@@ -36,6 +38,9 @@ export default function CaseList() {
   const isAllLocations = true
   const [locFilter, setLocFilter] = useState<string>('all')
   const [showDupes, setShowDupes] = useState(false)
+  const [sortBy, setSortBy] = useState<'default' | 'touched' | 'service' | 'name'>(() => { try { const v = localStorage.getItem('cos.caseSort'); return v === 'touched' || v === 'service' || v === 'name' ? v : 'default' } catch { return 'default' } })
+  const changeSort = (v: typeof sortBy) => { setSortBy(v); try { localStorage.setItem('cos.caseSort', v) } catch { /* ignore */ } }
+  const { recent, pinned, togglePin } = useCaseShortcuts(currentUser?.id)
 
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ['cases', 'all'],
@@ -64,6 +69,18 @@ export default function CaseList() {
     }
     return true
   }).sort((a, b) => {
+    // Starred cases stay at the top until they are unstarred.
+    const pa = pinned.includes(a.id) ? 0 : 1, pb = pinned.includes(b.id) ? 0 : 1
+    if (pa !== pb) return pa - pb
+    if (sortBy === 'name') return `${a.decedent.lastName} ${a.decedent.firstName}`.localeCompare(`${b.decedent.lastName} ${b.decedent.firstName}`)
+    if (sortBy === 'touched') {
+      const at = (c: typeof a) => recent.find((r) => r.id === c.id)?.at ?? 0
+      return at(b) - at(a) || new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+    }
+    if (sortBy === 'service') {
+      const d = (c: typeof a) => { const x = c.serviceDate ?? c.visitationDate; return x ? new Date(x).getTime() : Infinity }
+      return d(a) - d(b)
+    }
     // Open cases first (new first calls with no dates, then soonest service); completed cases last, most recent first.
     const done = (c: typeof a) => (c.status === 'completed' ? 1 : 0)
     if (done(a) !== done(b)) return done(a) - done(b)
@@ -150,8 +167,18 @@ export default function CaseList() {
             </button>
           ))}
           <button onClick={() => setNeedsOnly((v) => !v)} className={`text-xs px-2.5 py-1.5 rounded-md border transition ${needsOnly ? 'bg-red-600 text-white border-red-600' : 'border-red-300 text-red-700 hover:bg-red-50'}`}>Needs attention</button>
+          <label className="ml-auto inline-flex items-center gap-1.5 text-xs text-slate-600">Sort by
+            <select value={sortBy} onChange={(e) => changeSort(e.target.value as typeof sortBy)} className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs" aria-label="Sort cases by">
+              <option value="default">Open cases first</option>
+              <option value="touched">Last opened by me</option>
+              <option value="service">Service date</option>
+              <option value="name">Name (A–Z)</option>
+            </select>
+          </label>
         </div>
       </div>
+
+      <RecentCases cases={inCompany} userId={currentUser.id} />
 
       {showDupes && (
         <Card className="p-4 mb-4 border-amber-200 bg-amber-50/50">
@@ -197,6 +224,7 @@ export default function CaseList() {
               >
                 <td className="px-3 py-3">
                   <Link to={`/cases/${c.id}`} className="flex items-center gap-2">
+                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(c.id) }} title={pinned.includes(c.id) ? 'Starred — stays at the top. Click to unstar' : 'Star this case to keep it at the top'} aria-label={pinned.includes(c.id) ? 'Unstar case' : 'Star case'} className="-ml-1 p-0.5"><Star size={15} className={pinned.includes(c.id) ? 'fill-amber-400 text-amber-500' : 'text-slate-300 hover:text-amber-500'} /></button>
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
                     <span className="font-medium text-slate-900">{c.decedent.firstName} {c.decedent.lastName}</span>
                     {c.familyUnseen && <span title="The family added something in their portal" className="ml-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-full px-2 py-0.5">Family updated</span>}

@@ -12,7 +12,9 @@ import { quickQuotes, quickQuoteEmailText, type QuickQuote } from '@/lib/quickQu
 import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
 import type { Raw, SheetDef } from '@/lib/sheetEngine'
 import { StatementSheet } from '@/components/statement/StatementSheet'
-import { loadSheets } from '@/components/statement/StatementTabs'
+import { TabNotes } from '@/components/statement/TabNotes'
+import { loadBook } from '@/components/statement/StatementTabs'
+import { resolveSheets, stamp } from '@/lib/statementSheets'
 import { QuoteView } from '@/components/quote/QuoteView'
 import { freezeDates } from '@/lib/quoteForms'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
@@ -205,7 +207,10 @@ const newOpt = (o?: Partial<Opt>): Opt => ({ id: `o${optSeq++}`, title: '', loca
 function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?: string[]) => void }) {
   const qc = useQueryClient()
   const { currentUser, activeLocationId, accessibleLocations } = useSession()
-  const { data: sheets } = useQuery({ queryKey: ['statement-sheets'], queryFn: loadSheets, staleTime: Infinity })
+  const { data: book } = useQuery({ queryKey: ['statement-book'], queryFn: loadBook, staleTime: Infinity })
+  const sheets = book?.current
+  // Each option shows the 2026 forms, except a tab already priced on an earlier form, which keeps that form.
+  const sheetsFor = (o: { local: Record<string, Record<string, Raw>> }): SheetDef[] => (book ? resolveSheets(book, o.local) : [])
   const [locationId, setLocationId] = useState(from?.locationId || activeLocationId || accessibleLocations[0]?.id || '')
   const [rate, setRate] = useState(String(from?.taxRate ?? DEFAULT_TAX_RATE))
   const [forName, setForName] = useState(from?.forName ?? '')
@@ -224,17 +229,18 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
   // Every option is priced from the same forms; the dollar amounts are what differ.
   const priced = useMemo(() => opts.map((o) => {
     const per = new Map<string, StatementSummary>()
-    for (const sh of sheets ?? []) per.set(sh.name, summarize(withTaxRate(sh, taxRate), { ...defaultsFor(sh), ...(o.local[sh.name] ?? {}) }).summary)
-    const chosen = (sheets ?? []).map((s) => s.name).filter((n) => o.included.includes(n))
+    for (const sh of sheetsFor(o)) per.set(sh.name, summarize(withTaxRate(sh, taxRate), { ...defaultsFor(sh), ...(o.local[sh.name] ?? {}) }).summary)
+    const chosen = sheetsFor(o).map((s) => s.name).filter((n) => o.included.includes(n))
     const lines: QuoteLine[] = chosen.flatMap((n) => (per.get(n)?.lines ?? []).filter((l) => l.checked && l.amount !== 0).map((l) => ({ name: l.label || 'Other charge', amount: l.amount, pkg: n })))
     const tax = Math.round(chosen.reduce((s, n) => s + (per.get(n)?.tax ?? 0), 0) * 100) / 100
     const credit = Math.round(chosen.reduce((s, n) => s + (per.get(n)?.credit ?? 0), 0) * 100) / 100
     const total = Math.round((lines.reduce((s, l) => s + l.amount, 0) + tax - credit) * 100) / 100
     return { per, chosen, lines, tax, credit, total }
-  }), [sheets, opts, taxRate, forName]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [book, opts, taxRate, forName]) // eslint-disable-line react-hooks/exhaustive-deps
   const now = priced[Math.min(active, priced.length - 1)]
   const perSheet = now.per
-  const sheet: SheetDef | undefined = sheets?.find((s) => s.name === view)
+  const curSheets = sheetsFor(cur)
+  const sheet: SheetDef | undefined = curSheets.find((s) => s.name === view)
   const locName = accessibleLocations.find((l) => l.id === locationId)?.name ?? ''
   const usable = opts.map((o, i) => ({ o, p: priced[i] })).filter((x) => x.p.lines.length > 0)
 
@@ -287,7 +293,7 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
       {!sheets ? <div className="py-10 text-center text-sm text-slate-400">Loading the forms…</div> : (
         <>
           <div className="no-print flex flex-wrap items-end gap-1 border-b border-slate-200">
-            {sheets.map((s) => {
+            {curSheets.map((s) => {
               const on = cur.included.includes(s.name)
               return (
                 <div key={s.name} className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-t-md border border-b-0 -mb-px ${view === s.name ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent hover:bg-white'} ${on ? 'ring-1 ring-inset ring-[#3b4a35]/40' : ''}`}>
@@ -302,7 +308,8 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
           <p className="no-print text-xs text-slate-500">Open a package, type the prices, and tick the box on its tab to put it in the quote. Tick or untick single items inside it.</p>
           {sheet && (
             <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
-              <StatementSheet key={`${cur.id}-${view}`} sheet={withTaxRate(sheet, taxRate)} saved={cur.local[view] ?? {}} defaults={defaultsFor(sheet)} canEdit onChange={(k, v) => setCur((o) => ({ ...o, local: { ...o.local, [view]: { ...(o.local[view] ?? {}), [k]: v } } }))} />
+              <StatementSheet key={`${cur.id}-${view}`} sheet={withTaxRate(sheet, taxRate)} saved={cur.local[view] ?? {}} defaults={defaultsFor(sheet)} canEdit onChange={(k, v) => setCur((o) => ({ ...o, local: { ...o.local, [view]: stamp(sheet, { ...(o.local[view] ?? {}), [k]: v }) } }))} />
+              <TabNotes sheet={sheet} />
             </div>
           )}
           <div className="no-print sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-300 bg-white p-4 shadow-lg">
@@ -325,7 +332,7 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
             for (const { o, p } of usable) {
               const input = { locationId, locationName: locName, forName: forName.trim(), contactPhone: phone.trim() || undefined, contactEmail: email.trim() || undefined, taxRate, packages: p.chosen, lines: p.lines, tax: p.tax, credit: p.credit,
                 name: extra.names[o.id] ?? '', validUntil: extra.validUntil, note: extra.note,
-                forms: Object.fromEntries(p.chosen.map((n) => { const sh = sheets!.find((x) => x.name === n)!; return [n, freezeDates(sh, { ...defaultsFor(sh), ...(o.local[n] ?? {}) })] })) }
+                forms: Object.fromEntries(p.chosen.map((n) => { const sh = sheetsFor(o).find((x) => x.name === n)!; return [n, stamp(sh, freezeDates(sh, { ...defaultsFor(sh), ...(o.local[n] ?? {}) }))] })) }
               if (mode === 'update' && from) { await quickQuotes.replace(from.id, input); made.push(from.id) }
               else made.push((await quickQuotes.create(input, currentUser)).id)
             }

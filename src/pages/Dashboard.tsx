@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { RecentCases } from '@/components/cases/RecentCases'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
@@ -92,6 +93,7 @@ function FullDashboard() {
         </Card>
       </div>
 
+      <RecentCases cases={cases} userId={currentUser.id} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Whiteboard */}
         <Card className="lg:col-span-2 p-4">
