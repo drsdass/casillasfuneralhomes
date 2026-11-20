@@ -141,8 +141,13 @@ for ws in wb.worksheets:
             end = mmap.get((r, c), (r, c))[1]
             for c2 in range(end + 1, maxc + 1):
                 e2 = cells.get('%d,%d' % (r, c2))
+                if e2 and 'v' in e2 and ' '.join(str(e2['v']).split()) in want: break   # ran into the next label: use the first box after this label
                 if e2 and ('v' in e2 or 'f' in e2 or styles[e2['s']].get('bb')):
                     fields[want[' '.join(v.split())]] = '%d,%d' % (r, c2); break
+            else:
+                pass
+            if want[' '.join(v.split())] not in fields and end + 1 <= maxc:
+                fields[want[' '.join(v.split())]] = '%d,%d' % (r, end + 1)
     ref = [f for f in out if f['fields']]
     if len(fields) < 6 and ref:   # same layout on every tab: fall back to the same offset from the label column
         labcol = {w: int(k.split(',')[1]) for k, e in cells.items() for w in [want.get(' '.join(str(e.get('v')).split()))] if w}
@@ -150,6 +155,44 @@ for ws in wb.worksheets:
             if key not in fields and key in labcol:
                 row = int(ref[0]['fields'][key].split(',')[0])
                 fields[key] = '%d,%d' % (row, labcol[key] + off)
+    # a label wider than its own cell (e.g. "Decedent's Name:" in a narrow column) is given the empty cells next to it, so it reads in full; the typed value then starts after it
+    labels = {}
+    for k, e in cells.items():
+        w = want.get(' '.join(str(e.get('v', '')).split()))
+        if w: labels[w] = (int(k.split(',')[0]), int(k.split(',')[1]), ' '.join(str(e['v']).split()))
+    for key in ('name', 'rel', 'phone', 'dec'):
+        if key not in fields or key not in labels: continue
+        r, c0, text = labels[key]
+        c1 = mmap.get((r, c0), (r, c0))[1]
+        c = c1
+        need = len(text) * 7.0 + 6
+        while sum(cols[i - 1] for i in range(c0, c + 1)) < need and c + 1 <= maxc:
+            e2 = cells.get('%d,%d' % (r, c + 1))
+            if e2 and ('v' in e2 or 'f' in e2): break
+            c += 1
+        if c > c1:
+            merges[:] = [m for m in merges if not (m[0] <= r <= m[2] and m[1] <= c and m[3] >= c0)]
+            merges.append([r, c0, r, c])
+            vr, vc = map(int, fields[key].split(','))
+            if vc <= c: fields[key] = '%d,%d' % (r, c + 1)
+            mmap[(r, c0)] = (r, c)
+    # a person field's box runs across the empty cells to its right (as in Excel), so a long name is not shrunk to fit one narrow cell
+    for key in ('name', 'rel', 'phone', 'dec'):
+        if key not in fields: continue
+        r, c0 = map(int, fields[key].split(','))
+        c1 = mmap.get((r, c0), (r, c0))[1]
+        c = c1
+        while c + 1 <= maxc:
+            e2 = cells.get('%d,%d' % (r, c + 1))
+            if e2 and ('v' in e2 or 'f' in e2):
+                if str(e2.get('v', '')).strip().lower() in ('xx', 'xxx', 'xxxx'):   # a sample name typed into the workbook: not part of the form
+                    e2.pop('v', None); c += 1; continue
+                break
+            c += 1
+        # also stop before a merged box that starts further right and holds its own wording
+        if c > c1:
+            merges[:] = [m for m in merges if not (m[0] <= r <= m[2] and m[1] <= c and m[3] >= c0)]
+            merges.append([r, c0, r, c])
     # drop blank trailing columns / rows so the form scales up to fill a printed page
     def has_ink(e):
         st = styles[e['s']]
