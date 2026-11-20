@@ -41,7 +41,7 @@ import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
-const tabs = ['Overview', 'Tasks', 'Orders', 'Quotes', 'Notes', 'Documents', 'Media', 'Emails', 'Financials'] as const
+const tabs = ['Overview', 'Tasks', 'Orders', 'Contracts', 'Quotes', 'Notes', 'Documents', 'Media', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
 const orderStatusStyles: Record<OrderStatus, string> = {
@@ -165,6 +165,10 @@ export default function CaseDetail() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-statements', caseId] }); queryClient.invalidateQueries({ queryKey: ['all-signoffs'] }) },
   })
   const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
+  const chosenContract = typeof caseStatements?.['_chosen']?.name === 'string' ? String(caseStatements['_chosen'].name) : ''
+  // Going back to Orders opens the chosen contract, not the first tab, so the wrong form is not edited by mistake.
+  const openedChosen = useRef('')
+  useEffect(() => { if (chosenContract && openedChosen.current !== `${caseId}:${chosenContract}`) { openedChosen.current = `${caseId}:${chosenContract}`; setOrdersView(chosenContract) } }, [chosenContract, caseId])
   const [confirmPassed, setConfirmPassed] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [choosingDisp, setChoosingDisp] = useState(false)
@@ -886,6 +890,14 @@ export default function CaseDetail() {
       {tab === 'Orders' && (
         <div className="space-y-4">
           <StatementWorkspace caseObj={c} view={ordersView} onView={setOrdersView} canEdit={canEdit} currentUser={currentUser!} onQuoteSaved={() => { setTab('Quotes'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+        </div>
+      )}
+
+      {tab === 'Contracts' && (
+        <div className="space-y-4">
+          {chosenContract
+            ? <StatementWorkspace caseObj={c} lockTo={chosenContract} view={chosenContract} onView={() => {}} canEdit={canEdit} currentUser={currentUser!} onQuoteSaved={() => { setTab('Quotes'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+            : <Card className="p-8 text-center text-sm text-slate-500">No contract has been chosen yet. Open the Orders tab, pick the form the family agreed to and press <b>Make this the chosen contract</b>. It will then appear here and open first on Orders.<div><button type="button" onClick={() => setTab('Orders')} className="mt-3 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white">Go to Orders</button></div></Card>}
         </div>
       )}
 

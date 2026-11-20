@@ -42,7 +42,7 @@ export function caseDefaults(sheet: SheetDef, caseObj: FuneralCase, repName?: st
  * Ashlie's statement tabs for one case. Each tab is a package. Ticking the box on a tab adds that package to the
  * case's invoice; the invoice is every ticked tab added up (staff untick any line that is doubled). Payments follow.
  */
-export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser, onQuoteSaved }: { caseObj: FuneralCase; view: string; onView: (v: string) => void; canEdit: boolean; currentUser: StaffMember; onQuoteSaved?: () => void }) {
+export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser, onQuoteSaved, lockTo }: { lockTo?: string; caseObj: FuneralCase; view: string; onView: (v: string) => void; canEdit: boolean; currentUser: StaffMember; onQuoteSaved?: () => void }) {
   const qc = useQueryClient()
   const [quoting, setQuoting] = useState(false)
   const { data: book } = useQuery({ queryKey: ['statement-book'], queryFn: loadBook, staleTime: Infinity })
@@ -95,6 +95,15 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
     mutationFn: (names: string[]) => api.saveCaseStatement(caseObj.id, '_invoice', { sources: names.join('|'), ...(invRaw?.taxRate !== undefined ? { taxRate: invRaw.taxRate as string | number } : {}) }, currentUser),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['case-statements', caseObj.id] }),
   })
+  // The contract the family chose: it opens first on this case and has its own Contracts tab.
+  const chosen = typeof savedAll?.['_chosen']?.name === 'string' && savedAll['_chosen'].name && perSheet.has(String(savedAll['_chosen'].name)) ? String(savedAll['_chosen'].name) : ''
+  const choose = useMutation({
+    mutationFn: async (name: string) => {
+      await api.saveCaseStatement(caseObj.id, '_chosen', { name }, currentUser)
+      if (name && !ticked.includes(name)) await api.saveCaseStatement(caseObj.id, '_invoice', { sources: [...(sheets ?? []).map((x) => x.name).filter((n) => n === name || ticked.includes(n))].join('|'), ...(invRaw?.taxRate !== undefined ? { taxRate: invRaw.taxRate as string | number } : {}) }, currentUser)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['case-statements', caseObj.id] }),
+  })
   const toggleTab = (name: string) => setTicked.mutate(ticked.includes(name) ? ticked.filter((n) => n !== name) : [...(sheets ?? []).map((s) => s.name).filter((n) => n === name || ticked.includes(n))])
 
   const saveRate = useMutation({
@@ -136,33 +145,42 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
     return () => window.clearTimeout(t)
   }, [canEdit, savedAll, sheets, inSync, sync.isPending, sync.isError, contract, lines.length, wanted, tax, credit])
 
-  const names = (sheets ?? []).map((s) => s.name)
+  const names = (sheets ?? []).map((s) => s.name).filter((n) => !lockTo || n === lockTo)
   const sheet = sheets?.find((s) => s.name === view)
   const cur = perSheet.get(view)
 
   return (
     <div className="space-y-3">
-      <div className="no-print flex flex-wrap items-end gap-1 border-b border-slate-200">
+      {!lockTo && <div className="no-print flex flex-wrap items-end gap-1 border-b border-slate-200">
         {names.map((n) => {
           const on = ticked.includes(n); const t = perSheet.get(n)?.summary.total ?? 0
           return (
             <div key={n} className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-t-md border border-b-0 -mb-px transition ${view === n ? 'bg-white border-slate-200' : 'bg-slate-50 border-transparent hover:bg-white'} ${on ? 'ring-1 ring-inset ring-[#3b4a35]/40' : ''}`}>
               <input type="checkbox" checked={on} disabled={!canEdit || setTicked.isPending} onChange={() => toggleTab(n)} title={on ? 'This package is on the invoice — click to take it off' : 'Click to add this package to the invoice'} style={{ width: 17, height: 17, accentColor: '#3d5a80', cursor: canEdit ? 'pointer' : 'default' }} />
               <button type="button" onClick={() => onView(n)} className={`text-left text-sm font-medium ${view === n ? 'text-[#3b4a35]' : 'text-slate-500 hover:text-slate-800'}`}>
-                {n.trim()}<span className="block text-[11px] font-normal text-slate-400">{money(t)}</span>
+                {n.trim()}{chosen === n && <span className="ml-1.5 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">CHOSEN</span>}<span className="block text-[11px] font-normal text-slate-400">{money(t)}</span>
               </button>
             </div>
           )
         })}
         <button type="button" onClick={() => onView(ORDERS_VIEW)}
           className={`ml-3 px-3.5 py-2 text-sm font-medium rounded-t-md border border-b-0 -mb-px transition ${view === ORDERS_VIEW ? 'bg-white text-[#3b4a35] border-slate-200' : 'bg-slate-50 text-slate-500 border-transparent hover:text-slate-800'}`}>{ORDERS_VIEW}</button>
-      </div>
+      </div>}
 
+      {!lockTo && chosen && view !== chosen && view !== ORDERS_VIEW && (
+        <div className="no-print flex flex-wrap items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          <span>The family chose <strong>{chosen.trim()}</strong>. You are looking at a different form, so changes here do not change the chosen contract.</span>
+          <button type="button" onClick={() => onView(chosen)} className="ml-auto rounded-md bg-emerald-700 px-3 py-1 text-sm font-semibold text-white hover:bg-emerald-800">Go to the chosen contract</button>
+        </div>
+      )}
       {view !== ORDERS_VIEW && (!sheet || !cur) && <div className="text-sm text-slate-400 py-10 text-center">Loading the form…</div>}
       {view !== ORDERS_VIEW && sheet && cur && (
         <>
           <div className="no-print flex flex-wrap items-center gap-2">
             <button type="button" onClick={lockAndPrint} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3 py-1.5 hover:bg-[#3b4a35]/5"><Printer size={15} /> Print this form</button>
+            {canEdit && (chosen === view
+              ? <button type="button" disabled={choose.isPending} onClick={() => { if (confirm('Take the chosen mark off this contract?')) choose.mutate('') }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-md px-3 py-1.5"><Check size={15} /> Chosen contract — click to unmark</button>
+              : <button type="button" disabled={choose.isPending} onClick={() => { if (!chosen || confirm(`The chosen contract is currently ${chosen.trim()}. Make ${view.trim()} the chosen one instead?`)) choose.mutate(view) }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-800 border border-emerald-400 rounded-md px-3 py-1.5 hover:bg-emerald-50"><Check size={15} /> Make this the chosen contract</button>)}
             {canEdit && <button type="button" onClick={() => setQuoting(true)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-[#3b4a35] rounded-md px-3 py-1.5 hover:bg-[#4d5f45]"><FileText size={15} /> Save as quote</button>}
             {canEdit && Object.keys(cur.saved).length > 0 && (
               <button type="button" onClick={() => { if (confirm('Clear everything typed on this tab for this case and go back to the blank form?')) { setLocal((l) => ({ ...l, [view]: {} })); save.mutate({ sheet: view, data: {} }) } }}
