@@ -20,7 +20,13 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setSubmitting(true)
-    const result = await login(email, password)
+    // Phones: autofill can fill a box without telling the page, and keyboards can add a trailing space.
+    // So read what is actually in the boxes, and if that fails only because of stray spaces, try again without them.
+    const form = new FormData(e.currentTarget as HTMLFormElement)
+    const em = String(form.get('email') ?? email).trim()
+    const pw = String(form.get('password') ?? password)
+    let result = await login(em, pw)
+    if (!result.ok && pw !== pw.trim()) result = await login(em, pw.trim())
     setSubmitting(false)
     if (!result.ok) {
       setError(result.error)
@@ -81,6 +87,11 @@ export default function LoginPage() {
             <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
             <input
               type="email"
+              name="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               autoFocus
               value={email}
@@ -93,6 +104,11 @@ export default function LoginPage() {
             <label className="block text-xs font-medium text-slate-600 mb-1">Password</label>
             <input
               type="password"
+              name="password"
+              autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
