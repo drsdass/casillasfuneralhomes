@@ -6,6 +6,8 @@ import './index.css'
 import App from './App.tsx'
 import { installPrintFit } from './lib/printFit'
 installPrintFit()
+import { installErrorLog } from './lib/errorLog'
+installErrorLog()
 
 // After an update goes live, a tab left open from before can't find the page pieces it asks for. Reload once to pick up the new version.
 window.addEventListener('vite:preloadError', (e) => {

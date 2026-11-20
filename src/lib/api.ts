@@ -252,6 +252,7 @@ async function esignCall(body: Record<string, unknown>) {
   return data
 }
 
+export interface HelpReport { id: string; created_at: string; staff_id: string | null; staff_name: string; page: string; message: string; details: string; status: 'new' | 'looking' | 'fixed'; note: string }
 export const api = {
   // -------------------------------------------------------------------
   // Locations / staff / roles / access
@@ -2185,6 +2186,25 @@ export const api = {
   // never block or fail the actual action that triggered it. Every call
   // site below wraps this in its own try/catch for exactly that reason.
   // -------------------------------------------------------------------
+
+  // ---- Help button: "something isn't working" reports ----
+  async submitHelpReport(input: { message: string; page: string; details: string }, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { try { const all = JSON.parse(localStorage.getItem('cos.helpReports') || '[]'); all.unshift({ id: crypto.randomUUID(), created_at: new Date().toISOString(), staff_id: by.id, staff_name: by.name, status: 'new', note: '', ...{ page: input.page, message: input.message, details: input.details } }); localStorage.setItem('cos.helpReports', JSON.stringify(all)) } catch { /* ignore */ } return }
+    const { error } = await supabase!.from('help_reports').insert({ staff_id: by.id, staff_name: by.name, page: input.page, message: input.message, details: input.details })
+    if (error) throw error
+    void this.notifySlack(`🆘 *Help report* from ${by.name} on ${input.page}: ${input.message.slice(0, 300)}`)
+  },
+  async getHelpReports(): Promise<HelpReport[]> {
+    if (USE_MOCK) { try { return JSON.parse(localStorage.getItem('cos.helpReports') || '[]') } catch { return [] } }
+    const { data, error } = await supabase!.from('help_reports').select('*').order('created_at', { ascending: false }).limit(200)
+    if (error) throw error
+    return (data ?? []) as HelpReport[]
+  },
+  async setHelpReportStatus(id: string, status: HelpReport['status'], note?: string): Promise<void> {
+    if (USE_MOCK) { try { const all = JSON.parse(localStorage.getItem('cos.helpReports') || '[]').map((r: HelpReport) => (r.id === id ? { ...r, status, note: note ?? r.note } : r)); localStorage.setItem('cos.helpReports', JSON.stringify(all)) } catch { /* ignore */ } return }
+    const { error } = await supabase!.from('help_reports').update({ status, ...(note !== undefined ? { note } : {}) }).eq('id', id)
+    if (error) throw error
+  },
 
   async notifySlack(text: string): Promise<void> {
     if (USE_MOCK) return // no-op in demo mode

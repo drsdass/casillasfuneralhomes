@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
+import { HelpReportsPanel } from '@/components/admin/HelpReportsPanel'
 import { TvScreensPanel } from '@/components/admin/TvScreensPanel'
 import { StaffDaySummary } from '@/components/admin/StaffDaySummary'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
@@ -28,7 +29,7 @@ export default function AdminPage() {
   const queryClient = useQueryClient()
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [accessPanelId, setAccessPanelId] = useState<string | null>(null)
-  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'screens' | 'audit'>('staff')
+  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'screens' | 'help' | 'audit'>('staff')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const canAssign = currentUser ? canAssignRoles(currentUser.role) : false
   const canManage = currentUser ? canManageAccess(currentUser.role) : false
@@ -181,6 +182,14 @@ export default function AdminPage() {
             TV Screens
           </button>
         )}
+        {canManage && (
+          <button
+            onClick={() => setSubTab('help')}
+            className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${subTab === 'help' ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Help reports
+          </button>
+        )}
         {canViewAudit && (
           <button
             onClick={() => setSubTab('audit')}
@@ -192,6 +201,7 @@ export default function AdminPage() {
       </div>
 
       {subTab === 'screens' && canManage && <TvScreensPanel />}
+      {subTab === 'help' && canManage && <HelpReportsPanel />}
 
       {subTab === 'staff' && (
         <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">

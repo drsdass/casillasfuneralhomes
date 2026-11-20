@@ -15,6 +15,7 @@ import { useWorkflowFor } from '@/lib/useWorkflow'
 import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 import { ROLE_LABELS } from '@/types'
 import { playMessageChime, isMessageSoundEnabled, setMessageSoundEnabled } from '@/lib/notificationSound'
+import { HelpButton } from './HelpButton'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
@@ -295,6 +296,7 @@ export default function AppShell() {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <WhoIsOnline />
+            <HelpButton />
             {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}
