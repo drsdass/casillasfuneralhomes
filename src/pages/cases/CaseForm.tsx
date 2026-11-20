@@ -1,5 +1,6 @@
 import { BOARD_DISP_OPTIONS } from '@/lib/boardDisp'
 import { DateTime24, Time24 } from '../../components/ui/DateTime24'
+import { CaseEventsPanel } from '../../components/cases/CaseEventsPanel'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -160,6 +161,9 @@ export default function CaseForm() {
   const effEndTime = visitationEndTime || (visitationOvernight ? '08:00' : '')
   const visitationEndIso = visitationDate && effEndTime ? localInputToIso(`${visitationOvernight ? nextDay(visitationDate.slice(0, 10)) : visitationDate.slice(0, 10)}T${effEndTime}`) : undefined
 
+  const visChanged = !!existing && (visitationDate !== isoToLocalInput(existing.visitationDate) || visitationLocation !== (existing.visitationLocation ?? '') || effEndTime !== isoToLocalInput(existing.visitationEnd).slice(11, 16))
+  const svcChanged = !!existing && (serviceDate !== isoToLocalInput(existing.serviceDate) || serviceLocation !== (existing.serviceLocation ?? ''))
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (quoteStart && !firstName.trim() && !lastName.trim() && !contactName.trim()) throw new Error('Enter the name of the person asking for the quote (or the patient\'s name).')
@@ -176,11 +180,9 @@ export default function CaseForm() {
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
           contacts,
           familyId,
-          visitationDate: localInputToIso(visitationDate),
-          visitationEnd: visitationEndIso,
-          visitationLocation: visitationLocation || undefined,
-          serviceDate: localInputToIso(serviceDate),
-          serviceLocation: serviceLocation || undefined,
+          // Only send the visitation / service boxes if they were changed here; otherwise saving this page must not touch the dates and Calendar events set elsewhere.
+          ...(visChanged ? { visitationDate: localInputToIso(visitationDate), visitationEnd: visitationEndIso, visitationLocation: visitationLocation || undefined } : {}),
+          ...(svcChanged ? { serviceDate: localInputToIso(serviceDate), serviceLocation: serviceLocation || undefined } : {}),
         }, currentUser!)
       }
       return api.createCase({
@@ -384,7 +386,8 @@ export default function CaseForm() {
 
         <Card className="p-5 mb-5">
           <h3 className="text-sm font-medium text-slate-800 mb-1">Visitation &amp; Service</h3>
-          <p className="text-xs text-slate-400 mb-3">Setting a date here automatically adds (or updates) it on the Calendar — no separate step needed.</p>
+          {isEdit && existing && currentUser && <CaseEventsPanel caseObj={existing} canEdit currentUser={currentUser} />}
+          <p className="text-xs text-slate-400 mb-3">{isEdit ? 'The list above is every visitation and service on the Calendar — add, change or remove them there. The boxes below are only the main visitation and service; leave them alone unless you are changing those.' : 'Setting a date here automatically adds (or updates) it on the Calendar — no separate step needed.'}</p>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className={labelClass}>Visitation Date &amp; Start Time (24-hour)</label>

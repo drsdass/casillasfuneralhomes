@@ -164,6 +164,10 @@ export default function CaseDetail() {
     mutationFn: (v: { key: string; fp: string; label: string }) => api.signOffCheck(caseId!, v.key, v.fp, v.label, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-statements', caseId] }); queryClient.invalidateQueries({ queryKey: ['all-signoffs'] }) },
   })
+  const statusMutation = useMutation({
+    mutationFn: (status: import('@/types').CaseStatus) => api.updateCase(caseId!, { status }, currentUser!),
+    onSuccess: () => { for (const k of ['case', 'cases', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
+  })
   const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
   const chosenContract = typeof caseStatements?.['_chosen']?.name === 'string' ? String(caseStatements['_chosen'].name) : ''
   // Going back to Orders opens the chosen contract, not the first tab, so the wrong form is not edited by mistake.
@@ -409,7 +413,11 @@ export default function CaseDetail() {
               <span className="text-[11px] text-slate-400">shown on the TV Board</span>
             </div>
           )}
-          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
+          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5">{canEdit && (
+            <select value={c.status} onChange={(e) => statusMutation.mutate(e.target.value as import('@/types').CaseStatus)} aria-label="Change case status" title="Change the status of this case" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+              {([['first_call', 'First Call'], ['arrangement_pending', 'Arrangement Pending'], ['arrangement_scheduled', 'Arrangement Scheduled'], ['in_progress', 'In Progress'], ['service_scheduled', 'Service Scheduled'], ['completed', 'Completed'], ['on_hold', 'On Hold']] as const).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          )}{!canEdit && <CaseStatusBadge status={c.status} />}<CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">
               <Users2 size={11} /> {linkedFamily.name}
