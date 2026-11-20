@@ -1,7 +1,7 @@
 import { deriveServicePatch, deriveVitalEvents, VITAL_EVENT_KEYS } from '@/lib/vitalToCase'
 import { PlacePicker } from '../../components/ui/PlacePicker'
 import { Time24 } from '../../components/ui/DateTime24'
-import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
+import { useState, useEffect, useRef, createContext, useContext, type ReactNode } from 'react'
 import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -95,7 +95,9 @@ export default function VitalSheetIntake() {
   const navigate = useNavigate()
   const { currentUser, accessibleLocations } = useSession()
   const { data: staffAll = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
-  const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
+  // Always re-read the case when this page opens, and fill the boxes from that fresh copy — never from an older cached one.
+  const { data: c, isFetchedAfterMount } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId, refetchOnMount: 'always' })
+  const baseline = useRef<VitalSheetInfo>({})
 
   // Vital Sheet fields proper
   const [f, setF] = useState<VitalSheetInfo>({})
@@ -129,13 +131,14 @@ export default function VitalSheetIntake() {
   const [pinned, setPinned] = useState<Set<string> | null>(null)
 
   useEffect(() => {
-    if (c && !initialized) {
+    if (c && isFetchedAfterMount && !initialized) {
       const seeded = withFirstCallDefaults(c) // First Call pickup place → place-of-death boxes, where still empty
       const init = withSplitNames(seeded.vitalSheet)
       init.education = normalizeEducation(init.education).value ?? init.education
       init.race = normalizeRace(init.race).value ?? init.race
       init.typeOfDisposition = normalizeDisposition(init.typeOfDisposition).value ?? init.typeOfDisposition
       setF(init)
+      baseline.current = { ...init }
       setFirstName(c.decedent.firstName)
       setMiddleName(c.decedent.middleName ?? '')
       setLastName(c.decedent.lastName)
@@ -150,7 +153,7 @@ export default function VitalSheetIntake() {
       setCoronerNumber(c.firstCall?.coronerCaseNumber ?? '')
       setInitialized(true)
     }
-  }, [c, initialized])
+  }, [c, initialized, isFetchedAfterMount])
 
   function set<K extends keyof VitalSheetInfo>(key: K, value: VitalSheetInfo[K]) {
     setF((prev) => ({ ...prev, [key]: value }))
@@ -193,28 +196,37 @@ export default function VitalSheetIntake() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!c) return
-      const fromSheet = deriveServicePatch(c, f).patch // puts the service times on the Calendar and TV Board
+      // Save on top of the newest copy in the database, changing only the boxes edited here — so something a family member
+      // or a coworker added in the meantime is not wiped out by this save.
+      const latest = (await api.getCase(caseId!)) ?? c
+      const changed: VitalSheetInfo = {}
+      for (const k of new Set([...Object.keys(f), ...Object.keys(baseline.current)]) as Set<keyof VitalSheetInfo>) {
+        if (JSON.stringify(f[k]) !== JSON.stringify(baseline.current[k])) (changed as Record<string, unknown>)[k] = f[k]
+      }
+      const merged: VitalSheetInfo = { ...(latest.vitalSheet ?? {}), ...changed }
+      const fromSheet = deriveServicePatch(latest, merged).patch // puts the service times on the Calendar and TV Board
       await api.updateCase(caseId!, {
         ...fromSheet,
-        vitalSheet: f,
+        vitalSheet: merged,
         decedent: {
-          ...c.decedent,
+          ...latest.decedent,
           firstName, middleName: middleName || undefined, lastName,
           dateOfBirth: dob || undefined, dateOfDeath: dod || undefined,
           sex: sex || undefined, maritalStatus: marital || undefined, veteran,
           placeOfDeath: placeOfDeath || undefined,
         },
         firstCall: {
-          ...(c.firstCall ?? {}),
+          ...(latest.firstCall ?? {}),
           timeOfDeath: timeOfDeath || undefined,
           weight: weight || undefined,
           coronerCaseNumber: coronerNumber || undefined,
         },
       }, currentUser!)
       // Rosary and graveside become events of their own (several can sit on one case); only when their boxes changed, so hand edits survive.
-      const prev = c.vitalSheet ?? {}
-      if (VITAL_EVENT_KEYS.some((k) => (prev[k] ?? '') !== (f[k] ?? ''))) { try { await api.syncVitalEvents(c, deriveVitalEvents(f), currentUser!) } catch { /* the database step case-events.sql has not been run yet */ } }
+      const prev = latest.vitalSheet ?? {}
+      if (VITAL_EVENT_KEYS.some((k) => (prev[k] ?? '') !== (merged[k] ?? ''))) { try { await api.syncVitalEvents(latest, deriveVitalEvents(merged), currentUser!) } catch { /* the database step case-events.sql has not been run yet */ } }
       if (ssnDirty && ssn.trim()) await api.setDecedentSsn(caseId!, ssn, currentUser!)
+      baseline.current = { ...f }
     },
     onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
   })
