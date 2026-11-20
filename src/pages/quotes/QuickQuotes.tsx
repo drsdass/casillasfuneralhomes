@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { shortLocationName, getCompanyName } from '@/lib/company'
 import { money, defaultValidUntil, type QuoteLine } from '@/lib/quotes'
 import { quickQuotes, quickQuoteEmailText, type QuickQuote } from '@/lib/quickQuotes'
-import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
+import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, taxRateForLocation, type StatementSummary } from '@/lib/statementItems'
 import type { Raw, SheetDef } from '@/lib/sheetEngine'
 import { StatementSheet } from '@/components/statement/StatementSheet'
 import { TabNotes } from '@/components/statement/TabNotes'
@@ -212,7 +212,7 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
   // Each option shows the 2026 forms, except a tab already priced on an earlier form, which keeps that form.
   const sheetsFor = (o: { local: Record<string, Record<string, Raw>> }): SheetDef[] => (book ? resolveSheets(book, o.local) : [])
   const [locationId, setLocationId] = useState(from?.locationId || activeLocationId || accessibleLocations[0]?.id || '')
-  const [rate, setRate] = useState(String(from?.taxRate ?? DEFAULT_TAX_RATE))
+  const [rate, setRate] = useState(String(from?.taxRate ?? taxRateForLocation(accessibleLocations.find((l) => l.id === locationId)?.name)))
   const [forName, setForName] = useState(from?.forName ?? '')
   const [phone, setPhone] = useState(from?.contactPhone ?? '')
   const [email, setEmail] = useState(from?.contactEmail ?? '')
@@ -256,7 +256,7 @@ function QuoteBuilder({ from, onDone }: { from?: QuickQuote; onDone: (savedIds?:
 
       <div className="no-print grid grid-cols-1 gap-3 rounded-md border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
         <label className="block text-sm font-medium text-slate-700">Location
-          <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={inputCls}>
+          <select value={locationId} onChange={(e) => { setLocationId(e.target.value); setRate(String(taxRateForLocation(accessibleLocations.find((l) => l.id === e.target.value)?.name))) }} className={inputCls}>
             {accessibleLocations.map((l) => <option key={l.id} value={l.id}>{shortLocationName(l.name)}</option>)}
           </select>
         </label>

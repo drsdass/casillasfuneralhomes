@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Printer, RotateCcw, Check, FileText, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { dateToSerial, type Raw, type SheetDef } from '@/lib/sheetEngine'
-import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, type StatementSummary } from '@/lib/statementItems'
+import { summarize, withTaxRate, repKey, DEFAULT_TAX_RATE, taxRateForLocation, type StatementSummary } from '@/lib/statementItems'
 import type { FuneralCase, StaffMember } from '@/types'
 import { StatementSheet } from './StatementSheet'
 import { PaymentsPanel } from './PaymentsPanel'
@@ -74,7 +74,10 @@ export function StatementWorkspace({ caseObj, view, onView, canEdit, currentUser
 
   // ---- every tab worked out, so each can show its own total and the invoice can add them up ----
   const invRaw = savedAll?.['_invoice']
-  const taxRate = (() => { const n = Number(invRaw?.taxRate); return invRaw?.taxRate !== undefined && invRaw?.taxRate !== '' && isFinite(n) && n >= 0 ? n : DEFAULT_TAX_RATE })()
+  const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: () => api.getLocations() })
+  // The rate follows the location the case is handled at, unless someone typed a different one for this case.
+  const locationRate = taxRateForLocation(locations.find((l) => l.id === caseObj.locationId)?.name)
+  const taxRate = (() => { const n = Number(invRaw?.taxRate); return invRaw?.taxRate !== undefined && invRaw?.taxRate !== '' && isFinite(n) && n >= 0 ? n : locationRate })()
   const perSheet = useMemo(() => {
     const out = new Map<string, { defaults: Record<string, Raw>; saved: Record<string, Raw>; summary: StatementSummary }>()
     for (const sh of sheets ?? []) {

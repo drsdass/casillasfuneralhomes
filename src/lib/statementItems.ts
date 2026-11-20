@@ -77,6 +77,10 @@ export interface StatementSummary {
 
 /** The rate the forms were built with; each case can use its own (cases are in different cities). */
 export const DEFAULT_TAX_RATE = 8.75
+/** Sales tax by where the services are done: Cathedral City is 9.25%; Coachella and Desert Hot Springs are 8.75%. */
+export function taxRateForLocation(name?: string): number {
+  return /cathedral/i.test(name ?? '') ? 9.25 : DEFAULT_TAX_RATE
+}
 const taxCache = new WeakMap<SheetDef, Map<number, SheetDef>>()
 /** A copy of the form whose State Sales Tax line uses this percent instead of 8.75%. */
 export function withTaxRate(sheet: SheetDef, rate: number): SheetDef {
