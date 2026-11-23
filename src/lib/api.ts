@@ -2190,8 +2190,10 @@ export const api = {
   // ---- Help button: "something isn't working" reports ----
   async submitHelpReport(input: { message: string; page: string; details: string }, by: StaffMember): Promise<void> {
     if (USE_MOCK) { try { const all = JSON.parse(localStorage.getItem('cos.helpReports') || '[]'); all.unshift({ id: crypto.randomUUID(), created_at: new Date().toISOString(), staff_id: by.id, staff_name: by.name, status: 'new', note: '', ...{ page: input.page, message: input.message, details: input.details } }); localStorage.setItem('cos.helpReports', JSON.stringify(all)) } catch { /* ignore */ } return }
-    const { error } = await supabase!.from('help_reports').insert({ staff_id: by.id, staff_name: by.name, page: input.page, message: input.message, details: input.details })
+    const { data, error } = await supabase!.from('help_reports').insert({ staff_id: by.id, staff_name: by.name, page: input.page, message: input.message, details: input.details }).select('id').single()
     if (error) throw error
+    // Phone notification + email to the owner. Best effort: the report is already saved either way.
+    void supabase!.functions.invoke('help-alert', { body: { reportId: data.id } }).catch(() => undefined)
     void this.notifySlack(`🆘 *Help report* from ${by.name} on ${input.page}: ${input.message.slice(0, 300)}`)
   },
   async getHelpReports(): Promise<HelpReport[]> {
