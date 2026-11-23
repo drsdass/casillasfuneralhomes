@@ -45,8 +45,8 @@ export function boardEventsOf(r: EvRow): { visits: Ev[]; services: Ev[] } {
  * and cases whose services are all over but which are still open — waiting on cremation, shipping, burial, ashes ...
  * The second group is shown at the bottom, longest-waiting first.
  */
-/** DISP codes where there is normally no service here, so a finished visitation means the case is just waiting on shipping. */
-export const NO_SERVICE_DISPS = ['SHIP-OUT', 'CR/SHIP-OUT']
+/** DISP codes where the visitation is normally the whole service (cremation, or shipping out), so once it is over the case is just waiting on the cremation, shipping or burial. */
+export const NO_SERVICE_DISPS = ['SHIP-OUT', 'CR/SHIP-OUT', 'CR/RES', 'CR/BUR']
 
 export function boardSplit<T extends EvRow & { lastName: string }>(rows: T[], now: Date): { current: T[]; waiting: T[]; doneAt: Map<T, string> } {
   const current: T[] = [], waiting: T[] = []
