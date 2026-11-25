@@ -2378,11 +2378,54 @@ export const api = {
 
   async getAuditLog(filters?: { caseId?: string; entityType?: AuditLogEntry['entityType'] }): Promise<AuditLogEntry[]> {
     if (USE_MOCK) return delay(mockStore.getAuditLog(filters))
-    let query = supabase!.from('audit_log').select('*, staff_members(name)').order('timestamp', { ascending: false })
-    if (filters?.caseId) query = query.eq('case_id', filters.caseId)
-    if (filters?.entityType) query = query.eq('entity_type', filters.entityType)
-    const { data, error } = await query
-    if (error) throw error
-    return (data ?? []).map(rowToAuditLogEntry)
+    // The database hands back at most 1,000 rows per request, so page through to get the whole trail.
+    const all: any[] = []
+    for (let from = 0; from < 10000; from += 1000) {
+      let query = supabase!.from('audit_log').select('*, staff_members(name)').order('timestamp', { ascending: false }).range(from, from + 999)
+      if (filters?.caseId) query = query.eq('case_id', filters.caseId)
+      if (filters?.entityType) query = query.eq('entity_type', filters.entityType)
+      const { data, error } = await query
+      if (error) throw error
+      all.push(...(data ?? []))
+      if ((data ?? []).length < 1000) break
+    }
+    return all.map(rowToAuditLogEntry)
   },
+
+  /** Field-by-field change history (who changed what, old → new). Admin-only by database rule. */
+  async getChangeLog(filters?: { caseId?: string; limit?: number }): Promise<ChangeLogEntry[]> {
+    if (USE_MOCK) return []
+    const limit = filters?.limit ?? 1500
+    let q = supabase!.from('change_log').select('*').order('at', { ascending: false }).limit(limit)
+    if (filters?.caseId) q = q.eq('case_id', filters.caseId)
+    const { data, error } = await q
+    if (error) throw error
+    const rows = data ?? []
+    const ids = [...new Set(rows.map((r: any) => r.changed_by).filter(Boolean))] as string[]
+    const caseIds = [...new Set(rows.map((r: any) => r.case_id).filter(Boolean))] as string[]
+    const names = new Map<string, string>()
+    const cases = new Map<string, string>()
+    if (ids.length) {
+      const { data: s } = await supabase!.from('staff_members').select('id,name').in('id', ids)
+      for (const x of s ?? []) names.set((x as any).id, (x as any).name)
+    }
+    if (caseIds.length) {
+      for (let i = 0; i < caseIds.length; i += 150) {
+        const { data: c } = await supabase!.from('cases').select('id,case_number,decedent_first_name,decedent_last_name').in('id', caseIds.slice(i, i + 150))
+        for (const x of c ?? []) cases.set((x as any).id, `${[(x as any).decedent_first_name, (x as any).decedent_last_name].filter(Boolean).join(' ')} (${(x as any).case_number})`)
+      }
+    }
+    return rows.map((r: any) => ({
+      id: String(r.id), at: r.at, table: r.table_name, recordId: r.record_id ?? '', caseId: r.case_id ?? undefined,
+      caseName: r.case_id ? cases.get(r.case_id) : undefined,
+      action: r.action, who: r.changed_by ? (names.get(r.changed_by) ?? 'Unknown') : 'Automatic / family portal',
+      label: r.label ?? '', changes: r.changes ?? {},
+    }))
+  },
+}
+
+export interface ChangeLogEntry {
+  id: string; at: string; table: string; recordId: string; caseId?: string; caseName?: string
+  action: 'insert' | 'update' | 'delete'; who: string; label: string
+  changes: Record<string, { old: unknown; new: unknown } | number>
 }
