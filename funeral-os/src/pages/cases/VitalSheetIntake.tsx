@@ -1,7 +1,10 @@
-import { useState, useEffect, createContext, useContext, type ReactNode } from 'react'
+import { deriveServicePatch, deriveVitalEvents, VITAL_EVENT_KEYS } from '@/lib/vitalToCase'
+import { PlacePicker } from '../../components/ui/PlacePicker'
+import { Time24 } from '../../components/ui/DateTime24'
+import { useState, useEffect, useRef, createContext, useContext, type ReactNode } from 'react'
 import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
@@ -10,7 +13,7 @@ import {
   EDRS_MARITAL, EDRS_EDUCATION, EDRS_RACES, EDRS_RELATIONSHIPS, EDRS_DISPOSITIONS, PLACE_OF_DEATH_TYPES,
   normalizeMarital, normalizeEducation, normalizeRace, normalizeDisposition,
 } from '@/lib/edrsFormat'
-import { buildEdrsRows, readiness, type EdrsNote } from '@/lib/edrsFormat'
+import { buildEdrsRows, readiness, splitSuffix, splitStreet, EDRS_SUFFIXES, type EdrsNote } from '@/lib/edrsFormat'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Mail, MessageSquare, Copy, Check, ListChecks, Eye } from 'lucide-react'
 import type { VitalSheetInfo, Decedent, FuneralCase } from '@/types'
@@ -36,11 +39,15 @@ function IssueNote({ issue }: { issue?: Issue }) {
   return <div className={`mt-1 text-[11px] ${issue.level === 'error' ? 'text-red-600' : 'text-amber-700'}`}>{issue.messages.join(' · ')}</div>
 }
 
+const ROW_FOR_FIELD: Record<string, string> = { finalDisposition: 'finalDisposition', dispositionState: 'disp-value', dispositionAddress: 'disp-name', dispositionCity: 'disp-city', dispositionZip: 'disp-zip5', informantSuffix: 'inf-suffix' }
+
 function L({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
   const f = byId[id]
   const ctx = useContext(IssueCtx)
-  const issue = ctx.byKey.get(id) ?? (f.number ? ctx.byNumber.get(f.number) : undefined)
-  const pinned = !!ctx.pinned && (ctx.pinned.has(id) || (!!f.number && ctx.pinned.has('#' + f.number)))
+  // Item 40 and the suffix boxes each have their own EDRS rows — look those up directly instead of by the shared item number.
+  const own = ROW_FOR_FIELD[id]
+  const issue = ctx.byKey.get(id) ?? (own ? ctx.byKey.get(own) : f.number ? ctx.byNumber.get(f.number) : undefined)
+  const pinned = !!ctx.pinned && (ctx.pinned.has(id) || (own ? ctx.pinned.has(own) : false) || (!own && !!f.number && ctx.pinned.has('#' + f.number)))
   return (
     <div className={className} data-field data-issue={issue ? issue.level : undefined} data-pinned={pinned ? '' : undefined}>
       <label className={`${labelClass} ${issue?.level === 'error' ? '!text-red-700' : ''}`}>
@@ -87,7 +94,10 @@ export default function VitalSheetIntake() {
   const { caseId } = useParams<{ caseId: string }>()
   const navigate = useNavigate()
   const { currentUser, accessibleLocations } = useSession()
-  const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
+  const { data: staffAll = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
+  // Always re-read the case when this page opens, and fill the boxes from that fresh copy — never from an older cached one.
+  const { data: c, isFetchedAfterMount } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId, refetchOnMount: 'always' })
+  const baseline = useRef<VitalSheetInfo>({})
 
   // Vital Sheet fields proper
   const [f, setF] = useState<VitalSheetInfo>({})
@@ -109,6 +119,7 @@ export default function VitalSheetIntake() {
   const [ssnDirty, setSsnDirty] = useState(false)
   const [ssnLoading, setSsnLoading] = useState(false)
   const [ssnNotice, setSsnNotice] = useState<string | null>(null)
+  const onFile = !!(c?.decedent.ssnOnFile || c?.decedent.ssn)
 
   const [initialized, setInitialized] = useState(false)
   const [sendMethod, setSendMethod] = useState<'text' | 'email' | null>(null)
@@ -120,13 +131,14 @@ export default function VitalSheetIntake() {
   const [pinned, setPinned] = useState<Set<string> | null>(null)
 
   useEffect(() => {
-    if (c && !initialized) {
+    if (c && isFetchedAfterMount && !initialized) {
       const seeded = withFirstCallDefaults(c) // First Call pickup place → place-of-death boxes, where still empty
       const init = withSplitNames(seeded.vitalSheet)
       init.education = normalizeEducation(init.education).value ?? init.education
       init.race = normalizeRace(init.race).value ?? init.race
       init.typeOfDisposition = normalizeDisposition(init.typeOfDisposition).value ?? init.typeOfDisposition
       setF(init)
+      baseline.current = { ...init }
       setFirstName(c.decedent.firstName)
       setMiddleName(c.decedent.middleName ?? '')
       setLastName(c.decedent.lastName)
@@ -141,7 +153,7 @@ export default function VitalSheetIntake() {
       setCoronerNumber(c.firstCall?.coronerCaseNumber ?? '')
       setInitialized(true)
     }
-  }, [c, initialized])
+  }, [c, initialized, isFetchedAfterMount])
 
   function set<K extends keyof VitalSheetInfo>(key: K, value: VitalSheetInfo[K]) {
     setF((prev) => ({ ...prev, [key]: value }))
@@ -151,6 +163,19 @@ export default function VitalSheetIntake() {
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(key, e.target.value as never),
     className: inputClass,
   })
+
+  /** #20 is three boxes (number / street / apt-suite-unit) so it lands in EDRS as-is; the whole line is kept in step for everything else. */
+  const resParts = (() => {
+    const has = f.residenceStreetNumber !== undefined || f.residenceStreetName !== undefined || f.residenceUnit !== undefined
+    if (has) return { number: f.residenceStreetNumber ?? '', name: f.residenceStreetName ?? '', unit: f.residenceUnit ?? '' }
+    return splitStreet(f.residenceAddress)
+  })()
+  function setResPart(part: 'number' | 'name' | 'unit', value: string) {
+    const next = { ...resParts, [part]: value }
+    const unit = next.unit.trim().replace(/^(apt\.?|apartment|unit|ste\.?|suite|#)\s*#?\s*/i, '')
+    const line = [next.number.trim(), next.name.trim()].filter(Boolean).join(' ') + (unit ? ` #${unit}` : '')
+    setF((prev) => ({ ...prev, residenceStreetNumber: next.number, residenceStreetName: next.name, residenceUnit: next.unit, residenceAddress: line }))
+  }
 
   async function revealSsn() {
     setSsnLoading(true)
@@ -167,27 +192,43 @@ export default function VitalSheetIntake() {
     }
   }
 
+  const queryClient = useQueryClient()
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!c) return
+      // Save on top of the newest copy in the database, changing only the boxes edited here — so something a family member
+      // or a coworker added in the meantime is not wiped out by this save.
+      const latest = (await api.getCase(caseId!)) ?? c
+      const changed: VitalSheetInfo = {}
+      for (const k of new Set([...Object.keys(f), ...Object.keys(baseline.current)]) as Set<keyof VitalSheetInfo>) {
+        if (JSON.stringify(f[k]) !== JSON.stringify(baseline.current[k])) (changed as Record<string, unknown>)[k] = f[k]
+      }
+      const merged: VitalSheetInfo = { ...(latest.vitalSheet ?? {}), ...changed }
+      const fromSheet = deriveServicePatch(latest, merged).patch // puts the service times on the Calendar and TV Board
       await api.updateCase(caseId!, {
-        vitalSheet: f,
+        ...fromSheet,
+        vitalSheet: merged,
         decedent: {
-          ...c.decedent,
+          ...latest.decedent,
           firstName, middleName: middleName || undefined, lastName,
           dateOfBirth: dob || undefined, dateOfDeath: dod || undefined,
           sex: sex || undefined, maritalStatus: marital || undefined, veteran,
           placeOfDeath: placeOfDeath || undefined,
         },
         firstCall: {
-          ...(c.firstCall ?? {}),
+          ...(latest.firstCall ?? {}),
           timeOfDeath: timeOfDeath || undefined,
           weight: weight || undefined,
           coronerCaseNumber: coronerNumber || undefined,
         },
       }, currentUser!)
+      // Rosary and graveside become events of their own (several can sit on one case); only when their boxes changed, so hand edits survive.
+      const prev = latest.vitalSheet ?? {}
+      if (VITAL_EVENT_KEYS.some((k) => (prev[k] ?? '') !== (merged[k] ?? ''))) { try { await api.syncVitalEvents(latest, deriveVitalEvents(merged), currentUser!) } catch { /* the database step case-events.sql has not been run yet */ } }
       if (ssnDirty && ssn.trim()) await api.setDecedentSsn(caseId!, ssn, currentUser!)
+      baseline.current = { ...f }
     },
+    onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
   })
 
   const linkMutation = useMutation({
@@ -220,7 +261,7 @@ export default function VitalSheetIntake() {
     vitalSheet: f,
   } as FuneralCase
   const loc = accessibleLocations.find((l) => l.id === c.locationId)
-  const liveRows = buildEdrsRows(live, { location: loc && { name: loc.name, licenseNumber: loc.licenseNumber } })
+  const liveRows = buildEdrsRows(live, { embalmerName: staffAll.find((s) => s.id === c.assignedEmbalmerId)?.name, location: loc && { name: loc.name, licenseNumber: loc.licenseNumber } })
   const issueByKey = new Map<string, Issue>()
   const issueByNumber = new Map<string, Issue>()
   for (const r of liveRows) {
@@ -262,7 +303,7 @@ export default function VitalSheetIntake() {
         [data-issue="error"] input, [data-issue="error"] select, [data-issue="error"] textarea { border-color: #f87171; background-color: #fef2f2; }
         [data-issue="warn"] input, [data-issue="warn"] select, [data-issue="warn"] textarea { border-color: #fbbf24; background-color: #fffbeb; }
         .only-issues > div:not([data-keep]):not(:has([data-issue], [data-pinned])) { display: none; }
-        .only-issues [data-field]:not([data-issue]):not([data-pinned]) { display: none; }
+        .only-issues [data-field]:not([data-issue]):not([data-pinned]):not([data-group]:has([data-issue], [data-pinned]) *) { display: none; }
       `}</style>
 
       {issueByKey.size > 0 || onlyIssues ? (
@@ -290,11 +331,21 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>DECEDENT</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-3 gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="firstName"><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} /></L>
               <L id="middleName"><input value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} /></L>
               <L id="lastName"><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} /></L>
+              <L id="suffix"><VocabSelect value={f.decedentSuffix ?? ''} onChange={(v) => set('decedentSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
             </div>
+            {(() => {
+              const s = splitSuffix(lastName, f.decedentSuffix)
+              return s.inferred ? (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 flex flex-wrap items-center gap-2">
+                  The last name ends in “{s.suffix}”. EDRS wants that in its own Suffix box.
+                  <button type="button" onClick={() => { setLastName(s.rest); set('decedentSuffix', s.suffix) }} className="font-medium rounded-md bg-[#3b4a35] text-white px-2.5 py-1">Move {s.suffix} to the Suffix box</button>
+                </div>
+              ) : null
+            })()}
             <div className="grid grid-cols-4 gap-3">
               <L id="aka"><input {...text('alsoKnownAs')} /></L>
               <L id="dob"><input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputClass} /></L>
@@ -320,7 +371,7 @@ export default function VitalSheetIntake() {
                   <input
                     value={ssn}
                     onChange={(e) => { setSsn(e.target.value); setSsnDirty(true) }}
-                    placeholder="Leave blank to keep what's on file"
+                    placeholder={onFile ? 'On file — leave blank to keep it' : 'Not entered yet'}
                     autoComplete="off"
                     className={inputClass}
                   />
@@ -328,7 +379,9 @@ export default function VitalSheetIntake() {
                     <Eye size={14} />
                   </button>
                 </div>
-                {ssnNotice && <div className="text-[11px] text-amber-600 mt-1">{ssnNotice}</div>}
+                {ssnNotice
+                  ? <div className="text-[11px] text-amber-600 mt-1">{ssnNotice}</div>
+                  : <div className={`text-[11px] mt-1 ${onFile || ssn.trim() ? 'text-emerald-700' : 'text-slate-400'}`}>{ssnDirty && ssn.trim() ? 'Press Save to store it (it is encrypted).' : onFile ? '✓ Saved and encrypted. Press the eye to look at it.' : 'No Social Security number saved yet.'}</div>}
               </L>
               <L id="armedForces">
                 <div className="flex items-center gap-4 h-[38px]">
@@ -340,7 +393,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <L id="dod"><input type="date" value={dod} onChange={(e) => setDod(e.target.value)} className={inputClass} /></L>
-              <L id="timeOfDeath"><input type="time" value={timeOfDeath} onChange={(e) => setTimeOfDeath(e.target.value)} className={inputClass} /></L>
+              <L id="timeOfDeath"><Time24 fine label="Time" value={timeOfDeath} onChange={setTimeOfDeath} /></L>
             </div>
           </div>
         </Card>
@@ -374,8 +427,14 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>RESIDENCE</div>
           <div className="p-4 space-y-3">
-            <L id="residence"><input {...text('residenceAddress')} /></L>
-            <div className="grid grid-cols-5 gap-3">
+            <L id="residence">
+              <div className="grid grid-cols-6 gap-3">
+                <div className="col-span-2 sm:col-span-1"><input value={resParts.number} onChange={(e) => setResPart('number', e.target.value)} placeholder="Street #" aria-label="Street number" className={inputClass} /></div>
+                <div className="col-span-4 sm:col-span-3"><input value={resParts.name} onChange={(e) => setResPart('name', e.target.value)} placeholder="Street name" aria-label="Street name" className={inputClass} /></div>
+                <div className="col-span-6 sm:col-span-2"><input value={resParts.unit} onChange={(e) => setResPart('unit', e.target.value)} placeholder="Apt / suite / unit" aria-label="Apartment, suite or unit" className={inputClass} /></div>
+              </div>
+            </L>
+            <div data-group className="grid grid-cols-5 gap-3">
               <L id="residenceCity"><input {...text('residenceCity')} /></L>
               <L id="residenceCounty"><input {...text('residenceCounty')} /></L>
               <L id="residenceZip"><input {...text('residenceZip')} /></L>
@@ -388,30 +447,34 @@ export default function VitalSheetIntake() {
         <Card className="overflow-hidden">
           <div className={sectionLabel}>INFORMANT & FAMILY</div>
           <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div data-group className="grid grid-cols-[1fr_110px_1fr] gap-3">
               <L id="informantName"><input {...text('informantName')} /></L>
+              <L id="informantSuffix"><VocabSelect value={f.informantSuffix ?? ''} onChange={(v) => set('informantSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
               <L id="informantRelationship">
                 <input {...text('informantRelationship')} list="edrs-relationships" />
                 <datalist id="edrs-relationships">{EDRS_RELATIONSHIPS.map((r) => <option key={r} value={r} />)}</datalist>
               </L>
             </div>
             <L id="informantAddress"><input {...text('informantMailingAddress')} /></L>
-            <div className="grid grid-cols-3 gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px] gap-3">
               <L id="spouseFirst"><input {...text('spouseFirstName')} /></L>
               <L id="spouseMiddle"><input {...text('spouseMiddleName')} /></L>
               <L id="spouseLast"><input {...text('spouseLastName')} /></L>
+              <L id="spouseSuffix"><VocabSelect value={f.spouseSuffix ?? ''} onChange={(v) => set('spouseSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="fatherFirst"><input {...text('fatherFirstName')} /></L>
               <L id="fatherMiddle"><input {...text('fatherMiddleName')} /></L>
               <L id="fatherLast"><input {...text('fatherLastName')} /></L>
-              <L id="fatherBirthState"><input {...text('fatherBirthState')} /></L>
+              <L id="fatherSuffix"><VocabSelect value={f.fatherSuffix ?? ''} onChange={(v) => set('fatherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
+              <L id="fatherBirthState"><PlacePicker value={f.fatherBirthState ?? ''} onChange={(v) => set('fatherBirthState', v)} className={inputClass} /></L>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div data-group className="grid grid-cols-[1fr_1fr_1fr_110px_1fr] gap-3">
               <L id="motherFirst"><input {...text('motherFirstName')} /></L>
               <L id="motherMiddle"><input {...text('motherMiddleName')} /></L>
               <L id="motherLast"><input {...text('motherLastName')} /></L>
-              <L id="motherBirthState"><input {...text('motherBirthState')} /></L>
+              <L id="motherSuffix"><VocabSelect value={f.motherSuffix ?? ''} onChange={(v) => set('motherSuffix', v)} options={EDRS_SUFFIXES} className={inputClass} /></L>
+              <L id="motherBirthState"><PlacePicker value={f.motherBirthState ?? ''} onChange={(v) => set('motherBirthState', v)} className={inputClass} /></L>
             </div>
           </div>
         </Card>
@@ -421,8 +484,20 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <L id="dispositionDate"><input type="date" value={f.dispositionDate ?? ''} onChange={(e) => set('dispositionDate', e.target.value)} className={inputClass} /></L>
-              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} /></L>
-              <L id="dispositionState"><input {...text('dispositionState')} placeholder="CA, Mexico, UNK…" /></L>
+            </div>
+            <div data-group className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+              <L id="finalDisposition"><input {...text('placeOfFinalDisposition')} placeholder="Name of the place — e.g. cemetery, crematory, or RESIDENCE + family name" /></L>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Item 40 — address of the place (EDRS has a box for each)</span>
+                <button type="button" onClick={() => { set('dispositionAddress', f.residenceAddress ?? ''); set('dispositionCity', f.residenceCity ?? ''); set('dispositionZip', f.residenceZip ?? ''); set('dispositionState', f.residenceState ?? ''); if (!f.placeOfFinalDisposition && f.informantName) set('placeOfFinalDisposition', `RESIDENCE ${f.informantName}`.toUpperCase()) }}
+                  className="text-xs font-medium rounded-md border border-[#3b4a35]/40 text-[#3b4a35] px-2.5 py-1 hover:bg-[#3b4a35]/5">Same as the family's home address</button>
+              </div>
+              <div className="grid grid-cols-[200px_1fr_1fr_110px] gap-3">
+                <L id="dispositionState"><PlacePicker value={f.dispositionState ?? ''} onChange={(v) => set('dispositionState', v)} className={inputClass} /></L>
+                <L id="dispositionAddress"><input {...text('dispositionAddress')} placeholder="32520 Whispering Palms Apt A" /></L>
+                <L id="dispositionCity"><input {...text('dispositionCity')} /></L>
+                <L id="dispositionZip"><input {...text('dispositionZip')} /></L>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <L id="cvcDmpOther"><input {...text('dispositionTypeOther')} /></L>
@@ -508,14 +583,18 @@ export default function VitalSheetIntake() {
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className={labelClass}>Visitation — Hours</label>
-                <input {...text('visitationHours')} />
+                <label className={labelClass}>Visitation — Date</label>
+                <input type="date" value={f.visitationDate ?? (c.visitationDate ? c.visitationDate.slice(0, 10) : '')} onChange={(e) => set('visitationDate', e.target.value)} className={inputClass} />
               </div>
-              <div className="col-span-2 text-xs text-slate-400 self-end pb-2">Visitation and service dates and places are set under Edit on the case, so they stay in sync with the Calendar.</div>
+              <div>
+                <label className={labelClass}>Visitation — Hours and place</label>
+                <input {...text('visitationHours')} placeholder="12:00 PM–5:00 PM · DHS" />
+              </div>
+              <div className="text-xs text-slate-400 self-end pb-2">When you save, the visitation (date, hours, place) and the Mass or Graveside date and time are put on the Calendar and the TV Board automatically.</div>
             </div>
             <div className="grid grid-cols-5 gap-2 items-end">
               <div><label className={labelClass}>Rosary — Date</label><input type="date" value={f.rosaryDate ?? ''} onChange={(e) => set('rosaryDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.rosaryTime ?? ''} onChange={(e) => set('rosaryTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time (24-hour)</label><Time24 label="Rosary" value={f.rosaryTime ?? ''} onChange={(v) => set('rosaryTime', v)} /></div>
               <div>
                 <label className={labelClass}>ENG / SPAN</label>
                 <select value={f.rosaryLanguage ?? ''} onChange={(e) => set('rosaryLanguage', e.target.value as VitalSheetInfo['rosaryLanguage'])} className={inputClass}>
@@ -527,7 +606,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-5 gap-2 items-end">
               <div><label className={labelClass}>Mass — Date</label><input type="date" value={f.massDate ?? ''} onChange={(e) => set('massDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.massTime ?? ''} onChange={(e) => set('massTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><Time24 label="Time" value={f.massTime ?? ''} onChange={(v) => set('massTime', v)} /></div>
               <div>
                 <label className={labelClass}>ENG / SPAN</label>
                 <select value={f.massLanguage ?? ''} onChange={(e) => set('massLanguage', e.target.value as VitalSheetInfo['massLanguage'])} className={inputClass}>
@@ -539,7 +618,7 @@ export default function VitalSheetIntake() {
             </div>
             <div className="grid grid-cols-4 gap-2 items-end">
               <div><label className={labelClass}>Graveside — Date</label><input type="date" value={f.gravesideDate ?? ''} onChange={(e) => set('gravesideDate', e.target.value)} className={inputClass} /></div>
-              <div><label className={labelClass}>Time</label><input type="time" value={f.gravesideTime ?? ''} onChange={(e) => set('gravesideTime', e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>Time</label><Time24 label="Time" value={f.gravesideTime ?? ''} onChange={(v) => set('gravesideTime', v)} /></div>
               <div><label className={labelClass}>Place</label><input {...text('gravesidePlace')} /></div>
               <div><label className={labelClass}>By</label><input {...text('gravesideBy')} /></div>
             </div>
@@ -625,6 +704,7 @@ export default function VitalSheetIntake() {
                 </button>
               </div>
             )}
+            <button onClick={() => navigate(`/cases/${caseId}/guide`)} className="mb-2 w-full text-base font-semibold text-white bg-[#3b4a35] rounded-md px-3.5 py-3.5 hover:bg-[#4d5f45]">Continue — what’s next? →</button>
             <div className="flex gap-2">
               <button onClick={() => navigate(`/cases/${caseId}`)} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-md px-3.5 py-2.5 hover:bg-slate-50">Back to Case →</button>
               <button onClick={() => navigate(`/cases/${caseId}/edrs`)} className="flex-1 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2.5 hover:bg-[#3b4a35]/5">EDRS Entry →</button>

@@ -6,9 +6,13 @@ import { getErrorMessage } from '@/lib/errors'
 import { useSession } from '@/context/SessionContext'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { Building2, Mail, Phone, ShieldCheck, ChevronDown, Settings2, History, UserPlus, X, Check, Trash2, Plus } from 'lucide-react'
+import { HelpReportsPanel } from '@/components/admin/HelpReportsPanel'
+import { TvScreensPanel } from '@/components/admin/TvScreensPanel'
+import { StaffDaySummary } from '@/components/admin/StaffDaySummary'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
-import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES } from '@/lib/permissions'
-import { ROLE_LABELS, type UserRole, type VendorCategory, type CaseTask } from '@/types'
+import { ChangeHistory } from '@/components/activity/ChangeHistory'
+import { canAssignRoles, canManageAccess, canViewAuditLog, TOGGLEABLE_FEATURES, featureTicked, toggleFeatureList } from '@/lib/permissions'
+import { ROLE_LABELS, type UserRole, type StaffMember, type VendorCategory, type CaseTask } from '@/types'
 import { format, parseISO } from 'date-fns'
 
 const allRoles: UserRole[] = ['super_admin', 'admin', 'manager', 'supervisor', 'staff_member']
@@ -26,10 +30,11 @@ export default function AdminPage() {
   const queryClient = useQueryClient()
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
   const [accessPanelId, setAccessPanelId] = useState<string | null>(null)
-  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'audit'>('staff')
+  const [subTab, setSubTab] = useState<'staff' | 'vendors' | 'tasks' | 'screens' | 'help' | 'audit'>('staff')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const canAssign = currentUser ? canAssignRoles(currentUser.role) : false
   const canManage = currentUser ? canManageAccess(currentUser.role) : false
+  const [auditView, setAuditView] = useState<'summary' | 'log' | 'detail'>('detail')
   const canViewAudit = currentUser ? canViewAuditLog(currentUser.role) : false
 
   const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.getLocations })
@@ -63,10 +68,27 @@ export default function AdminPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
   })
 
+  const dutyMutation = useMutation({
+    mutationFn: ({ staffId, onDuty }: { staffId: string; onDuty: boolean }) => api.setStaffDuty(staffId, onDuty, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['off-duty'] }); queryClient.invalidateQueries({ queryKey: ['audit-log'] }) },
+  })
+
   const companiesMutation = useMutation({
     mutationFn: ({ staffId, allCompanies }: { staffId: string; allCompanies: boolean }) =>
       api.updateStaffAllCompanies(staffId, allCompanies, currentUser!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff'] }),
+  })
+
+  const profileMutation = useMutation({
+    mutationFn: ({ staffId, ...v }: { staffId: string; name: string; title?: string; phone?: string }) => api.updateStaffProfile(staffId, v, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['staff'] }); window.alert('Saved.') },
+    onError: (e) => window.alert(getErrorMessage(e)),
+  })
+
+  const deleteStaffMutation = useMutation({
+    mutationFn: (staffId: string) => api.deleteStaffMember(staffId, currentUser!),
+    onSuccess: (r) => { queryClient.invalidateQueries({ queryKey: ['staff'] }); setAccessPanelId(null); window.alert(r.mode === 'deleted' ? `${r.name} was deleted.` : `${r.name} has work in the system, so they were switched off instead: hidden from the lists and unable to sign in. Everything they did is kept.`) },
+    onError: (e) => window.alert(getErrorMessage(e)),
   })
 
   const createStaffMutation = useMutation({
@@ -106,9 +128,8 @@ export default function AdminPage() {
     locationsMutation.mutate({ staffId, locationIds: next })
   }
 
-  function toggleFeature(staffId: string, current: string[], key: string) {
-    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
-    featuresMutation.mutate({ staffId, disabledFeatures: next })
+  function toggleFeature(person: StaffMember, key: string) {
+    featuresMutation.mutate({ staffId: person.id, disabledFeatures: toggleFeatureList(person, key) })
   }
 
   return (
@@ -154,6 +175,22 @@ export default function AdminPage() {
         >
           Task Templates
         </button>
+        {canManage && (
+          <button
+            onClick={() => setSubTab('screens')}
+            className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${subTab === 'screens' ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            TV Screens
+          </button>
+        )}
+        {canManage && (
+          <button
+            onClick={() => setSubTab('help')}
+            className={`px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${subTab === 'help' ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Help reports
+          </button>
+        )}
         {canViewAudit && (
           <button
             onClick={() => setSubTab('audit')}
@@ -164,8 +201,11 @@ export default function AdminPage() {
         )}
       </div>
 
+      {subTab === 'screens' && canManage && <TvScreensPanel />}
+      {subTab === 'help' && canManage && <HelpReportsPanel />}
+
       {subTab === 'staff' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             {!canAssign ? (
@@ -204,8 +244,21 @@ export default function AdminPage() {
                             {s.name.split(' ').map((n) => n[0]).join('')}
                           </div>
                           <div>
-                            <div className="font-medium text-slate-900 flex items-center gap-2">{s.name} <PresenceDot info={presence.get(s.id)} showText /></div>
+                            <div className="font-medium text-slate-900">{s.name}</div>
                             <div className="text-xs text-slate-500">{s.title}{s.department && ` · ${s.department}`}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                              <PresenceDot info={presence.get(s.id)} showText />
+                              {canAssign && s.id !== currentUser?.id && (
+                                <button
+                                  onClick={() => dutyMutation.mutate({ staffId: s.id, onDuty: !!presence.get(s.id)?.offDuty })}
+                                  disabled={dutyMutation.isPending}
+                                  title={presence.get(s.id)?.offDuty ? 'Switch this person back On duty' : 'Switch this person Off duty (no notifications, pop-ups or sounds)'}
+                                  className="ml-1 rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-slate-100"
+                                >
+                                  {presence.get(s.id)?.offDuty ? 'Set On duty' : 'Set Off duty'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -262,6 +315,7 @@ export default function AdminPage() {
                       <tr>
                         <td colSpan={5} className="bg-slate-50 px-4 py-4 border-b border-slate-100">
                           <div className="grid grid-cols-2 gap-8">
+                            <StaffDetailsEditor key={s.id + s.name + (s.title ?? '') + (s.phone ?? '')} s={s} onSave={(v) => profileMutation.mutate({ staffId: s.id, ...v })} saving={profileMutation.isPending} />
                             <div>
                               <div className="text-xs font-semibold text-slate-700 mb-2">Location Access</div>
                               <div className="space-y-1.5">
@@ -281,14 +335,14 @@ export default function AdminPage() {
                             <div>
                               <div className="text-xs font-semibold text-slate-700 mb-2">Feature Access</div>
                               <div className="space-y-1.5">
-                                {TOGGLEABLE_FEATURES.map((f) => {
-                                  const disabled = (s.disabledFeatures ?? []).includes(f.key)
+                                {TOGGLEABLE_FEATURES.filter((f) => !(s.role === 'staff_member' && f.key === 'admin')).map((f) => {
+                                  const disabled = !featureTicked(s, f.key)
                                   return (
                                     <label key={f.key} className="flex items-center gap-2 text-sm cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={!disabled}
-                                        onChange={() => toggleFeature(s.id, s.disabledFeatures ?? [], f.key)}
+                                        onChange={() => toggleFeature(s, f.key)}
                                         className="accent-[#3b4a35]"
                                       />
                                       {f.label}
@@ -296,8 +350,20 @@ export default function AdminPage() {
                                   )
                                 })}
                               </div>
-                              <p className="text-[11px] text-slate-400 mt-2">Unchecking a feature blocks it for this person even though their role would normally allow it.</p>
+                              <p className="text-[11px] text-slate-400 mt-2">{s.role === 'staff_member' ? 'Staff Members always get Invoices. Tick the other screens this person should see.' : 'Unchecking a feature blocks it for this person even though their role would normally allow it.'}</p>
                             </div>
+                            {canAssign && s.id !== currentUser?.id && (
+                              <div className="col-span-2 border-t border-slate-200 pt-3 flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button" disabled={deleteStaffMutation.isPending}
+                                  onClick={() => { if (window.confirm(`Remove ${s.name} (${s.email})?\n\nIf they have never done any work in the system they are deleted. If they have, they are switched off instead: hidden and unable to sign in, with everything they did kept.`)) deleteStaffMutation.mutate(s.id) }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 border border-red-200 rounded-md px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  Remove {s.name.split(' ')[0]}
+                                </button>
+                                <span className="text-[11px] text-slate-400">Asks you to confirm first.</span>
+                              </div>
+                            )}
                             {organizations.length > 1 && (s.role === 'admin' || s.role === 'super_admin') && (
                               <div className="col-span-2 border-t border-slate-200 pt-3">
                                 <div className="text-xs font-semibold text-slate-700 mb-2">Companies</div>
@@ -328,7 +394,7 @@ export default function AdminPage() {
       )}
 
       {subTab === 'vendors' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-slate-400">Who documents get sent to — removal companies, crematories, florists, and more.</div>
@@ -369,7 +435,7 @@ export default function AdminPage() {
                   </tr>
                 ))}
                 {vendors.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-10 text-center text-slate-400">No vendors yet.</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">No vendors yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -380,7 +446,7 @@ export default function AdminPage() {
       )}
 
       {subTab === 'tasks' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+        <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-slate-400">The standard checklist every new case starts with. Changes here don't affect existing cases' tasks.</div>
@@ -439,6 +505,14 @@ export default function AdminPage() {
 
       {subTab === 'audit' && (
         <>
+        <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+          {([['detail', 'Who changed what'], ['summary', 'Daily summary'], ['log', 'Full log']] as const).map(([k, label]) => (
+            <button key={k} type="button" onClick={() => setAuditView(k)} className={`px-3 py-1.5 rounded-md ${auditView === k ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+          ))}
+        </div>
+        {auditView === 'detail' && <ChangeHistory />}
+        {auditView === 'summary' && <StaffDaySummary entries={auditLog} />}
+        {auditView === 'log' && <>
         {organizations.length > 1 && activeOrg && (
           <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
             Audit trail for
@@ -452,16 +526,18 @@ export default function AdminPage() {
               <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
                 <th className="px-4 py-3 font-medium">When</th>
                 <th className="px-4 py-3 font-medium">Who</th>
-                <th className="px-4 py-3 font-medium">Entity</th>
+                <th className="px-4 py-3 font-medium">Device</th>
+                <th className="px-4 py-3 font-medium">Case</th>
                 <th className="px-4 py-3 font-medium">What happened</th>
               </tr>
             </thead>
             <tbody>
               {auditLog.map((entry) => (
                 <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{format(parseISO(entry.timestamp), 'MMM d, h:mm:ss a')}</td>
+                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{format(parseISO(entry.timestamp), 'MMM d, HH:mm:ss')}</td>
                   <td className="px-4 py-3 text-slate-700">{entry.changedByName}</td>
-                  <td className="px-4 py-3 text-slate-500 capitalize">{entry.entityType}</td>
+                  <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{entry.device ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-700">{entry.caseName ? <>{entry.caseName}<span className="block text-xs text-slate-400">{entry.caseNumber}</span></> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-800">{entry.summary}</td>
                 </tr>
               ))}
@@ -471,6 +547,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         </Card>
+        </>}
         </>
       )}
 
@@ -739,6 +816,30 @@ function AddTaskTemplateModal({
           </button>
         </div>
       </Card>
+    </div>
+  )
+}
+
+
+/** Fix a name (or title / phone) after the person was already added. Their login email stays the same. */
+function StaffDetailsEditor({ s, onSave, saving }: { s: { name: string; title?: string; phone?: string; email: string }; onSave: (v: { name: string; title?: string; phone?: string }) => void; saving: boolean }) {
+  const [name, setName] = useState(s.name)
+  const [title, setTitle] = useState(s.title ?? '')
+  const [phone, setPhone] = useState(s.phone ?? '')
+  const cls = 'w-full border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#b3925a]'
+  const changed = name.trim() !== s.name || title.trim() !== (s.title ?? '') || phone.trim() !== (s.phone ?? '')
+  return (
+    <div className="col-span-2 border-b border-slate-200 pb-4">
+      <div className="text-xs font-semibold text-slate-700 mb-2">Name &amp; details</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label className="text-xs text-slate-500">Full name<input value={name} onChange={(e) => setName(e.target.value)} className={cls} /></label>
+        <label className="text-xs text-slate-500">Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Funeral Director, etc." className={cls} /></label>
+        <label className="text-xs text-slate-500">Phone<input value={phone} onChange={(e) => setPhone(e.target.value)} className={cls} /></label>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <button type="button" disabled={!changed || !name.trim() || saving} onClick={() => onSave({ name: name.trim(), title: title.trim() || undefined, phone: phone.trim() || undefined })} className="rounded-md bg-[#3b4a35] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{saving ? 'Saving…' : 'Save name & details'}</button>
+        <span className="text-[11px] text-slate-400">Sign-in stays {s.email}. Only the name shown in the system changes.</span>
+      </div>
     </div>
   )
 }

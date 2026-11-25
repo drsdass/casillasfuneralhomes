@@ -35,6 +35,7 @@ let taskTemplateStore: TaskTemplate[] = [
   { id: 'tt-3', orgId: 'org-1', label: 'Schedule arrangement conference', category: 'family', daysUntilDue: 1, sortOrder: 3, active: true },
   { id: 'tt-4', orgId: 'org-1', label: 'Select merchandise', category: 'merchandise', daysUntilDue: 3, sortOrder: 4, active: true },
 ]
+const statementStore: Record<string, Record<string, Record<string, string | number>>> = {}
 let noteStore: CaseNote[] = caseNotes.map((n) => ({ ...n }))
 let documentStore: CaseDocument[] = []
 let vehicleStore: Vehicle[] = vehicles.map((v) => ({ ...v }))
@@ -120,6 +121,15 @@ export const mockStore = {
     return rows.filter((r) => staffStore.some((x) => x.id === r.staffId && x.orgId === org))
   },
 
+  setStaffDuty: (staffId: string, onDuty: boolean, changedBy: StaffMember) => {
+    try {
+      const k = `casillas_notif_prefs_${staffId}`
+      localStorage.setItem(k, JSON.stringify({ ...JSON.parse(localStorage.getItem(k) ?? '{}'), onDuty }))
+    } catch { /* ignore */ }
+    const name = staffStore.find((x) => x.id === staffId)?.name ?? staffId
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Switched ${name} ${onDuty ? 'On' : 'Off'} duty`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
   /** Demo: a couple of pretend colleagues are off duty, plus anyone who switched themselves off in this browser. */
   getOffDuty: (): string[] => {
     const org = demoOrgId()
@@ -133,6 +143,12 @@ export const mockStore = {
   getStaff: (): StaffMember[] => {
     const org = demoOrgId()
     return staffStore.filter((s) => s.orgId === org)
+  },
+
+  updateStaffProfile(staffId: string, input: { name: string; title?: string; phone?: string }, changedBy: StaffMember): StaffMember[] {
+    staffStore = staffStore.map((s) => (s.id === staffId ? { ...s, name: input.name, title: input.title?.trim() || undefined, phone: input.phone?.trim() || undefined } : s))
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Updated ${input.name}'s details`, changedBy: changedBy.id, changedByName: changedBy.name })
+    return staffStore
   },
 
   updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): StaffMember[] {
@@ -200,6 +216,13 @@ export const mockStore = {
     return { tempPassword: 'ChangeMe123!' }
   },
 
+  deleteStaffMember(staffId: string, changedBy: StaffMember): { mode: 'deleted' | 'deactivated'; name: string } {
+    const s = staffStore.find((x) => x.id === staffId)
+    staffStore = staffStore.filter((x) => x.id !== staffId)
+    logAudit({ entityType: 'staff', entityId: staffId, action: 'delete', summary: `Deleted staff member ${s?.name ?? staffId}`, changedBy: changedBy.id, changedByName: changedBy.name })
+    return { mode: 'deleted', name: s?.name ?? '' }
+  },
+
   // -----------------------------------------------------------------
   // Cases
   // -----------------------------------------------------------------
@@ -209,6 +232,7 @@ export const mockStore = {
   },
 
   getCase: (id: string): FuneralCase | undefined => caseStore.find((c) => c.id === id),
+  deleteCase(id: string): void { caseStore = caseStore.filter((c) => c.id !== id) },
 
   createCase(input: Omit<FuneralCase, 'id' | 'createdAt' | 'updatedAt'>, changedBy: StaffMember): FuneralCase {
     const now = new Date().toISOString()
@@ -228,8 +252,20 @@ export const mockStore = {
     caseStore = caseStore.map((c) => {
       if (c.id !== id) return c
       updated = { ...c, ...patch, updatedAt: new Date().toISOString() }
+      // Same rules as the database: status Completed <-> Completed column.
+      const done = (st: string) => st === 'completed' || st === 'shipped_released'
+      if (patch.status && patch.status !== c.status) {
+        if (patch.status === 'completed' && !done(updated.custodyStage)) updated = { ...updated, custodyStage: 'completed' }
+        else if (c.status === 'completed' && patch.status !== 'completed' && done(updated.custodyStage)) updated = { ...updated, custodyStage: 'funeral_home' }
+      }
       return updated
     })
+    // Moving a case to another location carries its invoice and calendar events with it.
+    if (updated && patch.locationId) {
+      const loc = patch.locationId
+      contractStore = contractStore.map((k) => (k.caseId === id ? { ...k, locationId: loc } : k))
+      eventStore = eventStore.map((e) => (e.caseId === id ? { ...e, locationId: loc } : e))
+    }
     if (updated) {
       logAudit({
         entityType: 'case', entityId: id, caseId: id, action: 'update',
@@ -243,6 +279,8 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Tasks
   // -----------------------------------------------------------------
+  getAllTasks: (): CaseTask[] => taskStore,
+  getAllDocuments: (): CaseDocument[] => documentStore,
   getCaseTasks: (caseId: string): CaseTask[] => taskStore.filter((t) => t.caseId === caseId),
 
   getOverdueTasks(): Array<CaseTask & { decedentName: string; caseNumber: string }> {
@@ -319,7 +357,23 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Notes
   // -----------------------------------------------------------------
+  getAllSignoffs: (): Record<string, Record<string, string | number>> =>
+    Object.fromEntries(Object.entries(statementStore).filter(([, v]) => v['_signoffs']).map(([id, v]) => [id, v['_signoffs']])),
+  logSignoff(caseId: string, summary: string, changedBy: StaffMember): void {
+    logAudit({ entityType: 'case', entityId: caseId, caseId, action: 'update', summary, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+  getStatements: (caseId: string) => ({ ...(statementStore[caseId] ?? {}) }),
+  saveStatement(caseId: string, sheet: string, data: Record<string, string | number>): void {
+    statementStore[caseId] = { ...(statementStore[caseId] ?? {}), [sheet]: data }
+  },
+
   getCaseNotes: (caseId: string): CaseNote[] => noteStore.filter((n) => n.caseId === caseId),
+
+  updateNote(id: string, patch: { body?: string; isSpecialRequest?: boolean }, changedBy: StaffMember): void {
+    let caseId = ''
+    noteStore = noteStore.map((n) => { if (n.id !== id) return n; caseId = n.caseId; return { ...n, ...patch } })
+    logAudit({ entityType: 'note', entityId: id, caseId, action: 'update', summary: 'Edited a note', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
 
   addNote(caseId: string, author: StaffMember, body: string, isSpecialRequest = false): CaseNote {
     const note: CaseNote = {
@@ -339,6 +393,10 @@ export const mockStore = {
   // Documents
   // -----------------------------------------------------------------
   getCaseDocuments: (caseId: string): CaseDocument[] => documentStore.filter((d) => d.caseId === caseId),
+
+  labelDocument(id: string, name: string, category: CaseDocument['category']): void {
+    documentStore = documentStore.map((d) => (d.id === id ? { ...d, name, category } : d))
+  },
 
   addDocument(doc: Omit<CaseDocument, 'id' | 'uploadedAt'>, changedBy: StaffMember): CaseDocument {
     const full: CaseDocument = { ...doc, id: newId('doc'), uploadedAt: new Date().toISOString() }
@@ -366,19 +424,47 @@ export const mockStore = {
   // -----------------------------------------------------------------
   // Chain of custody
   // -----------------------------------------------------------------
+  updateCustodyEntry(id: string, patch: { timestamp?: string; toStage?: CustodyStage; note?: string }, by: StaffMember): void {
+    custodyLogStore = custodyLogStore.map((l) => (l.id === id ? { ...l, ...(patch.timestamp ? { timestamp: patch.timestamp } : {}), ...(patch.toStage ? { toStage: patch.toStage } : {}), ...('note' in patch ? { note: patch.note?.trim() || undefined } : {}), editedAt: new Date().toISOString(), editedByName: by.name } : l))
+    const e = custodyLogStore.find((l) => l.id === id)
+    if (e) this.followLatestCustody(e.caseId)
+  },
+  deleteCustodyEntry(id: string, _by: StaffMember): void {
+    const e = custodyLogStore.find((l) => l.id === id)
+    custodyLogStore = custodyLogStore.filter((l) => l.id !== id)
+    if (e) this.followLatestCustody(e.caseId)
+  },
+  followLatestCustody(caseId: string): void {
+    const last = custodyLogStore.filter((l) => l.caseId === caseId).sort((a, b) => a.timestamp.localeCompare(b.timestamp)).pop()
+    if (last) caseStore = caseStore.map((c) => (c.id === caseId ? { ...c, custodyStage: last.toStage } : c))
+  },
+
   moveCustody(
     caseId: string,
     toStage: CustodyStage,
     movedBy: StaffMember,
-    note?: string
+    note?: string,
+    at?: string
   ): { cases: FuneralCase[]; log: CustodyLogEntry[] } {
     const existing = caseStore.find((c) => c.id === caseId)
     const fromStage = existing?.custodyStage
     const now = new Date().toISOString()
-    caseStore = caseStore.map((c) => (c.id === caseId ? { ...c, custodyStage: toStage, updatedAt: now } : c))
+    const lastTs = custodyLogStore.filter((l) => l.caseId === caseId).map((l) => l.timestamp).sort().pop()
+    const live = !at || Math.abs(Date.now() - new Date(at).getTime()) < 10 * 60 * 1000
+    const applyStage = live || !lastTs || new Date(at!) >= new Date(lastTs)
+    caseStore = caseStore.map((c) => {
+      if (c.id !== caseId || !applyStage) return c
+      const done = (st: string) => st === 'completed' || st === 'shipped_released'
+      let status = c.status
+      if (done(toStage) && status !== 'completed') status = 'completed'
+      else if (status === 'first_call' && toStage !== 'scene_first_call' && toStage !== 'in_transit') status = 'arrangement_pending'
+      else if (status !== 'first_call' && (toStage === 'scene_first_call' || toStage === 'in_transit')) status = 'first_call'
+      else if (done(c.custodyStage) && !done(toStage) && status === 'completed') status = 'in_progress'
+      return { ...c, custodyStage: toStage, status, updatedAt: now }
+    })
     const entry: CustodyLogEntry = {
       id: newId('cl'), caseId, fromStage, toStage,
-      movedBy: movedBy.id, movedByName: movedBy.name, timestamp: now, note,
+      movedBy: movedBy.id, movedByName: movedBy.name, timestamp: at ?? now, note,
     }
     custodyLogStore = [...custodyLogStore, entry]
     logAudit({
@@ -396,6 +482,15 @@ export const mockStore = {
   // GPL
   // -----------------------------------------------------------------
   getGplItems: (): GplItem[] => gplStore,
+  createGplItem(input: { locationId: string; sku?: string; name: string; category: GplItem['category']; price: number; taxable: boolean }, changedBy: StaffMember): void {
+    const org = gplStore[0]?.orgId ?? ''
+    gplStore = [...gplStore, { id: newId('gpl'), orgId: org, active: true, ...input, sku: input.sku ?? '' }]
+    logAudit({ entityType: 'contract', entityId: 'gpl', action: 'create', summary: `Added "${input.name}" to the price list`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+  updateGplItem(id: string, patch: Partial<GplItem>, changedBy: StaffMember): void {
+    gplStore = gplStore.map((g) => (g.id === id ? { ...g, ...patch } : g))
+    logAudit({ entityType: 'contract', entityId: id, action: 'update', summary: 'Updated a price list item', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
 
   // -----------------------------------------------------------------
   // Contracts / invoices / payments
@@ -437,6 +532,28 @@ export const mockStore = {
       contractStore = [...contractStore, contract]
     }
     return contract
+  },
+
+  /** Mock-mode counterpart to api.syncStatementInvoice. */
+  syncStatementInvoice(
+    input: { caseId: string; locationId: string; sheetName: string; lines: { name: string; amount: number }[]; tax: number; credit: number },
+    changedBy: StaffMember
+  ): void {
+    const contract = this.findOrCreateContract(input.caseId, input.locationId)
+    contractStore = contractStore.map((c) => c.id !== contract.id ? c : {
+      ...c, taxTotal: input.tax, discount: input.credit,
+      lineItems: [
+        ...c.lineItems.filter((i) => i.source !== 'statement'),
+        ...input.lines.map((l): ContractLineItem => ({ id: newId('line'), gplItemId: '', name: l.name || 'Other charge', quantity: 1, unitPrice: l.amount, source: 'statement' })),
+      ],
+    })
+    this.recalcContract(contract.id)
+    contractStore = contractStore.map((c) => c.id === contract.id ? { ...c, paid: c.total > 0 && c.amountPaid >= c.total } : c)
+    logAudit({
+      entityType: 'contract', entityId: contract.id, caseId: input.caseId, action: 'update',
+      summary: `Invoice updated from the "${input.sheetName.trim()}" statement — ${input.lines.length} item${input.lines.length === 1 ? '' : 's'} ordered`,
+      changedBy: changedBy.id, changedByName: changedBy.name,
+    })
   },
 
   addGplItemToQuote(caseId: string, locationId: string, gplItem: { id: string; name: string; price: number }, changedBy: StaffMember): void {
@@ -499,12 +616,12 @@ export const mockStore = {
     caseId ? paymentStore.filter((p) => p.caseId === caseId) : paymentStore,
 
   recordPayment(
-    input: { contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string },
+    input: { contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string; receivedAt?: string },
     changedBy: StaffMember
   ): Payment {
     const payment: Payment = {
       id: newId('pay'), contractId: input.contractId, caseId: input.caseId, amount: input.amount,
-      method: input.method, reference: input.reference, receivedAt: new Date().toISOString(), recordedBy: changedBy.id,
+      method: input.method, reference: input.reference, receivedAt: input.receivedAt ?? new Date().toISOString(), recordedBy: changedBy.id,
     }
     paymentStore = [...paymentStore, payment]
     const totalPaid = paymentStore.filter((p) => p.contractId === input.contractId).reduce((sum, p) => sum + p.amount, 0)
@@ -561,6 +678,28 @@ export const mockStore = {
       changedBy: changedBy.id, changedByName: changedBy.name,
     })
     return event
+  },
+
+  deleteEvent(id: string, changedBy: StaffMember): void {
+    const e = eventStore.find((x) => x.id === id)
+    eventStore = eventStore.filter((x) => x.id !== id)
+    if (e) logAudit({ entityType: 'event', entityId: id, caseId: e.caseId, action: 'delete', summary: `Removed "${e.title}"`, changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
+  syncVitalEvents(c: FuneralCase, items: { label: string; type: 'visitation' | 'service'; start: string; end: string; place?: string }[], changedBy: StaffMember): void {
+    const name = `${c.decedent.firstName} ${c.decedent.lastName}`
+    const mine = eventStore.filter((e) => e.caseId === c.id && e.source === 'vital')
+    const keep = new Set<string>()
+    for (const it of items) {
+      const ex = mine.find((e) => e.label === it.label)
+      if (ex) { keep.add(ex.id); eventStore = eventStore.map((e) => (e.id === ex.id ? { ...e, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place, placeConfirmed: e.placeConfirmed && e.location === it.place } : e)) }
+      else {
+        const created: CalendarEvent = { id: newId('evt'), orgId: c.orgId, locationId: c.locationId, caseId: c.id, title: `${name} — ${it.label}`, type: it.type, start: it.start, end: it.end, location: it.place, participantIds: [], label: it.label, source: 'vital' }
+        eventStore = [...eventStore, created]; keep.add(created.id)
+      }
+    }
+    eventStore = eventStore.filter((e) => !(e.caseId === c.id && e.source === 'vital' && !keep.has(e.id)))
+    logAudit({ entityType: 'event', entityId: c.id, caseId: c.id, action: 'update', summary: 'Updated visitations/services from the Vital Sheet', changedBy: changedBy.id, changedByName: changedBy.name })
   },
 
   updateEvent(id: string, patch: Partial<CalendarEvent>, changedBy: StaffMember): CalendarEvent | undefined {
@@ -693,6 +832,11 @@ export const mockStore = {
     return emailStore
   },
 
+  setEmailJunk(emailId: string, junk: boolean, changedBy: StaffMember): void {
+    emailStore = emailStore.map((e) => (e.id === emailId ? { ...e, junk } : e))
+    logAudit({ entityType: 'email', entityId: emailId, action: 'update', summary: junk ? 'Moved an email to Junk & Marketing' : 'Moved an email back out of Junk', changedBy: changedBy.id, changedByName: changedBy.name })
+  },
+
   /** Dismisses an email as not case-relevant (e.g. spam, a vendor newsletter). */
   ignoreEmail(emailId: string, changedBy: StaffMember): InboundEmail[] {
     emailStore = emailStore.map((e) => (e.id === emailId ? { ...e, matchStatus: 'ignored' as EmailMatchStatus } : e))
@@ -720,7 +864,7 @@ export const mockStore = {
     changedBy: StaffMember
   ): SignatureRequest {
     const req: SignatureRequest = {
-      ...input, id: newId('sig'), status: 'sent', sentAt: new Date().toISOString(),
+      ...input, id: newId('sig'), status: 'sent', sentAt: new Date().toISOString(), token: `mock-token-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`,
       signRequestId: `sr-mock-${Math.floor(Math.random() * 100000)}`,
     }
     signatureRequestStore = [...signatureRequestStore, req]

@@ -1,27 +1,48 @@
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import { SignaturesCard } from '@/components/signatures/SignaturesCard'
+import { SignDialog } from '@/components/signatures/SignDialog'
+import { deriveServicePatch, deriveVitalEvents } from '@/lib/vitalToCase'
+import { CustodyTimeline } from '@/components/cases/CustodyTimeline'
+import { CaseEventsPanel } from '@/components/cases/CaseEventsPanel'
+import { BOARD_DISP_OPTIONS, BOARD_EXTRA_OPTIONS } from '@/lib/boardDisp'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { DictateButton } from '@/components/ui/DictateButton'
 import { appendChunk } from '@/lib/dictation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { obituaries } from '@/lib/obituaries'
 import { TASK_STATUS_LABELS } from '@/types'
 import { getErrorMessage } from '@/lib/errors'
 import { VITAL_FIELDS, VITAL_SECTION_LABELS, VITAL_SECTION_ORDER } from '@/lib/vitalFields'
 import { useSession } from '@/context/SessionContext'
-import { Card, CaseStatusBadge, formatCurrency } from '@/components/ui/Primitives'
+import { Card, CaseStatusBadge, CustodyChip, formatCurrency } from '@/components/ui/Primitives'
 import { ArrowLeft, CheckSquare, Square, Pin, Link2, FileText, Pencil, Upload, Printer, Trash2, Truck, Clock, CheckCircle2, Plus, FileSignature, Mail, Paperclip, Copy, Check as CheckIcon, Users2, Send, X, AlertTriangle } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
-import { useState, useRef } from 'react'
-import { canEditCases } from '@/lib/permissions'
+import { useState, useRef, useEffect } from 'react'
+import { canEditCases, canDeleteCases, canEditCustodyHistory, canViewAuditLog } from '@/lib/permissions'
+import { ChangeHistory } from '@/components/activity/ChangeHistory'
+import { DeleteCaseDialog } from '@/components/cases/DeleteCaseDialog'
 import { ReleaseAuthorizationForm, EmbalmingAuthorizationForm, PreneedDisclosureForm, FirstCallForm, VitalSheetForm } from '@/components/documents/FormTemplates'
 import { ActivityPanel } from '@/components/activity/ActivityPanel'
+import { CaseEmailRow } from '@/components/inbox/CaseEmailRow'
+import { FamilyActivityCard } from '@/components/family/FamilyActivityCard'
 import { QuoteBuilder } from '@/components/quote/QuoteBuilder'
+import { PreNeedPlanner } from '@/components/quote/PreNeedPlanner'
+import { WorkflowTrack } from '@/components/workflow/WorkflowTrack'
+import { computeWorkflow } from '@/lib/workflow'
+import { PaymentsPanel } from '@/components/statement/PaymentsPanel'
+import { PrintCenter } from '@/components/documents/PrintCenter'
+import { FamilyMedia } from '@/components/media/FamilyMedia'
+import { noteCaseOpened } from '@/lib/caseShortcuts'
+import { StatementWorkspace, ORDERS_VIEW } from '@/components/statement/StatementTabs'
+import { CaseQuotes } from '@/components/quote/CaseQuotes'
+import { quotes as quotesApi } from '@/lib/quotes'
 import type { CaseDocument, OrderStatus, Vendor, VendorCategory, CaseTask, TaskStatus } from '@/types'
 
 import { nextStep } from '@/lib/nextStep'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { ComposeEmail } from '@/components/ui/ComposeEmail'
 import { getCompanyName } from '@/lib/company'
-const tabs = ['Overview', 'Tasks', 'Orders', 'Notes', 'Documents', 'Emails', 'Financials'] as const
+const tabs = ['Overview', 'Tasks', 'Orders', 'Contracts', 'Quotes', 'Notes', 'Documents', 'Media', 'Emails', 'Financials'] as const
 type Tab = typeof tabs[number]
 
 const orderStatusStyles: Record<OrderStatus, string> = {
@@ -64,6 +85,7 @@ const docCategoryLabels: Record<CaseDocument['category'], string> = {
 
 export default function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>()
+  const navigate = useNavigate()
   const { currentUser } = useSession()
   const [searchParams] = useSearchParams()
   const wantedTab = searchParams.get('tab')
@@ -76,13 +98,38 @@ export default function CaseDetail() {
   const queryClient = useQueryClient()
   const { language } = useLanguage()
   const [composeOpen, setComposeOpen] = useState<{ to?: string; subject?: string; replyTo?: import('@/types').InboundEmail } | null>(null)
+  const obitPageMutation = useMutation({
+    mutationFn: () => obituaries.startFromCase(c!, currentUser!.name),
+    onSuccess: (o) => navigate('/obituary-manager', { state: { open: o } }),
+  })
   const setDispositionMutation = useMutation({
     mutationFn: (disposition: import('@/types').DispositionType) => api.updateCase(caseId!, { disposition }, currentUser!),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
   })
+  const copyServiceMutation = useMutation({
+    mutationFn: async ({ patch, extras }: { patch: import('@/lib/vitalToCase').ServicePatch; extras: boolean }) => {
+      if (Object.keys(patch).length > 0) await api.updateCase(caseId!, patch, currentUser!)
+      if (extras && c?.vitalSheet) await api.syncVitalEvents(c, deriveVitalEvents(c.vitalSheet), currentUser!)
+    },
+    onSuccess: () => { for (const k of ['case', 'cases', 'events', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
+  })
+  const { data: caseEvents } = useQuery({ queryKey: ['events'], queryFn: () => api.getCalendarEvents() })
+  const setBoardDispMutation = useMutation({
+    mutationFn: (boardDisp: string) => api.updateCase(caseId!, { boardDisp }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
+  })
+  const setBoardPlaceMutation = useMutation({
+    mutationFn: (boardPlace: string) => api.updateCase(caseId!, { boardPlace }, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
+  })
+  const setBoardExtraMutation = useMutation({
+    mutationFn: (patch: { boardFlowers?: string; boardBirds?: string; boardEscort?: string }) => api.updateCase(caseId!, patch, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }); queryClient.invalidateQueries({ queryKey: ['board-data'] }) },
+  })
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
 
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
+  useEffect(() => { if (c && currentUser) noteCaseOpened(currentUser.id, c.id) }, [c?.id, currentUser?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const { data: linkedFamily } = useQuery({ queryKey: ['family', c?.familyId], queryFn: () => api.getFamily(c!.familyId!), enabled: !!c?.familyId })
   const { data: tasks = [] } = useQuery({ queryKey: ['case-tasks', caseId], queryFn: () => api.getCaseTasks(caseId!), enabled: !!caseId })
   const { data: notes = [] } = useQuery({ queryKey: ['case-notes', caseId], queryFn: () => api.getCaseNotes(caseId!), enabled: !!caseId })
@@ -99,6 +146,7 @@ export default function CaseDetail() {
   const { data: orders = [] } = useQuery({ queryKey: ['case-orders', caseId], queryFn: () => api.getOrders(caseId!), enabled: !!caseId })
   const { data: contracts = [] } = useQuery({ queryKey: ['contracts'], queryFn: api.getContracts })
   const { data: gplItems = [] } = useQuery({ queryKey: ['gpl', c?.locationId], queryFn: () => api.getGplItems(c?.locationId), enabled: !!c })
+  const { data: caseQuotes = [] } = useQuery({ queryKey: ['case-quotes', caseId], queryFn: () => quotesApi.list(caseId!), enabled: !!caseId })
   const { data: caseEmails = [] } = useQuery({ queryKey: ['case-emails', caseId], queryFn: () => api.getEmails({ caseId: caseId! }), enabled: !!caseId })
   const { data: signatureRequests = [] } = useQuery({ queryKey: ['signature-requests', caseId], queryFn: () => api.getSignatureRequests(caseId!), enabled: !!caseId })
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
@@ -112,6 +160,45 @@ export default function CaseDetail() {
     },
   })
 
+  const { data: caseStatements } = useQuery({ queryKey: ['case-statements', caseId], queryFn: () => api.getCaseStatements(caseId!), enabled: !!caseId })
+  const signoffMutation = useMutation({
+    mutationFn: (v: { key: string; fp: string; label: string }) => api.signOffCheck(caseId!, v.key, v.fp, v.label, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-statements', caseId] }); queryClient.invalidateQueries({ queryKey: ['all-signoffs'] }) },
+  })
+  const statusMutation = useMutation({
+    mutationFn: (status: import('@/types').CaseStatus) => api.updateCase(caseId!, { status }, currentUser!),
+    onSuccess: () => { for (const k of ['case', 'cases', 'board-data']) queryClient.invalidateQueries({ queryKey: [k] }) },
+  })
+  const [ordersView, setOrdersView] = useState<string>('MXLI DIRECT')
+  const chosenContract = typeof caseStatements?.['_chosen']?.name === 'string' ? String(caseStatements['_chosen'].name) : ''
+  // Going back to Orders opens the chosen contract, not the first tab, so the wrong form is not edited by mistake.
+  const openedChosen = useRef('')
+  useEffect(() => { if (chosenContract && openedChosen.current !== `${caseId}:${chosenContract}`) { openedChosen.current = `${caseId}:${chosenContract}`; setOrdersView(chosenContract) } }, [chosenContract, caseId])
+  const [confirmPassed, setConfirmPassed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [choosingDisp, setChoosingDisp] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const [payTick, setPayTick] = useState(0)
+  const closeMutation = useMutation({
+    mutationFn: () => api.updateCase(caseId!, { status: 'completed' }, currentUser!),
+    onSuccess: () => { setConfirmClose(false); queryClient.invalidateQueries({ queryKey: ['case', caseId] }); queryClient.invalidateQueries({ queryKey: ['cases'] }) },
+  })
+  const [qFirst, setQFirst] = useState('')
+  const [qLast, setQLast] = useState('')
+  const passedMutation = useMutation({
+    mutationFn: async () => {
+      // A quote started without the patient's name gets the real name now.
+      if (c?.decedent.firstName === 'Quote' && qFirst.trim() && qLast.trim()) await api.updateCase(caseId!, { decedent: { ...c.decedent, firstName: qFirst.trim(), lastName: qLast.trim() } }, currentUser!)
+      await api.markPassedAway(caseId!, currentUser!)
+    },
+    onSuccess: () => { setConfirmPassed(false); navigate(`/cases/${caseId}/first-call`) },
+  })
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingNoteText, setEditingNoteText] = useState('')
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { body?: string; isSpecialRequest?: boolean } }) => api.updateNote(id, patch, currentUser!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['case-notes', caseId] }); setEditingNoteId(null) },
+  })
   const [noteIsSpecialRequest, setNoteIsSpecialRequest] = useState(false)
   const addNoteMutation = useMutation({
     mutationFn: (body: string) => api.addNote(caseId!, currentUser!, body, noteIsSpecialRequest),
@@ -213,33 +300,24 @@ export default function CaseDetail() {
     },
   })
 
+  const [textMsg, setTextMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const textLinkMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const link = generatedLink ?? (await api.createFamilyPortalLink(caseId!, c?.contacts[0]?.id, 90, currentUser!)).url
+      setGeneratedLink(link)
+      await api.sendFamilyPortalText(phone, `${getCompanyName()}: here is your private link to review and share information about your loved one: ${link}`)
+    },
+    onSuccess: () => setTextMsg({ ok: true, text: 'Text sent.' }),
+    onError: (e) => setTextMsg({ ok: false, text: `Text not sent: ${getErrorMessage(e)}` }),
+  })
+
   const reopenIntakeMutation = useMutation({
     mutationFn: () => api.reopenFamilyIntake(caseId!, currentUser!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case', caseId] }),
   })
 
-  const sendForSignatureMutation = useMutation({
-    mutationFn: async (documentName: string) => {
-      const contact = c?.contacts[0]
-      let pdfBlob: Blob | undefined
-      if (formPreviewRef.current) {
-        const { pdfFromElement } = await import('@/lib/pdfGenerator')
-        pdfBlob = await pdfFromElement(formPreviewRef.current)
-      }
-      return api.createSignatureRequest({
-        caseId: caseId!, documentName,
-        signerName: contact?.name ?? 'Family Contact',
-        signerEmail: contact?.email ?? '',
-        sentBy: currentUser!.id,
-      }, currentUser!, pdfBlob)
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signature-requests', caseId] }),
-  })
-
-  const simulateSignedMutation = useMutation({
-    mutationFn: (requestId: string) => api.simulateSignatureComplete(requestId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['signature-requests', caseId] }),
-  })
+  const [signing, setSigning] = useState<string | null>(null)
+  const [signingDoc, setSigningDoc] = useState<CaseDocument | null>(null)
 
   if (!c) return <div className="text-slate-400 text-sm">Loading case…</div>
 
@@ -289,7 +367,7 @@ export default function CaseDetail() {
 
   return (
     <>
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">
     <div>
       <Link to="/cases" className="no-print inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-4">
         <ArrowLeft size={15} /> Back to cases
@@ -303,7 +381,44 @@ export default function CaseDetail() {
           <div className="text-sm text-slate-500 mt-1">
             {c.caseNumber} · {c.type.replace('_', '-')} · {c.disposition}
           </div>
-          <div className="mt-2"><CaseStatusBadge status={c.status} /></div>
+          {canEdit && (
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+              DISP (TV Board)
+              <select value={c.boardDisp ?? ''} onChange={(e) => setBoardDispMutation.mutate(e.target.value)} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                <option value="">— not set —</option>
+                {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+          )}
+          {canEdit && (
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
+              Position (TV Board)
+              <select value={c.boardPlace ?? ''} onChange={(e) => setBoardPlaceMutation.mutate(e.target.value)} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                <option value="">Automatic</option>
+                <option value="bottom">Move to bottom (services done, waiting on items)</option>
+                <option value="top">Keep at top</option>
+              </select>
+            </label>
+          )}
+          {canEdit && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+              {([['Flowers', 'boardFlowers'], ['Birds', 'boardBirds'], ['Escort', 'boardEscort']] as const).map(([label, key]) => (
+                <label key={key} className="inline-flex items-center gap-1.5">
+                  {label}
+                  <select value={c[key] ?? ''} onChange={(e) => setBoardExtraMutation.mutate({ [key]: e.target.value })} className="border border-slate-200 rounded-md px-2 py-1 text-sm text-slate-800 bg-white">
+                    <option value="">Auto (from Orders)</option>
+                    {BOARD_EXTRA_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                  </select>
+                </label>
+              ))}
+              <span className="text-[11px] text-slate-400">shown on the TV Board</span>
+            </div>
+          )}
+          <div className="mt-2"><span className="inline-flex flex-wrap items-center gap-1.5">{canEdit && (
+            <select value={c.status} onChange={(e) => statusMutation.mutate(e.target.value as import('@/types').CaseStatus)} aria-label="Change case status" title="Change the status of this case" className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+              {([['first_call', 'First Call'], ['arrangement_pending', 'Arrangement Pending'], ['arrangement_scheduled', 'Arrangement Scheduled'], ['in_progress', 'In Progress'], ['service_scheduled', 'Service Scheduled'], ['completed', 'Completed'], ['on_hold', 'On Hold']] as const).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          )}{!canEdit && <CaseStatusBadge status={c.status} />}<CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span></div>
           {linkedFamily && (
             <Link to={`/families/${linkedFamily.id}`} className="inline-flex items-center gap-1 text-xs text-[#3b4a35] hover:underline mt-1">
               <Users2 size={11} /> {linkedFamily.name}
@@ -315,14 +430,15 @@ export default function CaseDetail() {
             <input type="checkbox" checked={!!c.obituaryCompleted} disabled={!canEdit || obituaryMutation.isPending} onChange={(e) => obituaryMutation.mutate(e.target.checked)} />
             Obituary done
           </label>
+          {canEdit && <button type="button" disabled={obitPageMutation.isPending} onClick={() => obitPageMutation.mutate()} className="inline-flex items-center gap-1.5 text-xs font-medium border border-slate-200 rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">{obitPageMutation.isPending ? 'Opening…' : 'Obituary page'}</button>}
           {canEdit && (
             <>
-              <Link
+              {c.type !== 'pre_need' && <Link
                 to={`/cases/${c.id}/first-call`}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
               >
                 First Call
-              </Link>
+              </Link>}
               <Link
                 to={`/cases/${c.id}/vital-sheet`}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-2.5 py-1.5 hover:bg-slate-50"
@@ -353,6 +469,12 @@ export default function CaseDetail() {
               >
                 <Pencil size={12} /> Edit
               </Link>
+              {currentUser && canDeleteCases(currentUser.role) && (
+                <button type="button" onClick={() => setDeleting(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md px-2.5 py-1.5 hover:bg-red-50">
+                  <Trash2 size={12} /> Delete
+                </button>
+              )}
+              {deleting && <DeleteCaseDialog c={c} onClose={() => setDeleting(false)} onDeleted={() => navigate('/cases')} />}
             </>
           )}
         </div>
@@ -392,6 +514,28 @@ export default function CaseDetail() {
         </Card>
       )}
 
+      {c.type === 'pre_need' && (
+        <div className="no-print mt-4 rounded-lg border-2 border-violet-300 bg-violet-50 px-4 py-3">
+          <div className="text-sm font-semibold text-violet-900">{c.decedent.firstName === 'Quote' ? `Quote for the ${c.decedent.lastName} family — nobody has passed away` : `Pre-Need plan — ${c.decedent.firstName} has not passed away`}</div>
+          <p className="text-sm text-violet-900/80 mt-0.5">This plan stays off the Chain of Custody, TV board and Driver screens. When the family calls to say they have passed, tap the button to start the First Call — everything already planned stays on the file.</p>
+          {canEdit && (confirmPassed ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {c.decedent.firstName === 'Quote' ? (
+                <>
+                  <span className="text-sm font-medium text-slate-800">Who passed away?</span>
+                  <input value={qFirst} onChange={(e) => setQFirst(e.target.value)} placeholder="First name" className="border border-slate-300 rounded-md px-2.5 py-1.5 text-sm w-36" />
+                  <input value={qLast} onChange={(e) => setQLast(e.target.value)} placeholder="Last name" className="border border-slate-300 rounded-md px-2.5 py-1.5 text-sm w-36" />
+                </>
+              ) : <span className="text-sm font-medium text-slate-800">Start the First Call for {c.decedent.firstName} now?</span>}
+              <button type="button" disabled={passedMutation.isPending || (c.decedent.firstName === 'Quote' && !(qFirst.trim() && qLast.trim()))} onClick={() => passedMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">{passedMutation.isPending ? 'Starting…' : 'Yes, start First Call'}</button>
+              <button type="button" onClick={() => setConfirmPassed(false)} className="text-sm rounded-md border border-slate-300 bg-white px-3 py-1.5 text-slate-600">Not yet</button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setConfirmPassed(true)} className="mt-2 text-sm font-medium rounded-md bg-violet-700 text-white px-3.5 py-2 hover:bg-violet-800">Passed away — start First Call</button>
+          ))}
+        </div>
+      )}
+
       {/* Next step — one plain sentence and one button, so nobody has to know the whole process */}
       {(() => {
         const step = nextStep(c, { contract: caseContract, tasks }, language)
@@ -408,6 +552,7 @@ export default function CaseDetail() {
                 ))}
               </div>
             )}
+            {!step.done && <Link to={`/cases/${c.id}/guide`} className="shrink-0 rounded-md border border-[#3b4a35] bg-white text-[#3b4a35] text-sm font-medium px-4 py-2 hover:bg-[#3b4a35]/10">{language === 'es' ? 'Guíame' : 'Guide me'}</Link>}
             {step.button && canEdit && (
               step.to
                 ? <Link to={step.to} className="shrink-0 rounded-md bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 hover:bg-[#4d5f45]">{step.button}</Link>
@@ -417,8 +562,46 @@ export default function CaseDetail() {
         )
       })()}
 
+      {confirmClose && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onClick={() => setConfirmClose(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="font-semibold text-slate-900">{language === 'es' ? '¿Marcar este caso como completo?' : 'Mark this case complete?'}</div>
+            <p className="text-sm text-slate-600 mt-2">{language === 'es' ? 'Úselo cuando todo esté terminado y cobrado.' : 'Use this when everything is finished and paid.'}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setConfirmClose(false)} className="text-sm rounded-md border border-slate-300 px-3.5 py-2">{language === 'es' ? 'Cancelar' : 'Cancel'}</button>
+              <button disabled={closeMutation.isPending} onClick={() => closeMutation.mutate()} className="text-sm rounded-md bg-[#3b4a35] text-white px-3.5 py-2">{language === 'es' ? 'Sí, completo' : 'Yes, complete'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {choosingDisp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" onClick={() => setChoosingDisp(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="font-semibold text-slate-900">{language === 'es' ? '¿Entierro o cremación?' : 'Burial or cremation?'}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {([['burial', 'Burial', 'Entierro'], ['cremation', 'Cremation', 'Cremación'], ['entombment', 'Entombment', 'Mausoleo'], ['donation', 'Donation', 'Donación']] as const).map(([v, en, es]) => (
+                <button key={v} disabled={setDispositionMutation.isPending} onClick={() => setDispositionMutation.mutate(v, { onSuccess: () => setChoosingDisp(false) })} className="rounded-md border border-slate-300 py-3 text-sm font-medium hover:bg-[#3b4a35] hover:text-white">{language === 'es' ? es : en}</button>
+              ))}
+            </div>
+            <button onClick={() => setChoosingDisp(false)} className="mt-3 text-sm text-slate-500 w-full">{language === 'es' ? 'Cancelar' : 'Cancel'}</button>
+          </div>
+        </div>
+      )}
+
+      <WorkflowTrack
+        wf={computeWorkflow(c, { contract: caseContract, tasks, docs: documents, signoffs: caseStatements?.['_signoffs'] }, language)}
+        onTab={(t, key) => { if (key === 'disp') { setChoosingDisp(true); return } if (key === 'closed') { setConfirmClose(true); return } if (key === 'paid' || key === 'dep' || key === 'bal') setPayTick((n) => n + 1); setTab(t); setPreviewTemplate(null); setTimeout(() => document.getElementById('case-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }} canEdit={canEdit} lang={language}
+        signoff={{
+          lang: language, busy: signoffMutation.isPending,
+          blocked: c.assignedDirectorId && c.assignedDirectorId === currentUser!.id ? (language === 'es' ? 'Otra persona debe hacer esta revisión (usted es el director de este caso).' : 'Someone else has to do this check — you are the director on this case.') : undefined,
+          onSign: (it) => signoffMutation.mutate({ key: it.signoff!.key, fp: it.signoff!.fp, label: it.label }),
+        }} />
+
+      <div className="mt-4"><FamilyActivityCard c={c} currentUser={currentUser!} /></div>
+
       {/* Tabs */}
-      <div className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5">
+      <div id="case-tabs" className="no-print flex gap-1 border-b border-slate-200 mt-5 mb-5 scroll-mt-16">
         {tabs.map((t) => (
           <button
             key={t}
@@ -427,7 +610,7 @@ export default function CaseDetail() {
               tab === t ? 'border-[#b3925a] text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
-            {t}
+            {t}{t === 'Quotes' && caseQuotes.length > 0 && <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{caseQuotes.length}</span>}
           </button>
         ))}
       </div>
@@ -455,7 +638,7 @@ export default function CaseDetail() {
               <>
                 <h3 className="text-sm font-medium text-slate-800 mt-6 mb-3">Visitation</h3>
                 <div className="flex gap-6 text-sm">
-                  <Field label="Date & Time" value={format(parseISO(c.visitationDate), 'MMM d, yyyy · h:mm a')} />
+                  <Field label="Date & Time" value={format(parseISO(c.visitationDate), 'MMM d, yyyy · HH:mm') + (c.visitationEnd ? '–' + format(parseISO(c.visitationEnd), 'HH:mm') : '')} />
                   <Field label="Location" value={c.visitationLocation ?? '—'} />
                 </div>
               </>
@@ -465,7 +648,7 @@ export default function CaseDetail() {
               <>
                 <h3 className="text-sm font-medium text-slate-800 mt-6 mb-3">Service</h3>
                 <div className="flex gap-6 text-sm">
-                  <Field label="Date & Time" value={format(parseISO(c.serviceDate), 'MMM d, yyyy · h:mm a')} />
+                  <Field label="Date & Time" value={format(parseISO(c.serviceDate), 'MMM d, yyyy · HH:mm')} />
                   <Field label="Location" value={c.serviceLocation ?? '—'} />
                 </div>
               </>
@@ -513,12 +696,28 @@ export default function CaseDetail() {
                 </button>
               </div>
             )}
+            {(() => {
+              const phone = c.contacts.find((x) => x.phone)?.phone
+              const who = c.contacts.find((x) => x.phone)?.name
+              return phone ? (
+                <button
+                  onClick={() => { setTextMsg(null); textLinkMutation.mutate(phone) }}
+                  disabled={textLinkMutation.isPending}
+                  className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-sm font-medium text-white bg-[#3b4a35] rounded-md py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
+                >
+                  {textLinkMutation.isPending ? 'Sending…' : `Text link to ${who ?? 'family'} (${phone})`}
+                </button>
+              ) : <div className="mt-2 text-xs text-slate-400">Add a phone number to a family contact to text them the link.</div>
+            })()}
+            {textMsg && <div className={`mt-2 text-xs ${textMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>{textMsg.text}</div>}
             {generateLinkMutation.isError && (
               <div className="mt-2 text-xs text-red-600">
                 Couldn't generate a link: {getErrorMessage(generateLinkMutation.error)}
               </div>
             )}
           </Card>
+
+          <Card className="lg:col-span-3 p-5"><CustodyTimeline caseObj={c} canEdit={canEdit} canFix={canEditCustodyHistory(currentUser!.role)} currentUser={currentUser!} /></Card>
 
           <Card className="lg:col-span-3 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -551,6 +750,26 @@ export default function CaseDetail() {
               ))}
               <div>
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Services</div>
+                {(() => {
+                  const d0 = c.vitalSheet ? deriveServicePatch(c, c.vitalSheet, true) : null
+                  const have = (caseEvents ?? []).filter((e) => e.caseId === c.id && e.source === 'vital')
+                  const wantExtra = c.vitalSheet ? deriveVitalEvents(c.vitalSheet).filter((it) => !have.some((e) => e.label === it.label && new Date(e.start).getTime() === new Date(it.start).getTime())) : []
+                  const d = d0 && { ...d0, summary: [...d0.summary, ...wantExtra.map((it) => `${it.label} ${format(parseISO(it.start), 'MM/dd h:mm a')}${it.place ? ` · ${it.place}` : ''}`)] }
+                  if (!d || (d.summary.length === 0 && !d.needsVisitationDate)) return null
+                  return (
+                    <div className="no-print mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                      {d.summary.length > 0 && (
+                        <>
+                          <div className="font-semibold">These are on the Vital Sheet but not on the Calendar and TV Board yet:</div>
+                          <ul className="mt-1 list-disc pl-4">{d.summary.map((x) => <li key={x}>{x}</li>)}</ul>
+                          {canEdit && <button onClick={() => copyServiceMutation.mutate({ patch: d.patch, extras: wantExtra.length > 0 })} disabled={copyServiceMutation.isPending} className="mt-2 rounded-md bg-[#3b4a35] px-3 py-1.5 font-semibold text-white hover:bg-[#4d5f45] disabled:opacity-50">{copyServiceMutation.isPending ? 'Adding…' : 'Add them to the Calendar and TV Board'}</button>}
+                        </>
+                      )}
+                      {d.needsVisitationDate && <div className={d.summary.length ? 'mt-2' : ''}>Visitation hours are on the Vital Sheet but there is no visitation date, so it cannot go on the Calendar yet. Add the date in <Link to={`/cases/${c.id}/vital-sheet`} className="underline font-medium">Edit Vital Sheet</Link>.</div>}
+                    </div>
+                  )
+                })()}
+                <CaseEventsPanel caseObj={c} canEdit={canEdit} currentUser={currentUser!} />
                 <dl className="space-y-2">
                   <Field label="Visitation" value={[c.visitationDate && format(parseISO(c.visitationDate), 'MM/dd/yyyy'), c.vitalSheet?.visitationHours, c.visitationLocation].filter(Boolean).join(' · ') || '—'} />
                   <Field label="Rosary / Service" value={[c.vitalSheet?.rosaryDate && format(parseISO(c.vitalSheet.rosaryDate), 'MM/dd/yyyy'), c.vitalSheet?.rosaryTime, c.vitalSheet?.rosaryLanguage && (c.vitalSheet.rosaryLanguage === 'spanish' ? 'SPAN' : 'ENG'), c.vitalSheet?.rosaryPlace, c.vitalSheet?.rosaryBy && `by ${c.vitalSheet.rosaryBy}`].filter(Boolean).join(' · ') || '—'} />
@@ -678,7 +897,21 @@ export default function CaseDetail() {
       )}
 
       {tab === 'Orders' && (
-        <div className="space-y-5">
+        <div className="space-y-4">
+          <StatementWorkspace caseObj={c} view={ordersView} onView={setOrdersView} canEdit={canEdit} currentUser={currentUser!} onQuoteSaved={() => { setTab('Quotes'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+        </div>
+      )}
+
+      {tab === 'Contracts' && (
+        <div className="space-y-4">
+          {chosenContract
+            ? <StatementWorkspace caseObj={c} lockTo={chosenContract} view={chosenContract} onView={() => {}} canEdit={canEdit} currentUser={currentUser!} onQuoteSaved={() => { setTab('Quotes'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+            : <Card className="p-8 text-center text-sm text-slate-500">No contract has been chosen yet. Open the Orders tab, pick the form the family agreed to and press <b>Make this the chosen contract</b>. It will then appear here and open first on Orders.<div><button type="button" onClick={() => setTab('Orders')} className="mt-3 rounded-md bg-[#3b4a35] px-4 py-2 text-sm font-semibold text-white">Go to Orders</button></div></Card>}
+        </div>
+      )}
+
+      {tab === 'Orders' && ordersView === ORDERS_VIEW && (
+        <div className="space-y-5 mt-4">
           {canEdit && (
             <Card className="p-4">
               <h3 className="text-sm font-medium text-slate-800 mb-3">Add an Order</h3>
@@ -710,10 +943,10 @@ export default function CaseDetail() {
                       <div className="min-w-0 flex-1">
                         <div className="text-slate-800">{o.item}</div>
                         {o.confirmedAt && (
-                          <div className="text-xs text-slate-400">Confirmed {format(parseISO(o.confirmedAt), 'MMM d, h:mm a')}</div>
+                          <div className="text-xs text-slate-400">Confirmed {format(parseISO(o.confirmedAt), 'MMM d, HH:mm')}</div>
                         )}
                         {o.orderedAt && !o.confirmedAt && (
-                          <div className="text-xs text-slate-400">Ordered {format(parseISO(o.orderedAt), 'MMM d, h:mm a')}</div>
+                          <div className="text-xs text-slate-400">Ordered {format(parseISO(o.orderedAt), 'MMM d, HH:mm')}</div>
                         )}
                       </div>
                       {canEdit ? (
@@ -787,6 +1020,23 @@ export default function CaseDetail() {
             )}
           </Card>
 
+          {c.type === 'pre_need' && (
+            <PreNeedPlanner
+              contract={caseContract}
+              gplItems={gplItems}
+              canEdit={canEdit}
+              disposition={c.disposition}
+              onToggle={(item, lineId) => lineId
+                ? caseContract && removeLineMutation.mutate({ lineItemId: lineId, contractId: caseContract.id })
+                : addGplToQuoteMutation.mutate({ id: item.id, name: item.name, price: item.price })}
+              onAddMany={async (items) => {
+                for (const it of items) await api.addGplItemToQuote(caseId!, c.locationId, { id: it.id, name: it.name, price: it.price }, currentUser!)
+                queryClient.invalidateQueries({ queryKey: ['contracts'] })
+              }}
+              onSetDisposition={(d) => setDispositionMutation.mutate(d)}
+            />
+          )}
+
           <QuoteBuilder
             caseObj={c}
             contract={caseContract}
@@ -838,9 +1088,33 @@ export default function CaseDetail() {
                     </span>
                   )}
                   <span className="font-medium text-slate-700">{n.authorName}</span>
-                  <span>· {format(parseISO(n.createdAt), 'MMM d, h:mm a')}</span>
+                  <span>· {format(parseISO(n.createdAt), 'MMM d, HH:mm')}</span>
                 </div>
-                <p className="text-sm text-slate-800">{n.body}</p>
+                {editingNoteId === n.id ? (
+                  <div className="space-y-2">
+                    <textarea value={editingNoteText} onChange={(e) => setEditingNoteText(e.target.value)} rows={3}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+                    <div className="flex gap-2">
+                      <button type="button" disabled={!editingNoteText.trim() || updateNoteMutation.isPending}
+                        onClick={() => updateNoteMutation.mutate({ id: n.id, patch: { body: editingNoteText.trim() } })}
+                        className="text-sm rounded-md bg-[#3b4a35] text-white px-3 py-1.5 disabled:opacity-50">Save</button>
+                      <button type="button" onClick={() => setEditingNoteId(null)} className="text-sm rounded-md border border-slate-300 px-3 py-1.5 text-slate-600">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-800">{n.body}</p>
+                )}
+                {canEdit && editingNoteId !== n.id && (
+                  <div className="flex items-center gap-4 mt-1.5 text-xs">
+                    <button type="button" onClick={() => { setEditingNoteId(n.id); setEditingNoteText(n.body) }}
+                      className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800"><Pencil size={12} /> Edit</button>
+                    <button type="button" disabled={updateNoteMutation.isPending}
+                      onClick={() => updateNoteMutation.mutate({ id: n.id, patch: { isSpecialRequest: !n.isSpecialRequest } })}
+                      className={`inline-flex items-center gap-1 ${n.isSpecialRequest ? 'text-slate-500 hover:text-slate-800' : 'text-amber-700 hover:text-amber-900 font-medium'}`}>
+                      <AlertTriangle size={12} /> {n.isSpecialRequest ? 'Remove Special Request' : 'Make this a Special Request (show on TV Board)'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             {notes.length === 0 && <div className="text-sm text-slate-400 text-center py-6">No notes yet.</div>}
@@ -850,6 +1124,9 @@ export default function CaseDetail() {
 
       {tab === 'Documents' && !previewTemplate && (
         <div className="space-y-5">
+          <Card className="p-5">
+            <PrintCenter caseObj={c} canEdit={canEdit} currentUser={currentUser!} onOpenForm={(k) => setPreviewTemplate(k)} onGoTo={(t) => { setTab(t); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          </Card>
           {canEdit && (
             <Card className="p-4">
               <h3 className="text-sm font-medium text-slate-800 mb-3">Add a Document</h3>
@@ -870,80 +1147,16 @@ export default function CaseDetail() {
                 <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
                 <span className="text-xs text-slate-400">Stored in-session only until Supabase Storage is connected</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setPreviewTemplate('release')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.release}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('embalming')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.embalming}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('preneed')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.preneed}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('first_call')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.first_call}
-                </button>
-                <button
-                  onClick={() => setPreviewTemplate('vital_sheet')}
-                  className="text-xs font-medium text-slate-600 border border-slate-200 rounded-md px-3 py-1.5 hover:bg-slate-50"
-                >
-                  Generate: {templateLabels.vital_sheet}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-400 mt-2">
-                Death Certificate Control Form isn't wired up yet — that source document wasn't provided.
-              </p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                To send a document for signature, generate it above first — "Send for Signature" appears in the preview.
+              <p className="text-[11px] text-slate-400">
+                To send a form for signature, open it from the Print center above — "Send for Signature" appears in the preview. Signed copies are filed here automatically.
               </p>
             </Card>
           )}
 
-          {signatureRequests.length > 0 && (
-            <Card className="p-4">
-              <h3 className="text-sm font-medium text-slate-800 mb-3">Signature Requests</h3>
-              <div className="space-y-2">
-                {signatureRequests.map((sig) => (
-                  <div key={sig.id} className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-slate-50 text-sm">
-                    <FileSignature size={15} className="text-slate-400 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-slate-800">{sig.documentName}</div>
-                      <div className="text-xs text-slate-400">
-                        To {sig.signerName}{sig.sentAt && ` · Sent ${format(parseISO(sig.sentAt), 'MMM d, h:mm a')}`}
-                        {sig.signedAt && ` · Signed ${format(parseISO(sig.signedAt), 'MMM d, h:mm a')}`}
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                      sig.status === 'signed' ? 'bg-emerald-100 text-emerald-800'
-                        : sig.status === 'declined' || sig.status === 'expired' ? 'bg-red-100 text-red-700'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {sig.status}
-                    </span>
-                    {canEdit && sig.status === 'sent' && (
-                      <button
-                        onClick={() => simulateSignedMutation.mutate(sig.id)}
-                        className="text-xs font-medium text-slate-500 border border-slate-200 rounded-md px-2 py-1 hover:bg-slate-50"
-                      >
-                        Simulate Signed (demo)
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
+          <SignaturesCard caseObj={c} canEdit={canEdit} currentUser={currentUser!} />
+          {signingDoc && currentUser && (
+            <SignDialog caseObj={c} documentName={signingDoc.name.replace(/\.pdf$/i, '')} currentUser={currentUser} onClose={() => setSigningDoc(null)}
+              getPdf={async () => { const r = await fetch(await api.getDocumentSignedUrl(signingDoc.url)); if (!r.ok) throw new Error('Could not open that file.'); return r.blob() }} />
           )}
 
           <Card className="p-5">
@@ -959,7 +1172,7 @@ export default function CaseDetail() {
                     <FileText size={16} className="text-slate-400 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="text-slate-800 truncate">{d.name}</div>
-                      <div className="text-xs text-slate-400">{docCategoryLabels[d.category]} · {format(parseISO(d.uploadedAt), 'MMM d, yyyy h:mm a')}</div>
+                      <div className="text-xs text-slate-400">{docCategoryLabels[d.category]} · {format(parseISO(d.uploadedAt), 'MMM d, yyyy HH:mm')}</div>
                     </div>
                     {d.url && (
                       <button
@@ -968,6 +1181,9 @@ export default function CaseDetail() {
                       >
                         View
                       </button>
+                    )}
+                    {canEdit && d.url && /\.pdf$/i.test(d.url) && (
+                      <button onClick={() => setSigningDoc(d)} title="Send for signature" className="text-slate-400 hover:text-[#3b4a35] p-1"><FileSignature size={14} /></button>
                     )}
                     {canEdit && vendors.length > 0 && (
                       <button
@@ -1028,30 +1244,19 @@ export default function CaseDetail() {
               )}
               {canEdit && (
                 <button
-                  onClick={() => sendForSignatureMutation.mutate(templateLabels[previewTemplate])}
-                  disabled={sendForSignatureMutation.isPending || !c.contacts[0]?.email}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5 disabled:opacity-40"
-                  title={!c.contacts[0]?.email ? 'Add an email to the primary contact first' : undefined}
+                  onClick={() => setSigning(templateLabels[previewTemplate])}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#3b4a35] border border-[#3b4a35]/30 rounded-md px-3.5 py-2 hover:bg-[#3b4a35]/5"
                 >
-                  <FileSignature size={15} /> {sendForSignatureMutation.isPending ? 'Sending…' : 'Send for Signature'}
+                  <FileSignature size={15} /> Send for Signature
                 </button>
               )}
             </div>
           </div>
-          {!c.contacts[0]?.email && (
-            <p className="no-print text-xs text-amber-600 mb-3 text-right">Add an email address to the primary contact before sending for signature.</p>
+          {signing && currentUser && (
+            <SignDialog caseObj={c} documentName={signing} currentUser={currentUser} onClose={() => setSigning(null)}
+              getPdf={async () => { const { pdfFromElement } = await import('@/lib/pdfGenerator'); if (!formPreviewRef.current) throw new Error('Open the form first.'); return pdfFromElement(formPreviewRef.current) }} />
           )}
-          {sendForSignatureMutation.isError && (
-            <div className="no-print text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-3">
-              Couldn't send for signature: {getErrorMessage(sendForSignatureMutation.error)}
-            </div>
-          )}
-          {sendForSignatureMutation.isSuccess && (
-            <div className="no-print text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2 mb-3">
-              Sent successfully — check the Signature Requests list below the Documents tab.
-            </div>
-          )}
-          <div className="print-target" ref={formPreviewRef}>
+          <div className="print-target doc-fit" ref={formPreviewRef}>
             <Card className="p-8 max-w-2xl">
               {previewTemplate === 'release' && <ReleaseAuthorizationForm c={c} />}
               {previewTemplate === 'embalming' && <EmbalmingAuthorizationForm c={c} />}
@@ -1061,6 +1266,14 @@ export default function CaseDetail() {
             </Card>
           </div>
         </div>
+      )}
+
+      {tab === 'Media' && (
+        <Card className="p-5"><FamilyMedia caseId={c.id} canEdit={canEdit} currentUser={currentUser!} /></Card>
+      )}
+
+      {tab === 'Quotes' && (
+        <Card className="p-5"><CaseQuotes caseObj={c} canEdit={canEdit} currentUser={currentUser!} onGoToOrders={() => setTab('Orders')} /></Card>
       )}
 
       {tab === 'Emails' && (
@@ -1084,19 +1297,7 @@ export default function CaseDetail() {
           ) : (
             <div className="space-y-1">
               {caseEmails.map((email) => (
-                <div key={email.id} className="flex items-start gap-3 px-2 py-2.5 rounded-md hover:bg-slate-50 text-sm">
-                  <Mail size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-slate-900">{email.direction === 'out' ? `Sent to ${email.to}` : (email.fromName ?? email.from)}</span>
-                      {email.direction === 'out' && <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#3b4a35]/10 text-[#3b4a35]">Sent by {email.sentByName ?? 'staff'}</span>}
-                      {email.attachments.length > 0 && <Paperclip size={12} className="text-slate-400" />}
-                    </div>
-                    <div className="text-slate-800">{email.subject}</div>
-                    <div className="text-slate-500 text-xs truncate">{email.preview}</div>
-                  </div>
-                  <div className="text-xs text-slate-400 whitespace-nowrap">{format(parseISO(email.receivedAt), 'MMM d, h:mm a')}</div>
-                </div>
+                <CaseEmailRow key={email.id} email={email} caseId={caseId!} canEdit={canEdit} currentUser={currentUser!} />
               ))}
             </div>
           )}
@@ -1118,7 +1319,7 @@ export default function CaseDetail() {
                 <tbody>
                   {caseContract.lineItems.map((li) => (
                     <tr key={li.id} className="border-b border-slate-50 last:border-0">
-                      <td className="py-2 text-slate-700">{li.name}</td>
+                      <td className="py-2 text-slate-700">{li.name}{li.source === 'statement' && <span className="ml-2 text-[10px] text-slate-400">from statement</span>}</td>
                       <td className="py-2 text-slate-500 text-right w-16">×{li.quantity}</td>
                       <td className="py-2 text-slate-900 text-right w-28">{formatCurrency(li.unitPrice * li.quantity)}</td>
                     </tr>
@@ -1132,15 +1333,25 @@ export default function CaseDetail() {
                 <div className="text-emerald-600">Paid: {formatCurrency(caseContract.amountPaid)}</div>
                 <div className="text-red-500">Balance: {formatCurrency(caseContract.total - caseContract.amountPaid)}</div>
               </div>
+              <div className="border-t border-slate-100 mt-5 pt-4">
+                <h4 className="text-sm font-medium text-slate-800 mb-2">Payments</h4>
+                <PaymentsPanel caseObj={c} contract={caseContract} canEdit={canEdit} currentUser={currentUser!} autoOpen={payTick} />
+              </div>
             </div>
           ) : (
-            <div className="text-sm text-slate-400 text-center py-10">No contract created yet for this case.</div>
+            <div className="text-sm text-slate-500 text-center py-10">No contract yet — it is created when items are chosen on the Orders tab.<div><button type="button" onClick={() => setTab('Orders')} className="mt-3 text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2">Go to Orders and choose items</button></div></div>
           )}
         </Card>
       )}
     </div>
     <div className="no-print">
       <ActivityPanel caseId={caseId} title="Case Activity" />
+      {currentUser && canViewAuditLog(currentUser.role) && (
+        <details className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">Detailed change history</summary>
+          <div className="mt-3"><ChangeHistory caseId={caseId} compact /></div>
+        </details>
+      )}
     </div>
     </div>
 

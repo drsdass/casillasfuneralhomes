@@ -9,9 +9,9 @@ import { format, parseISO, isToday, isYesterday } from 'date-fns'
 
 function formatWhen(iso: string): string {
   const d = parseISO(iso)
-  if (isToday(d)) return format(d, 'h:mm a')
-  if (isYesterday(d)) return `Yesterday ${format(d, 'h:mm a')}`
-  return format(d, 'MMM d, h:mm a')
+  if (isToday(d)) return format(d, 'HH:mm')
+  if (isYesterday(d)) return `Yesterday ${format(d, 'HH:mm')}`
+  return format(d, 'MMM d, HH:mm')
 }
 
 export default function Messages() {

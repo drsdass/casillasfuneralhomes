@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Mail, FolderCheck, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { playMessageChime } from '@/lib/notificationSound'
 import { useNotificationPrefs } from '@/components/presence/NotificationSettings'
 import { isPushOn } from '@/lib/push'
+import { junkKind } from '@/lib/emailJunk'
 import type { InboundEmail } from '@/types'
 
 type Alert = { id: string; orgId: string; email: InboundEmail; caseName?: string; handledBy?: string }
@@ -25,6 +26,12 @@ const lookFor = (name: string) => (/^sanders/i.test(name) ? COMPANY_LOOK.sanders
  */
 export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { userId: string; orgs: Org[]; activeOrgId?: string; onSwitchOrg: (orgId: string, path?: string) => void }) {
   const navigate = useNavigate()
+  // While someone is filling in a form (new case, First Call, Vital Sheet, edit, EDRS) nothing may pop up over it.
+  // The mail still lands in the Inbox and the bell counter; they see it when they finish.
+  const { pathname } = useLocation()
+  const busy = /\/(new|first-call|vital-sheet|edit|edrs)(\/|$)/.test(pathname)
+  const busyRef = useRef(busy)
+  busyRef.current = busy
   const qc = useQueryClient()
   const multi = orgs.length > 1
   const { prefs } = useNotificationPrefs()
@@ -44,7 +51,7 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
   const { data } = useQuery({
     queryKey: ['new-email-alerts', userId, orgs.map((o) => o.id).join(',')],
     queryFn: async () => {
-      const out: { orgId: string; emails: InboundEmail[] }[] = []
+      const out: { orgId: string; emails: InboundEmail[]; all: InboundEmail[] }[] = []
       for (const o of orgs) {
         // First time on this computer: start from "now" so old mail doesn't pop up.
         if (!since.current![o.id]) {
@@ -54,7 +61,8 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         }
         try {
           const emails = await api.getNewInbound(since.current![o.id], multi ? o.id : undefined)
-          if (emails.length) out.push({ orgId: o.id, emails })
+          // Phishing and marketing never pop up; they wait quietly in the Junk & Marketing tab.
+          if (emails.length) out.push({ orgId: o.id, emails: emails.filter((e) => !junkKind(e)), all: emails })
         } catch { /* try again next round */ }
       }
       return out
@@ -75,12 +83,12 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         }
       }
       if (cancelled) return
-      for (const { orgId, emails } of data) {
-        since.current![orgId] = emails.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
+      for (const { orgId, all } of data) {
+        since.current![orgId] = all.reduce((m, e) => (e.receivedAt > m ? e.receivedAt : m), since.current![orgId] ?? '')
       }
       saveSince()
       qc.invalidateQueries({ queryKey: ['emails'] })
-      if (quietRef.current) return
+      if (quietRef.current || busyRef.current || fresh.length === 0) return
       setAlerts((old) => [...old, ...fresh.filter((f) => !old.some((o) => o.id === f.id))].slice(-4))
       qc.invalidateQueries({ queryKey: ['emails'] })
       playMessageChime()
@@ -89,9 +97,9 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
         const co = multi ? ` (${orgName(f.orgId).replace(/\s*Funeral Home$/i, '')})` : ''
         new Notification(`New email${fresh.length > 1 ? 's' : ''} for the funeral home${co}`, { body: `${f.email.fromName || f.email.from}: ${f.email.subject}`, icon: '/casillas-logo.png' })
       }
-      // Filed mail fades on its own; mail that needs a person stays.
+      // Every pop-up fades on its own (filed mail quickly, mail that needs review after a bit longer). It stays in the Inbox either way.
       for (const f of fresh) {
-        if (f.caseName) setTimeout(() => setAlerts((old) => old.filter((o) => o.id !== f.id)), 15000)
+        setTimeout(() => setAlerts((old) => old.filter((o) => o.id !== f.id)), f.caseName ? 12000 : 25000)
       }
     })()
     return () => { cancelled = true }
@@ -140,11 +148,11 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
     return () => { cancelled = true }
   }, [statuses]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (alerts.length === 0) return null
+  if (alerts.length === 0 || busy) return null
   const close = (id: string) => setAlerts((old) => old.filter((o) => o.id !== id))
 
   return (
-    <div className="fixed bottom-24 right-3 z-50 w-[22rem] max-w-[calc(100vw-1.5rem)] space-y-2">
+    <div className="fixed z-50 space-y-1.5 sm:space-y-2 bottom-2 left-2 right-2 sm:left-auto sm:right-3 sm:bottom-24 sm:w-[22rem] max-sm:[&>div:nth-last-child(n+3)]:hidden">
       {alerts.map(({ id, orgId, email, caseName, handledBy }) => {
         const filed = !!caseName
         const handled = !!handledBy
@@ -162,16 +170,16 @@ export function NewEmailAlerts({ userId, orgs, activeOrgId, onSwitchOrg }: { use
             tabIndex={0}
             onClick={open}
             onKeyDown={(e) => { if (e.key === 'Enter') open() }}
-            className={`cursor-pointer rounded-lg bg-white shadow-lg px-4 py-3 flex items-start gap-3 hover:shadow-xl transition ${co ? `border-2 ${co.border}` : `border ${needs ? 'border-amber-300' : handled ? 'border-sky-300' : 'border-emerald-300'}`}`}
+            className={`cursor-pointer rounded-lg bg-white shadow-lg px-3 py-2 sm:px-4 sm:py-3 flex items-start gap-3 hover:shadow-xl transition ${co ? `border-2 ${co.border}` : `border ${needs ? 'border-amber-300' : handled ? 'border-sky-300' : 'border-emerald-300'}`}`}
           >
-            <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${co ? `${co.bg} ${co.text}` : needs ? 'bg-amber-100 text-amber-700' : handled ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <div className={`hidden sm:flex h-9 w-9 rounded-full items-center justify-center shrink-0 ${co ? `${co.bg} ${co.text}` : needs ? 'bg-amber-100 text-amber-700' : handled ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
               {needs ? <AlertCircle size={17} /> : handled ? <CheckCircle2 size={17} /> : <FolderCheck size={17} />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Mail size={12} /> New email{co && <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] tracking-wide normal-case ${co.chip}`}>{orgName(orgId).replace(/\s*Funeral Home$/i, '')}</span>}</div>
               <div className="text-sm font-medium text-slate-800 truncate">{email.fromName || email.from}</div>
-              <div className="text-sm text-slate-600 truncate">{email.subject}</div>
-              <div className={`mt-1 text-sm font-medium ${needs ? 'text-amber-700' : handled ? 'text-sky-700' : 'text-emerald-700'}`}>
+              <div className="text-sm text-slate-600 truncate max-sm:hidden">{email.subject}</div>
+              <div className={`mt-0.5 sm:mt-1 text-xs sm:text-sm font-medium ${needs ? 'text-amber-700' : handled ? 'text-sky-700' : 'text-emerald-700'}`}>
                 {handled ? `Handled by ${handledBy} \u2014 filed to ${caseName ?? 'a case'}` : filed && !needs ? `Filed to ${caseName}\u2019s case` : filed ? `Possibly ${caseName}\u2019s case \u2014 please confirm` : 'Not filed to a case \u2014 needs review'}
               </div>
             </div>

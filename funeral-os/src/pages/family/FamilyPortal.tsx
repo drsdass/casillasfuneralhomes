@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { resolveName } from '@/lib/vitalFields'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Image as ImageIcon, MessageSquare, PenLine, Check,
   Phone, CreditCard, Lock, ShieldCheck, HeartHandshake, ClipboardList, FileText, Music, Video, Play, Pause,
@@ -43,6 +43,15 @@ export default function FamilyPortal() {
   const { t } = useLanguage()
   const [active, setActive] = useState<typeof sectionKeys[number]>('intake')
   const [obituaryText, setObituaryText] = useState('')
+  const [noteError, setNoteError] = useState('')
+  const [msgText, setMsgText] = useState('')
+  const [msgSent, setMsgSent] = useState(false)
+  const noteMutation = useMutation({
+    mutationFn: ({ action, text }: { action: 'obituary' | 'message'; text: string }) => api.sendFamilyPortalNote(token!, action, text),
+    onMutate: () => setNoteError(''),
+    onSuccess: (_d, v) => { if (v.action === 'obituary') setSaved(true); else { setMsgSent(true); setMsgText('') } },
+    onError: (e) => setNoteError(e instanceof Error ? e.message : 'Something went wrong — please try again.'),
+  })
   const [saved, setSaved] = useState(false)
   const [cardNumber, setCardNumber] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
@@ -111,6 +120,11 @@ export default function FamilyPortal() {
     retry: false,
   })
   const c = data?.case
+  // Coming back later: show what the family already saved instead of an empty box.
+  const obitLoaded = useRef(false)
+  useEffect(() => {
+    if (data?.obituaryBody && !obitLoaded.current) { obitLoaded.current = true; setObituaryText(data.obituaryBody) }
+  }, [data])
 
   useEffect(() => {
     if (c && c.intakeOpenForFamily === false && active === 'intake') setActive('vitalSheet')
@@ -275,28 +289,15 @@ export default function FamilyPortal() {
         </div>
       </div>
 
-      {/* Olive textured nav bar with logo card overlapping, like the live site */}
-      <div className="relative bg-[#5f6f4f] border-b-4 border-[#4d5f45]">
-        <div className="max-w-5xl mx-auto px-6 relative">
-          {/* Logo card */}
-          <div className="absolute -top-2 left-0 bg-white rounded-sm shadow-md px-5 py-3 flex items-center gap-3 z-10">
-            <BrandLogo name={loc?.name} className="h-11 w-auto shrink-0" />
-            {brandFor(loc?.name).key === 'casillas' && (
-              <div className="leading-tight">
-                <div className="font-display font-bold text-slate-800 text-sm tracking-wide">CASILLAS<br />FUNERAL HOME</div>
-              </div>
-            )}
-            <div className="text-[11px] leading-tight text-red-700 font-medium pl-2 border-l border-slate-200">
-              {loc && <div>{loc.city}, {loc.state} <span className="text-slate-400">{loc.licenseNumber}</span></div>}
-            </div>
-          </div>
-          <div className="h-16" />
-        </div>
-      </div>
-
       {/* Hero */}
       <div className="bg-[#3b4a35] text-white">
-        <div className="max-w-3xl mx-auto px-6 py-10 text-center">
+        <div className="max-w-3xl mx-auto px-6 pt-8 pb-10 text-center">
+          {/* The logo sits directly on the dark band (no white box) so it blends in. */}
+          <BrandLogo on="dark" name={loc?.name} className="h-24 w-auto mx-auto" />
+          <div className="mt-3 text-[11px] uppercase tracking-[0.25em] text-[#d9c78f]/90">{loc ? `${loc.city}, ${loc.state}` : ''}</div>
+          <div className="mx-auto my-6 flex items-center justify-center gap-3 text-[#d9c78f]/70" aria-hidden>
+            <span className="h-px w-16 bg-[#d9c78f]/40" /><span className="text-xs">&#10086;</span><span className="h-px w-16 bg-[#d9c78f]/40" />
+          </div>
           <div className="text-xs uppercase tracking-[0.2em] text-[#d9c78f] mb-2">{t('familyPortal.hero.inLovingMemory')}</div>
           <h1 className="font-display italic text-3xl font-semibold" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
             {c.decedent.firstName} {c.decedent.lastName}
@@ -306,7 +307,7 @@ export default function FamilyPortal() {
               {new Date(c.decedent.dateOfBirth).getFullYear()} – {new Date(c.decedent.dateOfDeath).getFullYear()}
             </div>
           )}
-          {loc && <div className="text-xs text-slate-300 mt-1">{loc.name}</div>}
+          
         </div>
       </div>
 
@@ -512,12 +513,14 @@ export default function FamilyPortal() {
               <div className="flex items-center justify-between mt-3">
                 <button className="text-sm text-slate-500 hover:text-slate-700">{t('familyPortal.obituary.aiHelp')}</button>
                 <button
-                  onClick={() => setSaved(true)}
-                  className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition"
+                  onClick={() => noteMutation.mutate({ action: 'obituary', text: obituaryText })}
+                  disabled={noteMutation.isPending || !obituaryText.trim()}
+                  className="inline-flex items-center gap-1.5 bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition disabled:opacity-60"
                 >
                   {saved ? <Check size={15} /> : null} {saved ? t('familyPortal.obituary.saved') : t('familyPortal.obituary.save')}
                 </button>
               </div>
+              {active === 'obituary' && noteError && <div className="text-sm text-red-600 mt-2">{noteError}</div>}
             </div>
           )}
 
@@ -737,14 +740,18 @@ export default function FamilyPortal() {
             <div>
               <h2 className="font-display text-lg font-semibold text-[#3b4a35] mb-1">{t('familyPortal.messages.title')}</h2>
               <p className="text-sm text-slate-500 mb-4">{t('familyPortal.messages.subtitle')}</p>
-              <div className="text-sm text-slate-400 text-center py-10">{t('familyPortal.messages.noMessages')}</div>
+              {msgSent ? <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md p-3 mb-3">Thank you — your message was sent to the funeral home. We will reply as soon as we can.</div>
+                : <div className="text-sm text-slate-400 text-center py-10">{t('familyPortal.messages.noMessages')}</div>}
               <div className="flex gap-2">
                 <input
+                  value={msgText}
+                  onChange={(e) => { setMsgText(e.target.value); setMsgSent(false) }}
                   placeholder={t('familyPortal.messages.placeholder')}
                   className="flex-1 border border-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#b3925a]"
                 />
-                <button className="bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition">{t('familyPortal.messages.send')}</button>
+                <button onClick={() => noteMutation.mutate({ action: 'message', text: msgText })} disabled={noteMutation.isPending || !msgText.trim()} className="bg-[#3b4a35] text-white text-sm font-medium px-4 py-2 rounded-sm hover:bg-[#4d5f45] transition disabled:opacity-60">{t('familyPortal.messages.send')}</button>
               </div>
+              {noteError && <div className="text-sm text-red-600 mt-2">{noteError}</div>}
             </div>
           )}
         </div>

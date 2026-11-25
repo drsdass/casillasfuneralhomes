@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
-import { canViewAllLocations, canEditCases, canAssignStaff } from '@/lib/permissions'
+import { canEditCases, canAssignStaff } from '@/lib/permissions'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { format, parseISO } from 'date-fns'
 import { Plus, Car, X, GripVertical, AlertTriangle, ChevronLeft, ChevronRight, List, CalendarDays } from 'lucide-react'
@@ -58,7 +58,7 @@ function EventHoverPopover({
   return (
     <div className="absolute z-20 left-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-md shadow-lg p-3 text-xs pointer-events-none">
       <div className="font-medium text-slate-800 mb-1">{e.title}</div>
-      <div className="text-slate-500 mb-1.5">{format(parseISO(e.start), 'MMM d, h:mm a')} – {format(parseISO(e.end), 'h:mm a')}</div>
+      <div className="text-slate-500 mb-1.5">{format(parseISO(e.start), 'MMM d, HH:mm')} – {format(parseISO(e.end), 'HH:mm')}</div>
       <div className="mb-1"><span className="text-slate-400">Staff:</span> {staffNames.length > 0 ? staffNames.join(', ') : '—'}</div>
       {linkedCase && (
         <>
@@ -79,7 +79,7 @@ export default function CalendarPage() {
   const { activeLocationId, currentUser } = useSession()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  const isAllLocations = !!currentUser // every location of the company is shown to everyone
   const canEdit = currentUser ? canEditCases(currentUser.role) : false
   const canDragAssign = currentUser ? canAssignStaff(currentUser.role) : false
 
@@ -213,7 +213,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <div className={canEdit ? 'grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start' : ''}>
+      <div className={canEdit ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-6 items-start' : ''}>
         <div>
           {viewMode === 'list' ? (
             <div className="space-y-6">
@@ -250,14 +250,14 @@ export default function CalendarPage() {
         </div>
 
         {canEdit && (
-          <div className="space-y-5">
+          <div className="space-y-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
             {canDragAssign && (
               <StaffPanel
                 staff={allStaff} timeOff={timeOff} anchor={anchor}
                 draggedStaffId={draggedStaffId} onDragStart={setDraggedStaffId} onDragEnd={() => setDraggedStaffId(null)}
               />
             )}
-            <ActivityPanel entityType="event" title="Calendar Activity" />
+            <ActivityPanel entityType="event" title="Calendar Activity" sticky={false} />
           </div>
         )}
       </div>
@@ -300,7 +300,7 @@ function EventRow({
       }`}
     >
       <div className="w-32 shrink-0 text-sm text-slate-600">
-        {format(parseISO(e.start), 'h:mm a')} – {format(parseISO(e.end), 'h:mm a')}
+        {format(parseISO(e.start), 'HH:mm')} – {format(parseISO(e.end), 'HH:mm')}
       </div>
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize shrink-0 ${typeColors[e.type]}`}>
         {e.type.replace('_', ' ')}
@@ -408,7 +408,7 @@ function MonthEventChip({ e, allCases, allStaff, onClick }: { e: CalendarEvent; 
         onClick={onClick}
         className={`block w-full text-left text-[10px] px-1 py-0.5 rounded truncate ${typeColors[e.type]}`}
       >
-        {format(parseISO(e.start), 'h:mma')} {e.title}
+        {format(parseISO(e.start), 'HH:mm')} {e.title}
       </button>
       {hovered && (
         <EventHoverPopover e={e} linkedCase={linkedCase} staffNames={staffNames} flowers={flowers} birds={birds} escort={escort} latestNote={latestNote} />
@@ -438,7 +438,7 @@ function StaffPanel({
   }
 
   return (
-    <Card className="p-3 sticky top-6">
+    <Card className="p-3">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-1 mb-2">Staff</div>
       <div className="space-y-1">
         {staff.filter((s) => s.active).map((s) => {

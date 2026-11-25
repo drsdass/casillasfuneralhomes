@@ -9,10 +9,10 @@ import assert from 'node:assert'
 import { createRequire } from 'node:module'
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'edrs-check-'))
-for (const f of ['vitalFields', 'firstCallPlace', 'edrsFormat']) {
+for (const f of ['vitalFields', 'firstCallPlace', 'places', 'edrsFormat']) {
   const src = fs.readFileSync(new URL(`../src/lib/${f}.ts`, import.meta.url), 'utf8')
   const out = ts.transpileModule(src, { compilerOptions: { module: 'CommonJS', target: 'ES2022' } }).outputText
-  fs.writeFileSync(path.join(dir, `${f}.cjs`), out.replace(/require\("\.\/(vitalFields|firstCallPlace)"\)/g, 'require("./$1.cjs")'))
+  fs.writeFileSync(path.join(dir, `${f}.cjs`), out.replace(/require\("\.\/(vitalFields|firstCallPlace|places)"\)/g, 'require("./$1.cjs")'))
 }
 const require = createRequire(import.meta.url)
 const vf = require(path.join(dir, 'vitalFields.cjs'))
@@ -28,9 +28,7 @@ const t = (name, fn) => {
 console.log('\n== item numbering ==')
 
 // Numbers exactly as printed on the uploaded form, in the order they appear, for everything keyed into EDRS
-const printedOrder = ['1','2','3','','4','5','','','6','9','9','9','10','11','12','7','8',
-  '13','14','14','16','17','18','19','20','21','22','23','24','25','26','26','27',
-  '28','29','30','31','32','33','34','35','36','37','38','39','40','40','41','101','104','105','106','106']
+const printedOrder = ['1','2','3','','','4','5','','','6','9','9','9','10','11','12','7','8','13','14','14','16','17','18','19','20','21','22','23','24','25','26','26','','27','28','29','30','','31','32','33','','34','35','36','37','','38','39','40','40','40','40','40','41','101','104','105','106','106']
 t('EDRS items carry the printed numbers, in paper-form order', () => {
   assert.deepStrictEqual(vf.VITAL_FIELDS.filter(f => f.edrs).map(f => f.number), printedOrder)
 })

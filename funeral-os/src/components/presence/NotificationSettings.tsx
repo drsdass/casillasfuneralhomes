@@ -45,13 +45,15 @@ export function NotificationSettingsModal({ onClose }: { onClose: () => void }) 
   }
   async function sendTest() {
     setBusy(true); setTestMsg(null)
+    // Give the person time to lock the phone: a notification is not shown while the app is open in front.
+    for (let n = 8; n > 0; n--) { setTestMsg(`Lock your phone or switch to another app now. Sending in ${n}…`); await new Promise((r) => setTimeout(r, 1000)) }
     try {
       const r = await api.sendTestPush()
       setTestMsg(r.offDuty ? 'You are Off duty, so nothing was sent. Switch to On duty and try again.'
         : r.noDevice ? 'No device is signed up yet. Turn on notifications first.'
-        : r.sent > 0 ? 'Sent! Lock your phone now. You should hear and feel it within a few seconds.'
+        : r.sent > 0 ? 'Sent! You should hear and feel it within a few seconds.'
         : 'Nothing could be delivered. Try turning notifications off and on again.')
-    } catch { setTestMsg('Could not send the test. Please try again.') }
+    } catch { setTestMsg('The test could not be sent. If this keeps happening, the send-push function on Supabase needs the latest version.') }
     setBusy(false)
   }
   async function turnOff() { setBusy(true); await disablePush(); setSubscribed(false); setResult(null); setBusy(false) }

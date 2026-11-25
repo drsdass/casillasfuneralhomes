@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
 import type { FuneralCase } from '@/types'
+import { api } from '@/lib/api'
+import { withFirstCallDefaults } from '@/lib/firstCallPlace'
 import { resolveName } from '@/lib/vitalFields'
 import { getCompanyWebsite, shortLocationName } from '@/lib/company'
 import { useSession } from '@/context/SessionContext'
@@ -60,10 +63,15 @@ function Letterhead() {
   )
 }
 
-function SigLine({ label }: { label: string }) {
+// The person signing for the family: the case's primary contact, else the first one listed.
+function signer(c?: FuneralCase | null) {
+  return c?.contacts.find((x) => x.isPrimary) ?? c?.contacts[0]
+}
+
+function SigLine({ label, text }: { label: string; text?: string }) {
   return (
     <div className="mt-6">
-      <div className="border-b border-slate-500 h-7" />
+      <div className="border-b border-slate-500 h-7 flex items-end pb-0.5 text-sm">{text}</div>
       <div className="text-xs text-slate-500 mt-0.5">{label}</div>
     </div>
   )
@@ -74,6 +82,11 @@ function SigLine({ label }: { label: string }) {
 // ---------------------------------------------------------------------------
 
 export function ReleaseAuthorizationForm({ c }: { c: FuneralCase }) {
+  // The facility comes from Place of Death, or from where the First Call says the body was picked up.
+  const facility = withFirstCallDefaults(c).decedent.placeOfDeath ?? ''
+  // Last 4 of the Social Security number: read from the encrypted copy (an audited read), only when one is on file.
+  const { data: ssn } = useQuery({ queryKey: ['ssn-last4', c.id], queryFn: () => api.getDecedentSsn(c.id), enabled: !!(c.decedent.ssnOnFile || c.decedent.ssn), staleTime: 5 * 60_000, retry: false })
+  const last4 = (ssn ?? '').replace(/\D/g, '').slice(-4)
   return (
     <div className="text-sm text-slate-900">
       <Letterhead />
@@ -83,7 +96,7 @@ export function ReleaseAuthorizationForm({ c }: { c: FuneralCase }) {
 
       <div className="flex items-baseline gap-2 mb-4">
         <span>To:</span>
-        <input defaultValue={c.decedent.placeOfDeath ?? ''} className={fieldClass} placeholder="Name of facility (i.e. hospital, nursing home, etc.)" />
+        <input key={facility} defaultValue={facility} className={fieldClass} placeholder="Name of facility (i.e. hospital, nursing home, etc.)" />
       </div>
       <div className="text-xs text-slate-500 mb-6">Name of facility (i.e. hospital, nursing home, etc.)</div>
 
@@ -108,7 +121,7 @@ export function ReleaseAuthorizationForm({ c }: { c: FuneralCase }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium w-32 shrink-0">Last 4 of SSN</span>
-            <input maxLength={4} className={fieldClass} />
+            <input key={last4} maxLength={4} defaultValue={last4} className={fieldClass} />
           </div>
         </div>
       </div>
@@ -122,12 +135,12 @@ export function ReleaseAuthorizationForm({ c }: { c: FuneralCase }) {
         <div>
           <SigLine label="Signature of Person Authorizing Release" />
           <div className="mt-3">
-            <div className="border-b border-slate-500 h-7" />
+            <div className="border-b border-slate-500 h-7 flex items-end pb-0.5 text-sm">{signer(c)?.name ?? ''}</div>
             <div className="text-xs text-slate-500 mt-0.5">Print Name</div>
           </div>
         </div>
         <div>
-          <SigLine label="Relationship of Authorizing Person to Decedent" />
+          <SigLine label="Relationship of Authorizing Person to Decedent" text={signer(c)?.relationship ?? ''} />
           <div className="mt-3">
             <div className="border-b border-slate-500 h-7" />
             <div className="text-xs text-slate-500 mt-0.5">Date</div>
@@ -170,7 +183,7 @@ export function EmbalmingAuthorizationForm({ c }: { c: FuneralCase }) {
 
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span>I,</span>
-        <input className={fieldClass} style={{ maxWidth: 220 }} />
+        <input defaultValue={signer(c)?.name ?? ''} className={fieldClass} style={{ maxWidth: 220 }} />
         <span>, do</span>
         <span className={checkboxClass} />
         <span>do not</span>
@@ -192,7 +205,7 @@ export function EmbalmingAuthorizationForm({ c }: { c: FuneralCase }) {
 
       <div className="grid grid-cols-2 gap-x-8 mb-6">
         <SigLine label="Signed" />
-        <SigLine label="Relationship to Decedent" />
+        <SigLine label="Relationship to Decedent" text={signer(c)?.relationship ?? ''} />
       </div>
       <div className="flex items-center gap-2 text-xs mb-8">
         <span>Executed this</span>
@@ -210,7 +223,7 @@ export function EmbalmingAuthorizationForm({ c }: { c: FuneralCase }) {
         embalming is obtained orally.
       </p>
       <p className="mb-2">The above statement regarding embalming and storage was read and/or provided to</p>
-      <div className="border-b border-slate-400 h-7 mb-1" />
+      <div className="border-b border-slate-400 h-7 mb-1 flex items-end pb-0.5 text-sm">{signer(c)?.relationship ?? ''}</div>
       <div className="text-xs text-slate-500 mb-4">Relationship to Decedent</div>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span>who</span>
@@ -292,7 +305,7 @@ export function PreneedDisclosureForm({ c, locationLicense }: { c: FuneralCase; 
         </div>
       </div>
       <div className="mb-6">
-        <div className="border-b border-slate-500 h-7" />
+        <div className="border-b border-slate-500 h-7 flex items-end pb-0.5 text-sm">{signer(c)?.name ?? ''}</div>
         <div className="text-xs text-slate-500 mt-0.5">Print name of the survivor or responsible party</div>
       </div>
 
@@ -347,6 +360,8 @@ export function PreneedDisclosureForm({ c, locationLicense }: { c: FuneralCase; 
 // ---------------------------------------------------------------------------
 
 export function FirstCallForm({ c }: { c?: FuneralCase }) {
+  const fc = c?.firstCall
+  const hhmm = (t?: string) => (t && /^\d{2}:\d{2}$/.test(t) ? t : undefined)
   return (
     <div className="text-sm text-slate-900">
       <div className="flex items-center gap-3 pb-3 mb-6 border-b-2 border-slate-800">
@@ -367,7 +382,7 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Time</span>
-            <input type="time" className={fieldClass} />
+            <input type="time" defaultValue={hhmm(fc?.timeOfDeath)} className={fieldClass} />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Date of Birth</span>
@@ -391,25 +406,25 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
           <span className={checkboxClass}></span>RES <span className={checkboxClass}></span>JFK <span className={checkboxClass}></span>DRMC <span className={checkboxClass}></span>EMC <span className={checkboxClass}></span>RCCO
           <span className="flex items-baseline gap-2 flex-1">other <input className={fieldClass + ' w-full'} /></span>
         </div>
-        <input className={fieldClass + ' w-full'} placeholder="Address" />
+        <input defaultValue={fc?.locationAddress ?? ''} className={fieldClass + ' w-full'} placeholder="Address" />
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Gate Code</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.gateCode ?? ''} className={fieldClass + ' w-full'} />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Weight</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.weight ?? ''} className={fieldClass + ' w-full'} />
           </div>
         </div>
         <div className="flex items-center gap-8 text-xs font-medium">
           <span>Fam. Present? <span className={checkboxClass}></span>Y <span className={checkboxClass}></span>N</span>
-          <span className="flex items-baseline gap-2 flex-1">Fam Ready? <input className={fieldClass + ' flex-1'} /></span>
+          <span className="flex items-baseline gap-2 flex-1">Fam Ready? <input defaultValue={fc?.familyReady ?? ''} className={fieldClass + ' flex-1'} /></span>
           <span>Contagious? <span className={checkboxClass}></span>N <span className={checkboxClass}></span>Y</span>
         </div>
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium shrink-0">Special instruction</span>
-          <input className={fieldClass + ' w-full'} />
+          <input defaultValue={fc?.specialInstructions ?? ''} className={fieldClass + ' w-full'} />
         </div>
       </div>
 
@@ -418,16 +433,16 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
         <div className="flex items-center gap-4">
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">Name</span>
-            <input defaultValue={c?.contacts[0]?.name ?? ''} className={fieldClass + ' w-full'} />
+            <input defaultValue={signer(c)?.name ?? ''} className={fieldClass + ' w-full'} />
           </div>
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">Ph</span>
-            <input defaultValue={c?.contacts[0]?.phone ?? ''} className={fieldClass + ' w-full'} />
+            <input defaultValue={signer(c)?.phone ?? ''} className={fieldClass + ' w-full'} />
           </div>
         </div>
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium shrink-0">Relationship</span>
-          <input defaultValue={c?.contacts[0]?.relationship ?? ''} className={fieldClass + ' w-full max-w-xs'} />
+          <input defaultValue={signer(c)?.relationship ?? ''} className={fieldClass + ' w-full max-w-xs'} />
         </div>
       </div>
 
@@ -435,26 +450,26 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
       <div className="space-y-2 mb-5">
         <div className="flex items-center gap-2 text-xs font-medium">
           Coroner's case? <span className={checkboxClass}></span>Y <span className={checkboxClass}></span>N
-          <span className="flex items-baseline gap-2 flex-1">#<input className={fieldClass + ' w-full'} /></span>
+          <span className="flex items-baseline gap-2 flex-1">#<input defaultValue={fc?.coronerCaseNumber ?? ''} className={fieldClass + ' w-full'} /></span>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">Doctor</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.doctorName ?? ''} className={fieldClass + ' w-full'} />
           </div>
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">PH</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.doctorPhone ?? ''} className={fieldClass + ' w-full'} />
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">Hospice</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.hospiceName ?? ''} className={fieldClass + ' w-full'} />
           </div>
           <div className="flex items-baseline gap-2 flex-1">
             <span className="text-xs font-medium shrink-0">PH</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.hospicePhone ?? ''} className={fieldClass + ' w-full'} />
           </div>
         </div>
       </div>
@@ -463,28 +478,28 @@ export function FirstCallForm({ c }: { c?: FuneralCase }) {
       <div className="space-y-2 mb-5">
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium w-28 shrink-0">Person calling</span>
-          <input className={fieldClass + ' w-full'} />
+          <input defaultValue={fc?.personCalling ?? ''} className={fieldClass + ' w-full'} />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Called received at</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.callReceivedAt ?? ''} className={fieldClass + ' w-full'} />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium shrink-0">Time of Removal</span>
-            <input className={fieldClass + ' w-full'} />
+            <input defaultValue={fc?.timeOfRemoval ?? ''} className={fieldClass + ' w-full'} />
           </div>
         </div>
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium w-28 shrink-0">Special instructions</span>
-          <input className={fieldClass + ' w-full'} />
+          <input defaultValue={fc?.specialInstructions ?? ''} className={fieldClass + ' w-full'} />
         </div>
       </div>
 
       <div className="flex items-center gap-6 text-xs font-medium mt-8 pt-3 border-t border-slate-300">
         Call taken: Date <input type="date" className={fieldClass} />
         time <input type="time" className={fieldClass} />
-        By <input className={fieldClass + ' flex-1'} />
+        By <input defaultValue={fc?.callTakenBy ?? ''} className={fieldClass + ' flex-1'} />
       </div>
     </div>
   )
@@ -529,9 +544,9 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
           <div className="flex text-right gap-2 w-1/2 justify-end">
             <div className="text-[10px] font-medium shrink-0 pt-0.5">CONTACT<br />PERSON</div>
             <div className="space-y-1 flex-1">
-              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">NAME</span><span className={ro}>{c.contacts[0]?.name ?? ''}</span></div>
-              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">PHONE</span><span className={ro}>{c.contacts[0]?.phone ?? ''}</span></div>
-              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">EMAIL</span><span className={ro}>{c.contacts[0]?.email ?? ''}</span></div>
+              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">NAME</span><span className={ro}>{signer(c)?.name ?? ''}</span></div>
+              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">PHONE</span><span className={ro}>{signer(c)?.phone ?? ''}</span></div>
+              <div className="flex items-baseline gap-1"><span className="text-[9px] text-slate-500 shrink-0">EMAIL</span><span className={ro}>{signer(c)?.email ?? ''}</span></div>
             </div>
           </div>
         </div>
@@ -544,7 +559,7 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
           </div>
           <div className="grid grid-cols-4 border-b border-slate-400">
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">ALSO KNOWN AS</div><div>{vs?.alsoKnownAs ?? ''}</div></div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">4. DATE OF BIRTH</div><div>{c.decedent.dateOfBirth ?? ''}</div></div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">4. DATE OF BIRTH</div><div>{fmtDate(c.decedent.dateOfBirth)}</div></div>
             <div className="p-1 border-r border-slate-400">
               <div className="text-[9px] text-slate-500">5. AGE</div><div>{age}</div>
               <div className="text-[8px] text-slate-500 mt-1">IF UNDER 24 HRS</div>
@@ -557,7 +572,7 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">10. SOCIAL SECURITY NUMBER</div><div>{ssn ?? ''}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">11. EVER IN ARMED FORCES?</div><div>{c.decedent.veteran ? 'Y' : 'N'}</div></div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">12. MARITAL STATUS</div><div className="capitalize">{c.decedent.maritalStatus ?? ''}</div></div>
-            <div className="p-1"><div className="text-[9px] text-slate-500">7. DATE OF DEATH</div><div>{c.decedent.dateOfDeath ?? ''}</div><div className="text-[9px] text-slate-500 mt-0.5">8 TIME</div><div>{fc?.timeOfDeath ?? ''}</div></div>
+            <div className="p-1"><div className="text-[9px] text-slate-500">7. DATE OF DEATH</div><div>{fmtDate(c.decedent.dateOfDeath)}</div><div className="text-[9px] text-slate-500 mt-0.5">8 TIME</div><div>{fc?.timeOfDeath ?? ''}</div></div>
           </div>
           <div className="grid grid-cols-3 border-b border-slate-400">
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">13. EDUCATION</div><div>{vs?.education ?? ''}</div></div>
@@ -634,27 +649,27 @@ export function VitalSheetForm({ c, ssn }: { c: FuneralCase; ssn?: string | null
         </div>
 
         <div className="border border-slate-400 border-t-0">
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">VISITATION</div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ?? ''}</div>
-            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{vs?.visitationHours ?? ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{c.visitationDate ? new Date(c.visitationDate).toLocaleDateString('en-US') : ''}</div>
+            <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Hours</div>{c.visitationDate ? [c.visitationDate, c.visitationEnd].filter(Boolean).map((x) => new Date(x as string).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })).join('–') : (vs?.visitationHours ?? '')}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">Place</div>{c.visitationLocation ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">ROSARY/SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.rosaryDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.rosaryTime ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.rosaryLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.rosaryPlace ?? ''}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.rosaryBy ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr_1fr] border-b border-slate-400">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr_1fr] border-b border-slate-400">
             <div className="p-1 font-semibold border-r border-slate-400">MASS FUNERAL SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.massDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.massTime ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">{vs?.massLanguage === 'spanish' ? 'SPAN' : 'ENG'} Place</div>{vs?.massPlace ?? ''}</div>
             <div className="p-1"><div className="text-[9px] text-slate-500">BY</div>{vs?.massBy ?? ''}</div>
           </div>
-          <div className="grid grid-cols-[100px_1fr_1fr_1fr]">
+          <div className="grid grid-cols-[124px_1fr_1fr_1fr]">
             <div className="p-1 font-semibold border-r border-slate-400">GRAVESIDE SERVICE</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Date</div>{vs?.gravesideDate ?? ''}</div>
             <div className="p-1 border-r border-slate-400"><div className="text-[9px] text-slate-500">Time</div>{vs?.gravesideTime ?? ''}</div>

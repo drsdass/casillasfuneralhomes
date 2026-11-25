@@ -93,6 +93,8 @@ export interface Decedent {
   dateOfDeath?: string
   placeOfDeath?: string
   ssn?: string // stored encrypted at rest in real deployment
+  /** True when a Social Security number is saved (the number itself is only read through the audited function). */
+  ssnOnFile?: boolean
   sex?: 'male' | 'female' | 'unknown' | 'nonbinary'
   maritalStatus?: string
   veteran?: boolean
@@ -143,7 +145,10 @@ export interface VitalSheetInfo {
   occupation?: string
   kindOfBusiness?: string
   yearsInOccupation?: string
-  residenceAddress?: string
+  residenceAddress?: string // the whole street line, kept in step with the three boxes below
+  residenceStreetNumber?: string
+  residenceStreetName?: string
+  residenceUnit?: string
   residenceCity?: string
   residenceCounty?: string
   residenceZip?: string
@@ -173,6 +178,16 @@ export interface VitalSheetInfo {
   /** @deprecated see spouseName */
   motherName?: string
   placeOfFinalDisposition?: string
+  /** Item 40 in EDRS has its own boxes: the place's name (above), then state, street, city and zip. */
+  dispositionAddress?: string
+  dispositionCity?: string
+  dispositionZip?: string
+  /** Name suffixes (Jr., Sr., II, III…) — EDRS has a separate Suffix box beside items 3, 26, 30, 33 and 37. */
+  decedentSuffix?: string
+  informantSuffix?: string
+  spouseSuffix?: string
+  fatherSuffix?: string
+  motherSuffix?: string
   dispositionDate?: string
   dispositionTypeOther?: string // "CVC / DMP / OTHER:" line
   typeOfDisposition?: string // "41 TYPE OF DISPOSITION" — EMB, etc.
@@ -197,6 +212,7 @@ export interface VitalSheetInfo {
   obituary?: boolean
   pacemaker?: boolean
   visitationHours?: string
+  visitationDate?: string // yyyy-mm-dd — with the hours, this puts the visitation on the Calendar and TV Board
   rosaryDate?: string
   rosaryTime?: string
   rosaryLanguage?: 'english' | 'spanish'
@@ -334,11 +350,19 @@ export interface FuneralCase {
   assignedDirectorId?: string
   assignedEmbalmerId?: string
   visitationDate?: string
+  visitationEnd?: string // end of the visitation window (same day as visitationDate)
   visitationLocation?: string
   serviceDate?: string
   serviceLocation?: string
+  boardFlowers?: string; boardBirds?: string; boardEscort?: string // 'no' | 'yes' | 'confirmed' on the TV Board; blank = worked out from the Orders
+  boardPlace?: string // 'bottom' = pinned to the waiting section, 'top' = pinned to the main list, empty = automatic
+  boardDisp?: string // DISP code shown on the TV Board (CVC, DMP, RNC, SHIP-OUT, ...)
   color?: string // whiteboard color coding
   custodyStage: CustodyStage
+  /** Set when the family changes something in their portal; cleared when staff tap "Got it". */
+  familyUnseen?: boolean
+  familyActivityAt?: string
+  familyActivityNote?: string
   createdAt: string
   updatedAt: string
 }
@@ -391,6 +415,8 @@ export interface CustodyLogEntry {
   movedByName: string
   timestamp: string
   note?: string
+  editedAt?: string
+  editedByName?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +441,7 @@ export interface ContractLineItem {
   id: string
   gplItemId: string
   serviceOrderId?: string // set for line items synced from a priced Order — see the Orders tab
+  source?: 'statement' // set for lines that came from a ticked line on a Statement of Funeral Goods and Services tab
   name: string
   quantity: number
   unitPrice: number
@@ -471,6 +498,9 @@ export interface AuditLogEntry {
   summary: string // human-readable description, e.g. "Marked task 'Confirm casket' complete"
   changedBy: string // staffId
   changedByName: string
+  caseName?: string // the decedent, looked up when the log is shown
+  caseNumber?: string
+  device?: string // e.g. 'iPhone · Safari'
   timestamp: string
 }
 
@@ -540,6 +570,12 @@ export interface CalendarEvent {
   participantIds: string[] // staffIds
   vehicleId?: string
   notes?: string
+  /** What this visitation/service is: Private, Public, Rosary, Mass, Graveside ... */
+  label?: string
+  /** The church / place has been confirmed with them (shows a check mark on the TV Board). */
+  placeConfirmed?: boolean
+  /** null/'case' = the case's main one, 'vital' = from the Vital Sheet, 'extra' = added by hand */
+  source?: 'case' | 'vital' | 'extra'
 }
 
 /** A scheduling conflict detected for a staff member or vehicle over an overlapping time window. */
@@ -613,6 +649,8 @@ export interface InboundEmail {
   threadId?: string
   sentBy?: string // staff id, for outgoing mail
   sentByName?: string // who pressed Send
+  /** Staff choice: true = moved to Junk, false = "not junk", unset = decided automatically. */
+  junk?: boolean | null
 }
 
 // ---------------------------------------------------------------------------
@@ -632,7 +670,12 @@ export interface SignatureRequest {
   sentBy: string
   sentAt?: string
   signedAt?: string
-  signedDocumentUrl?: string // populated once signed, downloaded from SignRequest and stored
+  signedDocumentUrl?: string // populated once signed: the storage path of the signed copy (older rows may hold a full web address)
+  mode?: 'email' | 'inperson' // emailed link, or signed on a tablet in the office
+  embedUrl?: string // older SignRequest rows only
+  token?: string // the secret in the signing link
+  expiresAt?: string
+  fields?: import('@/lib/esignFields').SignField[] // the boxes staff placed for the signer to fill in
 }
 
 // ---------------------------------------------------------------------------

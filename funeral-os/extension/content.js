@@ -37,7 +37,7 @@
     // Choosing one box (e.g. Age type) makes the next box appear, so repeat a few times, filling only what is still empty.
     const best = new Map()
     const rank = { filled: 3, 'skipped-has-value': 2, 'skipped-locked': 2, 'no-option': 1, missing: 0, 'skipped-empty': 0 }
-    for (let pass = 0; pass < 4; pass++) {
+    for (let pass = 0; pass < 6; pass++) {
       for (const r of core.fillScreen(document, screen, p.rows)) {
         const prev = best.get(r.key)
         if (!prev || rank[r.status] > rank[prev.status]) best.set(r.key, r)

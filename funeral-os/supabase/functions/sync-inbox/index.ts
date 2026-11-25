@@ -188,6 +188,7 @@ async function syncOrg(orgId: string, backfillDays: number) {
 
     let latest = lastMs
     let saved = 0
+    let pushCount = 0
     let skippedOwn = 0
     let lastFrom = ''
     let lastSubject = ''
@@ -238,6 +239,8 @@ async function syncOrg(orgId: string, backfillDays: number) {
         row = { ...row, case_id: sameThread[0].case_id, match_status: 'auto_matched', match_reason: 'Part of a conversation already filed to this case' }
       } else if (contact) {
         row = { ...row, case_id: contact.case_id, match_status: 'auto_matched', match_reason: `Sender matches contact ${contact.name}` }
+      } else if (looksLikeJunk(subject, n.preview, n.text)) {
+        row = { ...row, match_status: 'unmatched', match_reason: 'Looks like marketing or phishing', junk: true }
       } else {
         const sg = await suggestCaseMatch(subject, n.text || n.preview, caseOptions)
         row = sg && sg.confidence >= 0.6
@@ -247,15 +250,31 @@ async function syncOrg(orgId: string, backfillDays: number) {
       const { error } = await supabase.from('inbound_emails').upsert(row, { onConflict: 'graph_message_id' })
       if (error) { stuck = true; problems.push(error.message) } else {
         saved++
-        lastFrom = n.fromName || n.fromAddr
-        lastSubject = subject
+        if (!row.junk) pushCount++
+        if (!row.junk) { lastFrom = n.fromName || n.fromAddr; lastSubject = subject }
         if (!stuck) latest = Math.max(latest, new Date(n.receivedAt).getTime()) // never move past a mail that failed to save
       }
     }
     if (!backfillDays && latest > lastMs) await supabase.from('sync_state').upsert({ key: syncKey, value: new Date(latest).toISOString() })
     // Tell on-duty staff's phones (never during a catch-up, so old mail doesn't buzz anyone).
-    if (saved > 0 && !backfillDays) await pingPush(orgId, saved, lastFrom, lastSubject)
+    if (pushCount > 0 && !backfillDays) await pingPush(orgId, pushCount, lastFrom, lastSubject)
     return { synced: saved, skippedOwn, problems: problems.slice(0, 3), more: !!more }
+}
+
+// Obvious marketing / phishing goes to the "Junk & Marketing" tab and never buzzes phones. Nothing is deleted.
+// (Same word lists as src/lib/emailJunk.ts. Mail from a known contact or part of a filed conversation is never junk.)
+const JUNK_WORDS = [
+  'verify your account', 'verify your email', 'verify your identity', 'confirm your identity', 'confirm your password',
+  'account will be suspended', 'account has been suspended', 'account will be closed', 'account will be deactivated', 'account has been locked',
+  'password will expire', 'password expires', 'unusual sign-in', 'unusual activity', 'security alert', 'mailbox is full', 'storage is full',
+  'gift card', 'wire transfer', 'dear customer', 'dear user', 'dear account holder', 'dear valued customer', 'click the link below to', 'update your payment',
+  'unsubscribe', 'view in browser', 'view this email in your browser', 'manage your preferences', 'email preferences', 'newsletter',
+  '% off', 'save thousands', 'lowest price', 'limited time', 'act now', 'free shipping', 'special offer', 'exclusive deal', 'buy now', 'order now',
+  'best price', 'clearance', 'flash sale', 'webinar', 'free trial', 'promo code', 'this is an advertisement',
+]
+function looksLikeJunk(subject: string, preview: string, text: string): boolean {
+  const hay = `${subject} ${preview} ${text.slice(0, 4000)}`.toLowerCase()
+  return JUNK_WORDS.some((w) => hay.includes(w))
 }
 
 async function pingPush(orgId: string, count: number, from: string, subject: string) {

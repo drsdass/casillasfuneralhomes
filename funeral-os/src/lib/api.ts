@@ -3,7 +3,7 @@ import { mockStore } from '@/data/mockStore'
 import { TASK_STATUS_LABELS, CUSTODY_STAGE_LABELS } from '@/types'
 import type {
   FuneralCase, Location, StaffMember, CaseTask, CaseNote, CaseDocument,
-  GplItem, Contract, CalendarEvent, CustodyLogEntry, CustodyStage, UserRole,
+  GplItem, GplCategory, Contract, CalendarEvent, CustodyLogEntry, CustodyStage, UserRole,
   Vehicle, SchedulingConflict, Payment, PaymentMethod, AuditLogEntry, ServiceOrder, OrderStatus, TaskStatus,
   InboundEmail, SignatureRequest, ExtractedCaseData, StaffTimeOff, ChatMessage, ChatConversation,
   Family, FamilyInteraction, FamilyInteractionType, Vendor, VitalSheetInfo, TaskTemplate,
@@ -78,6 +78,16 @@ async function ssnEncryptionReady(): Promise<boolean> {
   return ssnEncryptionKnownReady
 }
 
+function formatMoneyPlain(n: number) { return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }
+
+/** "iPhone · Safari", "Windows · Chrome" ... a plain description of the device making the change. */
+function deviceLabel(): string {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux' : 'Unknown'
+  const browser = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /(Chrome|CriOS)\//.test(ua) ? 'Chrome' : /(Firefox|FxiOS)\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  return `${os} · ${browser}`
+}
+
 async function logAuditReal(entry: {
   entityType: AuditLogEntry['entityType']
   entityId: string
@@ -87,10 +97,13 @@ async function logAuditReal(entry: {
   changedBy: string
 }): Promise<void> {
   try {
-    await supabase!.from('audit_log').insert({
+    const row = {
       entity_type: entry.entityType, entity_id: entry.entityId, case_id: entry.caseId ?? null,
       action: entry.action, summary: entry.summary, changed_by: entry.changedBy,
-    })
+    }
+    const { error } = await supabase!.from('audit_log').insert({ ...row, device: deviceLabel() })
+    // If the "device" column isn't in the database yet, still record the change without it.
+    if (error) await supabase!.from('audit_log').insert(row)
   } catch (err) {
     console.error('Failed to write audit log entry:', err)
   }
@@ -187,13 +200,17 @@ async function syncCaseCalendarEvent(
   type: 'visitation' | 'service',
   dateIso: string | undefined,
   eventLocation: string | undefined,
-  decedentName: string
+  decedentName: string,
+  endIso?: string
 ): Promise<void> {
   const { data: existing } = await supabase!
     .from('calendar_events')
-    .select('id')
+    .select('*')
     .eq('case_id', caseId)
     .eq('type', type)
+    .or('source.is.null,source.eq.case') // only the case's main one — extra visitations/services are managed on their own
+    .order('start_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   if (!dateIso) {
@@ -206,21 +223,36 @@ async function syncCaseCalendarEvent(
 
   const durationMs = type === 'visitation' ? 2 * 60 * 60 * 1000 : 60 * 60 * 1000
   const startAt = dateIso
-  const endAt = new Date(new Date(dateIso).getTime() + durationMs).toISOString()
+  const endAt = endIso && new Date(endIso) > new Date(dateIso) ? endIso : new Date(new Date(dateIso).getTime() + durationMs).toISOString()
   const title = `${decedentName} — ${type === 'visitation' ? 'Visitation' : 'Service'}`
 
   if (existing) {
     await supabase!.from('calendar_events').update({
       start_at: startAt, end_at: endAt, location_text: eventLocation ?? null, title,
+      // a different church / place is not confirmed yet
+      ...(existing.place_confirmed && (existing.location_text ?? null) !== (eventLocation ?? null) ? { place_confirmed: false } : {}),
     }).eq('id', existing.id)
   } else {
     await supabase!.from('calendar_events').insert({
       org_id: orgId, location_id: locationId, case_id: caseId, title, type,
-      start_at: startAt, end_at: endAt, location_text: eventLocation ?? null,
+      start_at: startAt, end_at: endAt, location_text: eventLocation ?? null, source: 'case',
     })
   }
 }
 
+/** Calls the public signing function and turns its error message into a readable one. */
+async function esignCall(body: Record<string, unknown>) {
+  const { data, error } = await supabase!.functions.invoke('esign', { body })
+  if (error) {
+    const context = (error as { context?: Response }).context
+    let msg: string | undefined
+    if (context) { try { msg = (await context.clone().json())?.error } catch { /* not JSON */ } }
+    throw msg ? new Error(msg) : error
+  }
+  return data
+}
+
+export interface HelpReport { id: string; created_at: string; staff_id: string | null; staff_name: string; page: string; message: string; details: string; status: 'new' | 'looking' | 'fixed'; note: string }
 export const api = {
   // -------------------------------------------------------------------
   // Locations / staff / roles / access
@@ -241,7 +273,7 @@ export const api = {
     if (USE_MOCK) return delay(mockStore.getStaff())
     const { data, error } = await supabase!.from('staff_members').select('*, staff_locations(location_id)')
     if (error) throw error
-    return (data ?? []).map(rowToStaff)
+    return (data ?? []).map(rowToStaff).filter((s) => s.active !== false) // people who were switched off stay out of every list
   },
 
   // "Who is online" — see src/db/presence.sql.
@@ -276,6 +308,12 @@ export const api = {
     })
     if (error) throw error
   },
+  /** Super admin only: switch someone else On or Off duty. The person can still change it themselves. */
+  async setStaffDuty(staffId: string, onDuty: boolean, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.setStaffDuty(staffId, onDuty, changedBy); return }
+    const { error } = await supabase!.rpc('set_staff_duty', { p_staff: staffId, p_on: onDuty })
+    if (error) throw error
+  },
   /** Staff ids who are off duty (their light shows as off). */
   async getOffDuty(): Promise<string[]> {
     if (USE_MOCK) return delay(mockStore.getOffDuty())
@@ -293,6 +331,17 @@ export const api = {
     if (USE_MOCK) return
     await supabase!.from('push_subscriptions').delete().eq('endpoint', endpoint)
   },
+  /** "Forgot password?": asks the server to email a reset link. Always looks successful so nobody can probe for staff addresses. */
+  async requestPasswordReset(email: string): Promise<void> {
+    if (USE_MOCK) { await delay(null, 400); return }
+    await supabase!.functions.invoke('password-reset', { body: { email } }).catch(() => undefined)
+  },
+  /** Sets a new password for the person who opened the emailed link. */
+  async setNewPassword(password: string): Promise<void> {
+    if (USE_MOCK) { await delay(null, 300); return }
+    const { error } = await supabase!.auth.updateUser({ password })
+    if (error) throw error
+  },
   /** Sends a test notification to my own phones/computers. */
   async sendTestPush(): Promise<{ sent: number; offDuty?: boolean; noDevice?: boolean }> {
     if (USE_MOCK) return { sent: 0, noDevice: true }
@@ -307,6 +356,17 @@ export const api = {
   },
 
   /** Only callable by super_admin in the UI — enforced there and by a DB trigger (see schema.sql). */
+  /** super_admin only — fix a staff member's name, title or phone. Their login (email) is untouched. */
+  async updateStaffProfile(staffId: string, input: { name: string; title?: string; phone?: string }, changedBy: StaffMember): Promise<StaffMember[]> {
+    const name = input.name.trim()
+    if (!name) throw new Error('The name can\'t be empty.')
+    if (USE_MOCK) return delay(mockStore.updateStaffProfile(staffId, { ...input, name }, changedBy))
+    const { error } = await supabase!.from('staff_members').update({ name, title: input.title?.trim() || null, phone: input.phone?.trim() || null }).eq('id', staffId)
+    if (error) throw error
+    logAuditReal({ entityType: 'staff', entityId: staffId, action: 'update', summary: `Updated ${name}'s details`, changedBy: changedBy.id })
+    return this.getStaff()
+  },
+
   async updateStaffRole(staffId: string, role: UserRole, changedBy: StaffMember): Promise<StaffMember[]> {
     if (USE_MOCK) return delay(mockStore.updateStaffRole(staffId, role, changedBy))
     const { error } = await supabase!.from('staff_members').update({ role }).eq('id', staffId)
@@ -376,21 +436,30 @@ export const api = {
     const { data, error } = await supabase!.functions.invoke('create-staff-member', { body: { ...input, orgId: changedBy.orgId } })
     if (error) {
       const context = (error as { context?: Response }).context
+      let reason: string | undefined
       if (context) {
-        try {
-          const body = await context.clone().json()
-          throw new Error(body?.error ?? error.message)
-        } catch {
-          // fall through
-        }
+        try { reason = (await context.clone().json())?.error } catch { /* no readable reason */ }
       }
-      throw error
+      throw new Error(reason ?? error.message) // show the real reason from the server, not just "non-2xx
     }
     logAuditReal({
       entityType: 'staff', entityId: data.id, action: 'create',
       summary: `Added new staff member: ${input.name} (${input.role.replace('_', ' ')})`, changedBy: changedBy.id,
     })
     return { tempPassword: data.tempPassword }
+  },
+
+  /** Super Admin only. Someone with no history is deleted; someone with history is switched off (hidden, sign-in blocked) so nothing they did is lost. */
+  async deleteStaffMember(staffId: string, changedBy: StaffMember): Promise<{ mode: 'deleted' | 'deactivated'; name: string }> {
+    if (USE_MOCK) return delay(mockStore.deleteStaffMember(staffId, changedBy))
+    const { data, error } = await supabase!.functions.invoke('delete-staff-member', { body: { staffId } })
+    if (error) {
+      let reason: string | undefined
+      try { reason = (await (error as { context?: Response }).context?.clone().json())?.error } catch { /* no readable reason */ }
+      throw new Error(reason ?? error.message)
+    }
+    logAuditReal({ entityType: 'staff', entityId: staffId, action: 'delete', summary: `${data.mode === 'deleted' ? 'Deleted' : 'Switched off'} staff member ${data.name}`, changedBy: changedBy.id })
+    return data
   },
 
   // -------------------------------------------------------------------
@@ -446,7 +515,13 @@ export const api = {
 
   async createCase(input: Omit<FuneralCase, 'id' | 'createdAt' | 'updatedAt'>, changedBy: StaffMember): Promise<FuneralCase> {
     if (USE_MOCK) return delay(mockStore.createCase(input, changedBy))
-    const { data: caseRow, error } = await supabase!.from('cases').insert(caseToRow(input)).select().single()
+    let { data: caseRow, error } = await supabase!.from('cases').insert(caseToRow(input)).select().single()
+    // Until visitation-end.sql has been run, the end-time column doesn't exist — save everything else rather than block the case.
+    if (error && /visitation_end/.test(error.message)) {
+      const { visitation_end: _skip, ...rest } = caseToRow(input) as Record<string, unknown>
+      void _skip
+      ;({ data: caseRow, error } = await supabase!.from('cases').insert(rest).select().single())
+    }
     if (error) throw error
     if (input.contacts?.length) {
       const { error: contactErr } = await supabase!
@@ -455,7 +530,7 @@ export const api = {
       if (contactErr) throw contactErr
     }
     const decedentName = `${input.decedent.firstName} ${input.decedent.lastName}`
-    if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName)
+    if ('visitationDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'visitation', input.visitationDate, input.visitationLocation, decedentName, input.visitationEnd)
     if ('serviceDate' in input) await syncCaseCalendarEvent(caseRow.id, input.orgId, input.locationId, 'service', input.serviceDate, input.serviceLocation, decedentName)
     await this.seedTasksFromTemplates(caseRow.id, input.orgId)
     this.firePush({ type: 'case', caseId: caseRow.id, event: 'created' })
@@ -465,6 +540,22 @@ export const api = {
       summary: `Created case for ${decedentName}`, changedBy: changedBy.id,
     })
     return this.getCase(caseRow.id) as Promise<FuneralCase>
+  },
+
+  /**
+   * Permanently removes a case and everything on it (notes, documents, tasks, contract, statements). Admin only — the database enforces this too.
+   * The audit log records who removed which case, with its name and number, before it goes.
+   */
+  async deleteCase(id: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.deleteCase(id); return }
+    const { data } = await supabase!.from('cases').select('case_number, decedent_first_name, decedent_last_name').eq('id', id).single()
+    await logAuditReal({
+      entityType: 'case', entityId: id, caseId: undefined, action: 'delete',
+      summary: `Deleted case ${data?.case_number ?? id} (${data?.decedent_first_name ?? ''} ${data?.decedent_last_name ?? ''})`.trim(), changedBy: changedBy.id,
+    })
+    await supabase!.from('calendar_events').delete().eq('case_id', id)
+    const { error } = await supabase!.from('cases').delete().eq('id', id)
+    if (error) throw error
   },
 
   /** Practice cases (case number starts with PRACTICE-) can be removed by anyone with access to the location — real cases cannot. */
@@ -478,7 +569,12 @@ export const api = {
 
   async updateCase(id: string, patch: Partial<FuneralCase>, changedBy: StaffMember): Promise<FuneralCase | undefined> {
     if (USE_MOCK) return delay(mockStore.updateCase(id, patch, changedBy))
-    const { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)
+    let { error } = await supabase!.from('cases').update(caseToRow(patch)).eq('id', id)
+    if (error && /visitation_end/.test(error.message)) {
+      const { visitation_end: _skip, ...rest } = caseToRow(patch) as Record<string, unknown>
+      void _skip
+      ;({ error } = await supabase!.from('cases').update(rest).eq('id', id))
+    }
     if (error) throw error
     if (patch.contacts) {
       // Update existing rows in place rather than deleting and
@@ -514,7 +610,7 @@ export const api = {
       const current = await this.getCase(id)
       if (current) {
         const decedentName = `${current.decedent.firstName} ${current.decedent.lastName}`
-        if ('visitationDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'visitation', patch.visitationDate, patch.visitationLocation, decedentName)
+        if ('visitationDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'visitation', patch.visitationDate, patch.visitationLocation, decedentName, patch.visitationEnd ?? current.visitationEnd)
         if ('serviceDate' in patch) await syncCaseCalendarEvent(id, current.orgId, current.locationId, 'service', patch.serviceDate, patch.serviceLocation, decedentName)
       }
     }
@@ -526,9 +622,37 @@ export const api = {
     return result
   },
 
+  /** A pre-need person has passed away: the plan becomes a live case and the First Call starts. */
+  async markPassedAway(caseId: string, changedBy: StaffMember): Promise<void> {
+    const current = await this.getCase(caseId)
+    if (!current) return
+    const today = new Date().toISOString().slice(0, 10)
+    await this.updateCase(caseId, {
+      type: 'at_need', status: 'first_call', custodyStage: 'scene_first_call',
+      decedent: { ...current.decedent, dateOfDeath: current.decedent.dateOfDeath ?? today },
+    }, changedBy)
+    await this.addNote(caseId, changedBy, 'Passed away — the pre-need plan is now an active case. First call started.')
+    if (!USE_MOCK) this.firePush({ type: 'case', caseId, event: 'pickup' })
+  },
+
   // -------------------------------------------------------------------
   // Tasks
   // -------------------------------------------------------------------
+
+  /** Every task on every case — what the Cases list and Today screen use to show what is missing. */
+  async getAllCaseTasks(): Promise<CaseTask[]> {
+    if (USE_MOCK) return delay(mockStore.getAllTasks())
+    const { data, error } = await supabase!.from('case_tasks').select('*')
+    if (error) throw error
+    return (data ?? []).map(rowToTask)
+  },
+
+  async getAllCaseDocuments(): Promise<CaseDocument[]> {
+    if (USE_MOCK) return delay(mockStore.getAllDocuments())
+    const { data, error } = await supabase!.from('case_documents').select('*')
+    if (error) throw error
+    return (data ?? []).map(rowToDocument)
+  },
 
   async getCaseTasks(caseId: string): Promise<CaseTask[]> {
     if (USE_MOCK) return delay(mockStore.getCaseTasks(caseId))
@@ -638,6 +762,38 @@ export const api = {
   // Notes
   // -------------------------------------------------------------------
 
+  /** What staff filled in on the Statement of Funeral Goods and Services tabs, per tab. */
+  async getCaseStatements(caseId: string): Promise<Record<string, Record<string, string | number>>> {
+    if (USE_MOCK) return delay(mockStore.getStatements(caseId))
+    const { data, error } = await supabase!.from('case_statements').select('sheet, data').eq('case_id', caseId)
+    if (error) throw error
+    return Object.fromEntries((data ?? []).map((r) => [r.sheet as string, (r.data ?? {}) as Record<string, string | number>]))
+  },
+
+  /** Every case's second-person checks, keyed by case — for the Cases list, Today screen and sidebar counts. */
+  async getAllSignoffs(): Promise<Record<string, Record<string, string | number>>> {
+    if (USE_MOCK) return delay(mockStore.getAllSignoffs())
+    const { data, error } = await supabase!.from('case_statements').select('case_id, data').eq('sheet', '_signoffs')
+    if (error) throw error
+    return Object.fromEntries((data ?? []).map((r) => [r.case_id as string, (r.data ?? {}) as Record<string, string | number>]))
+  },
+
+  /** "I looked at this and it is right." Remembers who and when, plus a fingerprint so a later change asks for a new check. */
+  async signOffCheck(caseId: string, key: string, fp: string, label: string, changedBy: StaffMember): Promise<void> {
+    const all = await this.getCaseStatements(caseId)
+    const cur = all['_signoffs'] ?? {}
+    await this.saveCaseStatement(caseId, '_signoffs', { ...cur, [key]: [fp, changedBy.name, new Date().toISOString()].join('§') }, changedBy)
+    const summary = `Second check: ${changedBy.name} checked "${label.replace(/^Changed since it was checked — check again: /, '')}"`
+    if (USE_MOCK) mockStore.logSignoff(caseId, summary, changedBy)
+    else logAuditReal({ entityType: 'case', entityId: caseId, caseId, action: 'update', summary, changedBy: changedBy.id })
+  },
+
+  async saveCaseStatement(caseId: string, sheet: string, data: Record<string, string | number>, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.saveStatement(caseId, sheet, data); return }
+    const { error } = await supabase!.from('case_statements').upsert({ case_id: caseId, sheet, data, updated_by: changedBy.id, updated_at: new Date().toISOString() }, { onConflict: 'case_id,sheet' })
+    if (error) throw error
+  },
+
   async getCaseNotes(caseId: string): Promise<CaseNote[]> {
     if (USE_MOCK) return delay(mockStore.getCaseNotes(caseId))
     const { data, error } = await supabase!.from('case_notes').select('*, staff_members(name)').eq('case_id', caseId)
@@ -660,6 +816,21 @@ export const api = {
     return rowToNote(data)
   },
 
+  /** Edit a note's words, and/or flip whether it is a Special Request (shows on the TV Board). */
+  async updateNote(id: string, patch: { body?: string; isSpecialRequest?: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateNote(id, patch, changedBy); return }
+    const row: Record<string, unknown> = {}
+    if (patch.body !== undefined) row.body = patch.body
+    if (patch.isSpecialRequest !== undefined) row.is_special_request = patch.isSpecialRequest
+    const { data, error } = await supabase!.from('case_notes').update(row).eq('id', id).select('case_id').single()
+    if (error) throw error
+    logAuditReal({
+      entityType: 'note', entityId: id, caseId: data?.case_id, action: 'update',
+      summary: patch.body !== undefined ? 'Edited a note' : patch.isSpecialRequest ? 'Marked a note as a special request (TV Board)' : 'Removed special request from a note',
+      changedBy: changedBy.id,
+    })
+  },
+
   // -------------------------------------------------------------------
   // Documents
   // -------------------------------------------------------------------
@@ -680,6 +851,14 @@ export const api = {
     })
     if (error) throw error
     return path
+  },
+
+  /** Gives a saved document a clear, recognisable name (and type) so everyone can find it. */
+  async labelCaseDocument(docId: string, caseId: string, name: string, category: CaseDocument['category'], changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.labelDocument(docId, name, category); return }
+    const { error } = await supabase!.from('case_documents').update({ name, category }).eq('id', docId)
+    if (error) throw error
+    logAuditReal({ entityType: 'document', entityId: docId, caseId, action: 'update', summary: `Labelled a saved document "${name}"`, changedBy: changedBy.id })
   },
 
   async addDocument(doc: Omit<CaseDocument, 'id' | 'uploadedAt'>, changedBy: StaffMember): Promise<CaseDocument> {
@@ -722,6 +901,37 @@ export const api = {
     return (data ?? []).map(rowToGplItem)
   },
 
+  /** Price-list editing (super admin). New items get the location's company automatically. */
+  async createGplItem(input: { locationId: string; sku?: string; name: string; category: GplCategory; price: number; taxable: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.createGplItem(input, changedBy); return }
+    const { data: loc, error: locErr } = await supabase!.from('locations').select('org_id').eq('id', input.locationId).single()
+    if (locErr) throw locErr
+    const { data, error } = await supabase!.from('gpl_items').insert({
+      org_id: loc.org_id, location_id: input.locationId, sku: input.sku || null, name: input.name,
+      category: input.category, price: input.price, taxable: input.taxable, active: true,
+    }).select('id').single()
+    if (error) throw error
+    logAuditReal({ entityType: 'contract', entityId: data.id, action: 'create', summary: `Added "${input.name}" to the price list at ${formatMoneyPlain(input.price)}`, changedBy: changedBy.id })
+  },
+
+  async updateGplItem(id: string, before: GplItem, patch: { sku?: string; name?: string; category?: GplCategory; price?: number; taxable?: boolean; active?: boolean }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateGplItem(id, patch, changedBy); return }
+    const row: Record<string, unknown> = {}
+    if (patch.sku !== undefined) row.sku = patch.sku || null
+    if (patch.name !== undefined) row.name = patch.name
+    if (patch.category !== undefined) row.category = patch.category
+    if (patch.price !== undefined) row.price = patch.price
+    if (patch.taxable !== undefined) row.taxable = patch.taxable
+    if (patch.active !== undefined) row.active = patch.active
+    const { error } = await supabase!.from('gpl_items').update(row).eq('id', id)
+    if (error) throw error
+    const bits: string[] = []
+    if (patch.price !== undefined && patch.price !== before.price) bits.push(`price ${formatMoneyPlain(before.price)} \u2192 ${formatMoneyPlain(patch.price)}`)
+    if (patch.name !== undefined && patch.name !== before.name) bits.push(`name "${before.name}" \u2192 "${patch.name}"`)
+    if (patch.active !== undefined && patch.active !== before.active) bits.push(patch.active ? 'shown again' : 'hidden')
+    logAuditReal({ entityType: 'contract', entityId: id, action: 'update', summary: `Price list "${before.name}": ${bits.join(', ') || 'details updated'}`, changedBy: changedBy.id })
+  },
+
   async getContracts(): Promise<Contract[]> {
     if (USE_MOCK) return delay(mockStore.getContracts())
     const { data, error } = await supabase!.from('contracts').select('*, contract_line_items(*)')
@@ -730,6 +940,36 @@ export const api = {
   },
 
   /** Manual paid/unpaid toggle — the action the staff_member (lowest tier) role is permitted to take. */
+  /**
+   * Makes the case's invoice match the ticked lines of one Statement tab: replaces every invoice line that came from a
+   * statement (and only those), sets the sales tax and credits, and recomputes the total and paid flag. Payments are untouched.
+   */
+  async syncStatementInvoice(input: {
+    caseId: string; locationId: string; sheetName: string
+    lines: { name: string; amount: number }[]; tax: number; credit: number
+  }, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.syncStatementInvoice(input, changedBy); return }
+    const contract = await findOrCreateContract(input.caseId, input.locationId)
+    const { error: delErr } = await supabase!.from('contract_line_items').delete().eq('contract_id', contract.id).eq('source', 'statement')
+    if (delErr) throw delErr
+    if (input.lines.length) {
+      const { error } = await supabase!.from('contract_line_items').insert(
+        input.lines.map((l) => ({ contract_id: contract.id, name: l.name || 'Other charge', quantity: 1, unit_price: l.amount, source: 'statement' }))
+      )
+      if (error) throw error
+    }
+    const { error: upErr } = await supabase!.from('contracts').update({ tax_total: input.tax, discount: input.credit }).eq('id', contract.id)
+    if (upErr) throw upErr
+    await recalculateContractTotal(contract.id)
+    const { data: c } = await supabase!.from('contracts').select('total, amount_paid').eq('id', contract.id).single()
+    if (c) await supabase!.from('contracts').update({ paid: Number(c.total) > 0 && Number(c.amount_paid) >= Number(c.total) }).eq('id', contract.id)
+    const total = input.lines.reduce((s, l) => s + l.amount, 0) + input.tax - input.credit
+    logAuditReal({
+      entityType: 'contract', entityId: contract.id, caseId: input.caseId, action: 'update',
+      summary: `Invoice updated from the "${input.sheetName.trim()}" statement — ${input.lines.length} item${input.lines.length === 1 ? '' : 's'} ordered, total $${total.toFixed(2)}`, changedBy: changedBy.id,
+    })
+  },
+
   /** Marks a contract as signed — called after a signature is captured, whether via SignRequest or the in-person pad. */
   async markContractSigned(contractId: string, changedBy: StaffMember): Promise<void> {
     if (USE_MOCK) { mockStore.markContractSigned(contractId); return }
@@ -834,12 +1074,13 @@ export const api = {
    * matter how many separate payments come in.
    */
   async recordPayment(input: {
-    contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string
+    contractId: string; caseId: string; amount: number; method: PaymentMethod; reference?: string; receivedAt?: string
   }, changedBy: StaffMember): Promise<Payment> {
     if (USE_MOCK) return delay(mockStore.recordPayment(input, changedBy))
     const { data, error } = await supabase!.from('payments').insert({
       contract_id: input.contractId, case_id: input.caseId, amount: input.amount,
       method: input.method, reference: input.reference || null, recorded_by: changedBy.id,
+      ...(input.receivedAt ? { received_at: input.receivedAt } : {}),
     }).select().single()
     if (error) throw error
 
@@ -867,7 +1108,7 @@ export const api = {
 
   async getCustodyLog(caseId?: string): Promise<CustodyLogEntry[]> {
     if (USE_MOCK) return delay(mockStore.getCustodyLog(caseId))
-    let query = supabase!.from('custody_log').select('*, staff_members(name)').order('timestamp', { ascending: true })
+    let query = supabase!.from('custody_log').select('*, staff_members(name), cases(case_number, decedent_first_name, decedent_last_name)').order('timestamp', { ascending: true })
     if (caseId) query = query.eq('case_id', caseId)
     const { data, error } = await query
     if (error) throw error
@@ -879,17 +1120,33 @@ export const api = {
     caseId: string,
     toStage: CustodyStage,
     movedBy: StaffMember,
-    note?: string
+    note?: string,
+    /** When it really happened (ISO). Leave out for "just now". A time in the past is added to the history without changing where the case is now, unless it is the latest move. */
+    at?: string
   ): Promise<{ cases: FuneralCase[]; log: CustodyLogEntry[] }> {
-    if (USE_MOCK) return delay(mockStore.moveCustody(caseId, toStage, movedBy, note))
+    if (USE_MOCK) return delay(mockStore.moveCustody(caseId, toStage, movedBy, note, at))
     const current = await this.getCase(caseId)
-    const { error: caseErr } = await supabase!.from('cases').update({ custody_stage: toStage }).eq('id', caseId)
-    if (caseErr) throw caseErr
+    const live = !at || Math.abs(Date.now() - new Date(at).getTime()) < 10 * 60 * 1000
+    let applyStage = true
+    if (!live) {
+      const { data: last } = await supabase!.from('custody_log').select('timestamp').eq('case_id', caseId).order('timestamp', { ascending: false }).limit(1).maybeSingle()
+      if (last && new Date(at!) < new Date(last.timestamp)) applyStage = false
+    }
+    if (applyStage) {
+      const { error: caseErr } = await supabase!.from('cases').update({ custody_stage: toStage }).eq('id', caseId)
+      if (caseErr) throw caseErr
+    }
     const { error: logErr } = await supabase!.from('custody_log').insert({
       case_id: caseId, from_stage: current?.custodyStage, to_stage: toStage,
-      moved_by: movedBy.id, note,
+      moved_by: movedBy.id, note, ...(at ? { timestamp: at } : {}),
     })
     if (logErr) throw logErr
+    if (!live || !applyStage) {
+      const nm = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
+      logAuditReal({ entityType: 'custody', entityId: caseId, caseId, action: 'status_change', summary: `Recorded ${nm}: ${CUSTODY_STAGE_LABELS[toStage] ?? toStage} at ${at}`, changedBy: movedBy.id })
+      const [cases, log] = await Promise.all([this.getCases(), this.getCustodyLog()])
+      return { cases, log }
+    }
     if (toStage === 'scene_first_call') this.firePush({ type: 'case', caseId, event: 'pickup' })
     const decedentName = current ? `${current.decedent.firstName} ${current.decedent.lastName}` : caseId
     this.notifySlack(`📦 ${decedentName} moved to *${toStage.replace(/_/g, ' ')}* — by ${movedBy.name}`)
@@ -910,6 +1167,38 @@ export const api = {
     }
     const [cases, log] = await Promise.all([this.getCases(), this.getCustodyLog()])
     return { cases, log }
+  },
+
+  /** Fixes the time, place or note of an entry in a case's custody history. The row is stamped as edited and the change goes in the Activity log. */
+  async updateCustodyEntry(id: string, patch: { timestamp?: string; toStage?: CustodyStage; note?: string }, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateCustodyEntry(id, patch, by); return }
+    const { data: before, error: e0 } = await supabase!.from('custody_log').select('*').eq('id', id).single()
+    if (e0 || !before) throw e0 ?? new Error('That entry was not found.')
+    const row: Record<string, unknown> = { edited_at: new Date().toISOString(), edited_by_name: by.name }
+    if (patch.timestamp) row.timestamp = patch.timestamp
+    if (patch.toStage) row.to_stage = patch.toStage
+    if ('note' in patch) row.note = patch.note?.trim() || null
+    const { error } = await supabase!.from('custody_log').update(row).eq('id', id)
+    if (error) throw error
+    await this.followLatestCustody(before.case_id)
+    logAuditReal({ entityType: 'custody', entityId: before.case_id, caseId: before.case_id, action: 'update', summary: `Corrected a custody entry: was ${before.to_stage} at ${before.timestamp}${before.note ? ` (“${before.note}”)` : ''}; now ${patch.toStage ?? before.to_stage} at ${patch.timestamp ?? before.timestamp}`, changedBy: by.id })
+  },
+
+  async deleteCustodyEntry(id: string, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.deleteCustodyEntry(id, by); return }
+    const { data: before } = await supabase!.from('custody_log').select('*').eq('id', id).maybeSingle()
+    const { error } = await supabase!.from('custody_log').delete().eq('id', id)
+    if (error) throw error
+    if (before) {
+      await this.followLatestCustody(before.case_id)
+      logAuditReal({ entityType: 'custody', entityId: before.case_id, caseId: before.case_id, action: 'delete', summary: `Removed a custody entry: ${before.to_stage} at ${before.timestamp}${before.note ? ` (“${before.note}”)` : ''}`, changedBy: by.id })
+    }
+  },
+
+  /** After a history entry is fixed or removed, the case's current location is whatever its latest entry says. */
+  async followLatestCustody(caseId: string): Promise<void> {
+    const { data: last } = await supabase!.from('custody_log').select('to_stage').eq('case_id', caseId).order('timestamp', { ascending: false }).limit(1).maybeSingle()
+    if (last) await supabase!.from('cases').update({ custody_stage: last.to_stage }).eq('id', caseId)
   },
 
   // -------------------------------------------------------------------
@@ -1003,6 +1292,35 @@ export const api = {
       summary: `Scheduled "${input.title}"`, changedBy: changedBy.id,
     })
     return rowToEvent(full)
+  },
+
+  async deleteEvent(id: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.deleteEvent(id, changedBy); return }
+    const { data: ev } = await supabase!.from('calendar_events').select('title, case_id').eq('id', id).maybeSingle()
+    await supabase!.from('event_participants').delete().eq('event_id', id)
+    const { error } = await supabase!.from('calendar_events').delete().eq('id', id)
+    if (error) throw error
+    logAuditReal({ entityType: 'event', entityId: id, caseId: ev?.case_id ?? undefined, action: 'delete', summary: `Removed "${ev?.title ?? 'event'}"`, changedBy: changedBy.id })
+  },
+
+  /** Puts the Vital Sheet's rosary / graveside (and any other extra) on the Calendar and TV Board, one event each. Matches earlier ones by label so assigned attendants are kept. */
+  async syncVitalEvents(c: FuneralCase, items: import('@/lib/vitalToCase').VitalEventItem[], changedBy: StaffMember): Promise<void> {
+    const name = `${c.decedent.firstName} ${c.decedent.lastName}`
+    if (USE_MOCK) { mockStore.syncVitalEvents(c, items, changedBy); return }
+    const { data: existing, error } = await supabase!.from('calendar_events').select('*').eq('case_id', c.id).eq('source', 'vital')
+    if (error) throw error
+    const left = new Map((existing ?? []).map((e: { id: string; label: string | null }) => [e.label ?? '', e.id]))
+    const was = new Map((existing ?? []).map((e: { id: string; location_text: string | null; place_confirmed?: boolean }) => [e.id, e]))
+    for (const it of items) {
+      const row = { title: `${name} — ${it.label}`, type: it.type, start_at: it.start, end_at: it.end, location_text: it.place ?? null, label: it.label }
+      const id = left.get(it.label)
+      if (id) {
+        const old = was.get(id)
+        await supabase!.from('calendar_events').update({ ...row, ...(old?.place_confirmed && (old.location_text ?? null) !== (it.place ?? null) ? { place_confirmed: false } : {}) }).eq('id', id); left.delete(it.label)
+      }
+      else await supabase!.from('calendar_events').insert({ ...row, org_id: c.orgId, location_id: c.locationId, case_id: c.id, source: 'vital' })
+    }
+    for (const id of left.values()) { await supabase!.from('event_participants').delete().eq('event_id', id); await supabase!.from('calendar_events').delete().eq('id', id) }
   },
 
   async updateEvent(id: string, patch: Partial<CalendarEvent>, changedBy: StaffMember): Promise<CalendarEvent | undefined> {
@@ -1131,7 +1449,7 @@ export const api = {
   async getNewInbound(since: string, orgId?: string): Promise<InboundEmail[]> {
     if (USE_MOCK) return delay(mockStore.getEmails().filter((e) => e.direction === 'in' && e.receivedAt > since && mockStore.emailOrgId(e) === (orgId ?? mockStore.emailOrgId(e))))
     let q = supabase!.from('inbound_emails')
-      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction')
+      .select('id, graph_message_id, from_address, from_name, subject, preview, received_at, case_id, match_status, direction, junk')
       .eq('direction', 'in').neq('match_status', 'ignored').gt('received_at', since)
       .order('received_at', { ascending: true }).limit(10)
     if (orgId) q = q.setHeader('x-org-id', orgId)
@@ -1204,6 +1522,14 @@ export const api = {
       summary: 'Confirmed email match to case', changedBy: changedBy.id,
     })
     return this.getEmails()
+  },
+
+  /** Moves an email to (or back from) Junk & Marketing. Nothing is deleted; the original stays in the mailbox. */
+  async setEmailJunk(emailId: string, junk: boolean, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.setEmailJunk(emailId, junk, changedBy); return }
+    const { error } = await supabase!.from('inbound_emails').update({ junk }).eq('id', emailId)
+    if (error) throw error
+    logAuditReal({ entityType: 'email', entityId: emailId, action: 'update', summary: junk ? 'Moved an email to Junk & Marketing' : 'Moved an email back out of Junk', changedBy: changedBy.id })
   },
 
   async ignoreEmail(emailId: string, changedBy: StaffMember): Promise<InboundEmail[]> {
@@ -1324,8 +1650,8 @@ export const api = {
     })
     if (uploadErr) throw uploadErr
 
-    const { data, error } = await supabase!.functions.invoke('send-signature-request', {
-      body: { ...input, documentStoragePath: path },
+    const { data, error } = await supabase!.functions.invoke('esign', {
+      body: { ...input, action: 'create', documentStoragePath: path },
     })
     if (error) {
       // supabase-js's default error for a non-2xx Edge Function response is
@@ -1350,6 +1676,32 @@ export const api = {
       summary: `Sent "${input.documentName}" to ${input.signerName} for signature`, changedBy: changedBy.id,
     })
     return rowToSignatureRequest(data)
+  },
+
+  /** The signing page a family member sees — no login; the secret in their link is the key. */
+  esignPublic: {
+    async get(token: string): Promise<{ documentName: string; signerName: string; status: string; orgName: string; pdfUrl?: string; signedUrl?: string; signedAt?: string; fields?: import('./esignFields').SignField[] }> {
+      if (USE_MOCK) {
+        const r = mockStore.getSignatureRequests().find((x) => x.token === token)
+        if (!r) throw new Error('This signing link is not valid.')
+        return { documentName: r.documentName, signerName: r.signerName, status: r.status === 'sent' ? 'viewed' : r.status, orgName: 'Casillas Funeral Home', signedAt: r.signedAt, fields: r.fields }
+      }
+      return esignCall({ action: 'get', token })
+    },
+    async sign(token: string, name: string, signature: string | null, values?: Record<string, string>): Promise<{ signedUrl?: string }> {
+      if (USE_MOCK) { const r = mockStore.getSignatureRequests().find((x) => x.token === token); if (r) mockStore.simulateSignatureComplete(r.id); return {} }
+      return esignCall({ action: 'sign', token, name, signature, values, consent: true })
+    },
+    async decline(token: string): Promise<void> {
+      if (USE_MOCK) return
+      await esignCall({ action: 'decline', token })
+    },
+  },
+
+  /** A short-lived link to open the signed copy (or any saved signature file). Older rows hold a full web address already. */
+  async getSignedCopyUrl(pathOrUrl: string): Promise<string> {
+    if (/^https?:/i.test(pathOrUrl)) return pathOrUrl
+    return this.getDocumentSignedUrl(pathOrUrl)
   },
 
   /** Mock-only helper for demoing the flow without a real SignRequest webhook. */
@@ -1644,7 +1996,7 @@ export const api = {
 
   /** Public — no auth. This is what the family's browser actually calls. */
   async getFamilyPortalData(token: string): Promise<{
-    case: FuneralCase; location: Location; gplItems: GplItem[]; contracts: Contract[]; mediaFiles: CaseDocument[]; statusMessage: string | null
+    case: FuneralCase; location: Location; gplItems: GplItem[]; contracts: Contract[]; mediaFiles: CaseDocument[]; statusMessage: string | null; obituaryBody?: string
   }> {
     if (USE_MOCK) {
       // Mock mode: treat the "token" as a case ID directly, so the demo
@@ -1680,6 +2032,7 @@ export const api = {
       contracts: (data.contracts ?? []).map(rowToContract),
       mediaFiles: (data.mediaFiles ?? []).map(rowToDocument),
       statusMessage: data.statusMessage,
+      obituaryBody: data.obituary?.body ?? undefined,
     }
   },
 
@@ -1725,6 +2078,37 @@ export const api = {
       }
       throw error
     }
+  },
+
+  /** Staff: what the family has written in their portal (obituary draft, messages). */
+  async getFamilyActivity(caseId: string): Promise<{ obituary?: { body: string; updatedAt: string }; messages: { id: string; body: string; createdAt: string }[] }> {
+    if (USE_MOCK) return { messages: [] }
+    const [{ data: ob }, { data: msgs }] = await Promise.all([
+      supabase!.from('obituary_drafts').select('body, updated_at').eq('case_id', caseId).maybeSingle(),
+      supabase!.from('family_messages').select('id, body, created_at').eq('case_id', caseId).order('created_at', { ascending: false }),
+    ])
+    return {
+      obituary: ob?.body ? { body: ob.body, updatedAt: ob.updated_at } : undefined,
+      messages: (msgs ?? []).map((m) => ({ id: m.id, body: m.body, createdAt: m.created_at })),
+    }
+  },
+
+  async markFamilySeen(caseId: string, changedBy: StaffMember): Promise<void> {
+    if (USE_MOCK) { mockStore.updateCase(caseId, { familyUnseen: false }, changedBy); return }
+    const { error } = await supabase!.from('cases').update({ family_unseen: false }).eq('id', caseId)
+    if (error) throw error
+  },
+
+  /** Public — no auth. The family saves their obituary draft or sends a message to the funeral home. */
+  async sendFamilyPortalNote(token: string, action: 'obituary' | 'message', text: string): Promise<void> {
+    if (USE_MOCK) return
+    const { data, error } = await supabase!.functions.invoke('family-portal-note', { body: { token, action, text } })
+    if (error) {
+      const context = (error as { context?: Response }).context
+      if (context) { try { const b = await context.clone().json(); if (b?.error) throw new Error(b.error) } catch (e) { if (e instanceof Error && e.message !== error.message) throw e } }
+      throw error
+    }
+    if (data?.error) throw new Error(data.error)
   },
 
   /** Public — no auth. Lets a family member upload a photo or song for the memorial slideshow through their portal link. Uses a direct fetch() rather than supabase.functions.invoke() — checks the real HTTP status/body itself instead of trusting the SDK wrapper to detect failures, since that wasn't reliably surfacing errors for this specific request. */
@@ -1803,6 +2187,27 @@ export const api = {
   // site below wraps this in its own try/catch for exactly that reason.
   // -------------------------------------------------------------------
 
+  // ---- Help button: "something isn't working" reports ----
+  async submitHelpReport(input: { message: string; page: string; details: string }, by: StaffMember): Promise<void> {
+    if (USE_MOCK) { try { const all = JSON.parse(localStorage.getItem('cos.helpReports') || '[]'); all.unshift({ id: crypto.randomUUID(), created_at: new Date().toISOString(), staff_id: by.id, staff_name: by.name, status: 'new', note: '', ...{ page: input.page, message: input.message, details: input.details } }); localStorage.setItem('cos.helpReports', JSON.stringify(all)) } catch { /* ignore */ } return }
+    const { data, error } = await supabase!.from('help_reports').insert({ staff_id: by.id, staff_name: by.name, page: input.page, message: input.message, details: input.details }).select('id').single()
+    if (error) throw error
+    // Phone notification + email to the owner. Best effort: the report is already saved either way.
+    void supabase!.functions.invoke('help-alert', { body: { reportId: data.id } }).catch(() => undefined)
+    void this.notifySlack(`🆘 *Help report* from ${by.name} on ${input.page}: ${input.message.slice(0, 300)}`)
+  },
+  async getHelpReports(): Promise<HelpReport[]> {
+    if (USE_MOCK) { try { return JSON.parse(localStorage.getItem('cos.helpReports') || '[]') } catch { return [] } }
+    const { data, error } = await supabase!.from('help_reports').select('*').order('created_at', { ascending: false }).limit(200)
+    if (error) throw error
+    return (data ?? []) as HelpReport[]
+  },
+  async setHelpReportStatus(id: string, status: HelpReport['status'], note?: string): Promise<void> {
+    if (USE_MOCK) { try { const all = JSON.parse(localStorage.getItem('cos.helpReports') || '[]').map((r: HelpReport) => (r.id === id ? { ...r, status, note: note ?? r.note } : r)); localStorage.setItem('cos.helpReports', JSON.stringify(all)) } catch { /* ignore */ } return }
+    const { error } = await supabase!.from('help_reports').update({ status, ...(note !== undefined ? { note } : {}) }).eq('id', id)
+    if (error) throw error
+  },
+
   async notifySlack(text: string): Promise<void> {
     if (USE_MOCK) return // no-op in demo mode
     try {
@@ -1813,6 +2218,14 @@ export const api = {
   },
 
   /** Fire-and-forget, same reasoning as notifySlack — a failed text should never block or fail the case action that triggered it. */
+  async sendFamilyPortalText(toPhone: string, message: string): Promise<void> {
+    if (USE_MOCK) return
+    const { data, error } = await supabase!.functions.invoke('notify-family-sms', { body: { toPhone, message } })
+    if (error) throw new Error(error.message || 'The text could not be sent.')
+    if (data?.skipped) throw new Error('Texting is not set up yet (Twilio details are missing in Supabase).')
+    if (data?.sent === false) throw new Error(String(data.error ?? 'The text could not be sent.').slice(0, 200))
+  },
+
   async notifyFamilySms(toPhone: string, message: string): Promise<void> {
     if (USE_MOCK) return // no-op in demo mode
     try {
@@ -1965,11 +2378,54 @@ export const api = {
 
   async getAuditLog(filters?: { caseId?: string; entityType?: AuditLogEntry['entityType'] }): Promise<AuditLogEntry[]> {
     if (USE_MOCK) return delay(mockStore.getAuditLog(filters))
-    let query = supabase!.from('audit_log').select('*, staff_members(name)').order('timestamp', { ascending: false })
-    if (filters?.caseId) query = query.eq('case_id', filters.caseId)
-    if (filters?.entityType) query = query.eq('entity_type', filters.entityType)
-    const { data, error } = await query
-    if (error) throw error
-    return (data ?? []).map(rowToAuditLogEntry)
+    // The database hands back at most 1,000 rows per request, so page through to get the whole trail.
+    const all: any[] = []
+    for (let from = 0; from < 10000; from += 1000) {
+      let query = supabase!.from('audit_log').select('*, staff_members(name)').order('timestamp', { ascending: false }).range(from, from + 999)
+      if (filters?.caseId) query = query.eq('case_id', filters.caseId)
+      if (filters?.entityType) query = query.eq('entity_type', filters.entityType)
+      const { data, error } = await query
+      if (error) throw error
+      all.push(...(data ?? []))
+      if ((data ?? []).length < 1000) break
+    }
+    return all.map(rowToAuditLogEntry)
   },
+
+  /** Field-by-field change history (who changed what, old → new). Admin-only by database rule. */
+  async getChangeLog(filters?: { caseId?: string; limit?: number }): Promise<ChangeLogEntry[]> {
+    if (USE_MOCK) return []
+    const limit = filters?.limit ?? 1500
+    let q = supabase!.from('change_log').select('*').order('at', { ascending: false }).limit(limit)
+    if (filters?.caseId) q = q.eq('case_id', filters.caseId)
+    const { data, error } = await q
+    if (error) throw error
+    const rows = data ?? []
+    const ids = [...new Set(rows.map((r: any) => r.changed_by).filter(Boolean))] as string[]
+    const caseIds = [...new Set(rows.map((r: any) => r.case_id).filter(Boolean))] as string[]
+    const names = new Map<string, string>()
+    const cases = new Map<string, string>()
+    if (ids.length) {
+      const { data: s } = await supabase!.from('staff_members').select('id,name').in('id', ids)
+      for (const x of s ?? []) names.set((x as any).id, (x as any).name)
+    }
+    if (caseIds.length) {
+      for (let i = 0; i < caseIds.length; i += 150) {
+        const { data: c } = await supabase!.from('cases').select('id,case_number,decedent_first_name,decedent_last_name').in('id', caseIds.slice(i, i + 150))
+        for (const x of c ?? []) cases.set((x as any).id, `${[(x as any).decedent_first_name, (x as any).decedent_last_name].filter(Boolean).join(' ')} (${(x as any).case_number})`)
+      }
+    }
+    return rows.map((r: any) => ({
+      id: String(r.id), at: r.at, table: r.table_name, recordId: r.record_id ?? '', caseId: r.case_id ?? undefined,
+      caseName: r.case_id ? cases.get(r.case_id) : undefined,
+      action: r.action, who: r.changed_by ? (names.get(r.changed_by) ?? 'Unknown') : 'Automatic / family portal',
+      label: r.label ?? '', changes: r.changes ?? {},
+    }))
+  },
+}
+
+export interface ChangeLogEntry {
+  id: string; at: string; table: string; recordId: string; caseId?: string; caseName?: string
+  action: 'insert' | 'update' | 'delete'; who: string; label: string
+  changes: Record<string, { old: unknown; new: unknown } | number>
 }

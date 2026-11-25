@@ -20,6 +20,7 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if (c.vitalSheet !== undefined) row.vital_sheet = c.vitalSheet
   if (c.fieldDiscrepancies !== undefined) row.field_discrepancies = c.fieldDiscrepancies
   if (c.intakeOpenForFamily !== undefined) row.intake_open_for_family = c.intakeOpenForFamily
+  if (c.familyUnseen !== undefined) row.family_unseen = c.familyUnseen
   if (c.obituaryCompleted !== undefined) row.obituary_completed = c.obituaryCompleted
   if (c.caseNumber !== undefined) row.case_number = c.caseNumber
   if (c.type !== undefined) row.type = c.type
@@ -27,10 +28,17 @@ export function caseToRow(c: Partial<FuneralCase>): Record<string, unknown> {
   if (c.disposition !== undefined) row.disposition = c.disposition
   if (c.assignedDirectorId !== undefined) row.assigned_director_id = c.assignedDirectorId
   if (c.assignedEmbalmerId !== undefined) row.assigned_embalmer_id = c.assignedEmbalmerId
-  if (c.visitationDate !== undefined) row.visitation_date = c.visitationDate
-  if (c.visitationLocation !== undefined) row.visitation_location = c.visitationLocation
-  if (c.serviceDate !== undefined) row.service_date = c.serviceDate
-  if (c.serviceLocation !== undefined) row.service_location = c.serviceLocation
+  // A date/place that is present but empty means "cleared" — save it as null, otherwise the old value stays in the database.
+  if ('visitationDate' in c) row.visitation_date = c.visitationDate ?? null
+  if ('visitationEnd' in c) row.visitation_end = c.visitationEnd ?? null
+  if ('visitationLocation' in c) row.visitation_location = c.visitationLocation ?? null
+  if ('serviceDate' in c) row.service_date = c.serviceDate ?? null
+  if ('serviceLocation' in c) row.service_location = c.serviceLocation ?? null
+  if (c.boardDisp !== undefined) row.board_disp = c.boardDisp || null
+  if (c.boardPlace !== undefined) row.board_place = c.boardPlace || null
+  if (c.boardFlowers !== undefined) row.board_flowers = c.boardFlowers || null
+  if (c.boardBirds !== undefined) row.board_birds = c.boardBirds || null
+  if (c.boardEscort !== undefined) row.board_escort = c.boardEscort || null
   if (c.color !== undefined) row.color = c.color
   if (c.custodyStage !== undefined) row.custody_stage = c.custodyStage
 
@@ -64,6 +72,9 @@ export function rowToCase(row: any): FuneralCase {
     vitalSheet: row.vital_sheet ?? undefined,
     fieldDiscrepancies: row.field_discrepancies ?? undefined,
     intakeOpenForFamily: row.intake_open_for_family ?? true,
+    familyUnseen: row.family_unseen ?? false,
+    familyActivityAt: row.family_activity_at ?? undefined,
+    familyActivityNote: row.family_activity_note ?? undefined,
     obituaryCompleted: row.obituary_completed ?? false,
     caseNumber: row.case_number,
     type: row.type,
@@ -79,14 +90,19 @@ export function rowToCase(row: any): FuneralCase {
       sex: row.decedent_sex ?? undefined,
       maritalStatus: row.decedent_marital_status ?? undefined,
       veteran: row.decedent_veteran ?? undefined,
+      ssnOnFile: !!row.decedent_ssn_encrypted,   // only whether one is saved — the number itself is never put on the case
     },
     contacts: (row.case_contacts ?? []).map(rowToContact),
     assignedDirectorId: row.assigned_director_id ?? undefined,
     assignedEmbalmerId: row.assigned_embalmer_id ?? undefined,
     visitationDate: row.visitation_date ?? undefined,
+    visitationEnd: row.visitation_end ?? undefined,
     visitationLocation: row.visitation_location ?? undefined,
     serviceDate: row.service_date ?? undefined,
     serviceLocation: row.service_location ?? undefined,
+    boardDisp: row.board_disp ?? undefined,
+    boardPlace: row.board_place ?? undefined,
+    boardFlowers: row.board_flowers ?? undefined, boardBirds: row.board_birds ?? undefined, boardEscort: row.board_escort ?? undefined,
     color: row.color ?? undefined,
     custodyStage: row.custody_stage,
     createdAt: row.created_at,
@@ -188,6 +204,9 @@ export function eventToRow(e: Partial<CalendarEvent>): Record<string, unknown> {
   if (e.end !== undefined) row.end_at = e.end
   if (e.location !== undefined) row.location_text = e.location ?? null
   if (e.notes !== undefined) row.notes = e.notes ?? null
+  if (e.label !== undefined) row.label = e.label || null
+  if (e.placeConfirmed !== undefined) row.place_confirmed = e.placeConfirmed
+  if (e.source !== undefined) row.source = e.source
   return row
 }
 
@@ -204,6 +223,9 @@ export function rowToEvent(row: any): CalendarEvent {
     end: row.end_at,
     location: row.location_text ?? undefined,
     notes: row.notes ?? undefined,
+    label: row.label ?? undefined,
+    placeConfirmed: row.place_confirmed ?? undefined,
+    source: row.source ?? undefined,
     participantIds: (row.event_participants ?? []).map((p: { staff_id: string }) => p.staff_id),
   }
 }
@@ -253,6 +275,7 @@ function rowToLineItem(row: any): ContractLineItem {
     id: row.id,
     gplItemId: row.gpl_item_id,
     serviceOrderId: row.service_order_id ?? undefined,
+    source: row.source === 'statement' ? 'statement' : undefined,
     name: row.name,
     quantity: Number(row.quantity),
     unitPrice: Number(row.unit_price),
@@ -292,6 +315,8 @@ export function rowToCustodyLogEntry(row: any): CustodyLogEntry {
     movedByName: row.staff_members?.name ?? 'Unknown',
     timestamp: row.timestamp,
     note: row.note ?? undefined,
+    editedAt: row.edited_at ?? undefined,
+    editedByName: row.edited_by_name ?? undefined,
   }
 }
 
@@ -341,6 +366,7 @@ export function rowToEmail(row: any): InboundEmail {
     threadId: row.thread_id ?? undefined,
     sentBy: row.sent_by ?? undefined,
     sentByName: row.sent_by_name ?? undefined,
+    junk: row.junk ?? undefined,
   }
 }
 
@@ -361,6 +387,11 @@ export function rowToSignatureRequest(row: any): SignatureRequest {
     sentAt: row.sent_at ?? undefined,
     signedAt: row.signed_at ?? undefined,
     signedDocumentUrl: row.signed_document_url ?? undefined,
+    mode: row.mode ?? 'email',
+    embedUrl: row.embed_url ?? undefined,
+    token: row.token ?? undefined,
+    expiresAt: row.expires_at ?? undefined,
+    fields: row.fields ?? undefined,
   }
 }
 
@@ -377,7 +408,10 @@ export function rowToAuditLogEntry(row: any): AuditLogEntry {
     action: row.action,
     summary: row.summary,
     changedBy: row.changed_by,
-    changedByName: row.staff_members?.name ?? 'Unknown',
+    changedByName: row.staff_members?.name ?? (row.changed_by ? 'Unknown' : 'The family'),
+    caseName: row.cases ? [row.cases.decedent_first_name, row.cases.decedent_last_name].filter(Boolean).join(' ') || undefined : undefined,
+    caseNumber: row.cases?.case_number ?? undefined,
+    device: row.device ?? undefined,
     timestamp: row.timestamp,
   }
 }

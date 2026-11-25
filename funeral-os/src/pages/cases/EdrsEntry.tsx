@@ -25,6 +25,7 @@ const noteClass: Record<EdrsNote['level'], string> = {
 export default function EdrsEntry() {
   const { caseId } = useParams<{ caseId: string }>()
   const { accessibleLocations } = useSession()
+  const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff })
   const { data: c } = useQuery({ queryKey: ['case', caseId], queryFn: () => api.getCase(caseId!), enabled: !!caseId })
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -50,7 +51,8 @@ export default function EdrsEntry() {
   if (!c) return null
 
   const location = accessibleLocations.find((l) => l.id === c.locationId)
-  const rows = buildEdrsRows(c, { ssn, location: location && { name: location.name, licenseNumber: location.licenseNumber } })
+  const embalmerName = allStaff.find((s) => s.id === c.assignedEmbalmerId)?.name
+  const rows = buildEdrsRows(c, { ssn, embalmerName, location: location && { name: location.name, licenseNumber: location.licenseNumber } })
   const { blockers, toCheck, ready } = readiness(rows)
   const needsAttention = (r: EdrsRow) => r.notes.some((n) => n.level === 'error' || n.level === 'warn')
 
@@ -182,9 +184,12 @@ export default function EdrsEntry() {
                       <div className="shrink-0 w-24 text-right pt-0.5">
                         {isSsn ? (
                           ssn === undefined || ssnError ? (
+                            <>
                             <button onClick={(e) => { e.stopPropagation(); loadSsn(true) }} disabled={ssnLoading} className="inline-flex items-center gap-1 text-xs font-medium text-[#3b4a35] hover:underline disabled:opacity-50">
                               <Eye size={12} /> {ssnLoading ? 'Loading…' : 'Show & copy'}
                             </button>
+                            <div className={`mt-0.5 text-[11px] ${c.decedent.ssnOnFile || c.decedent.ssn ? 'text-emerald-700' : 'text-amber-600'}`}>{c.decedent.ssnOnFile || c.decedent.ssn ? '✓ On file' : 'Not entered yet'}</div>
+                            </>
                           ) : r.value ? (
                             <button onClick={(e) => { e.stopPropagation(); copy('ssn', r.value) }} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800">
                               {copiedKey === 'ssn' ? <><Check size={12} className="text-emerald-600" /> Copied</> : <><Copy size={12} /> Copy</>}

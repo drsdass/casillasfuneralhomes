@@ -1,6 +1,8 @@
+import { DateTime24 } from '../../components/ui/DateTime24'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { findVenueConflicts } from '@/lib/venue'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
@@ -56,6 +58,8 @@ export default function EventForm() {
   const [notes, setNotes] = useState('')
   const [conflicts, setConflicts] = useState<SchedulingConflict[]>([])
   const [overrideConflicts, setOverrideConflicts] = useState(false)
+  const { data: allEvents = [] } = useQuery({ queryKey: ['events', 'venue-check'], queryFn: () => api.getCalendarEvents() })
+  const venueClashes = (start && end && !isNaN(new Date(start).getTime()) && !isNaN(new Date(end).getTime())) ? findVenueConflicts(allEvents, { start: new Date(start).toISOString(), end: new Date(end).toISOString(), venue: location, locationId: activeLocationId, caseId: caseId || undefined, excludeEventId: eventId }) : []
 
   useEffect(() => {
     if (!existing) return
@@ -114,7 +118,7 @@ export default function EventForm() {
   // soft (a second vehicle might be arranged), so those keep the override.
   const staffConflicts = conflicts.filter((c) => c.kind === 'staff')
   const vehicleConflicts = conflicts.filter((c) => c.kind === 'vehicle')
-  const hasBlockingConflicts = staffConflicts.length > 0 || (vehicleConflicts.length > 0 && !overrideConflicts)
+  const hasBlockingConflicts = staffConflicts.length > 0 || ((vehicleConflicts.length > 0 || venueClashes.length > 0) && !overrideConflicts)
 
   // Time off is advisory, not a hard block — someone might genuinely need
   // to be called in. This is the same check Calendar's drag-and-drop
@@ -152,11 +156,11 @@ export default function EventForm() {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className={labelClass}>Start</label>
-              <input required type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={inputClass} />
+              <DateTime24 required label="Start" value={start} onChange={setStart} inputClass={inputClass} />
             </div>
             <div>
               <label className={labelClass}>End</label>
-              <input required type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className={inputClass} />
+              <DateTime24 required label="End" value={end} onChange={setEnd} inputClass={inputClass} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -219,18 +223,18 @@ export default function EventForm() {
           )}
         </Card>
 
-        {conflicts.length > 0 && (
+        {(conflicts.length > 0 || venueClashes.length > 0) && (
           <Card className="p-4 mb-5 border-amber-300 bg-amber-50">
             <div className="flex items-start gap-2 mb-2">
               <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-sm font-medium text-amber-800">Scheduling conflict{conflicts.length > 1 ? 's' : ''} detected</div>
+              <div className="text-sm font-medium text-amber-800">Scheduling conflict{conflicts.length + venueClashes.length > 1 ? 's' : ''} detected</div>
             </div>
             {staffConflicts.length > 0 && (
               <>
                 <ul className="text-sm text-amber-900 space-y-1 mb-2 ml-6 list-disc font-medium">
                   {staffConflicts.map((c, i) => (
                     <li key={i}>
-                      {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, h:mm a')}–{format(parseISO(c.conflictingEvent.end), 'h:mm a')}) — this can't be overridden.
+                      {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, HH:mm')}–{format(parseISO(c.conflictingEvent.end), 'HH:mm')}) — this can't be overridden.
                     </li>
                   ))}
                 </ul>
@@ -240,12 +244,19 @@ export default function EventForm() {
               <ul className="text-sm text-amber-800 space-y-1 mb-3 ml-6 list-disc">
                 {vehicleConflicts.map((c, i) => (
                   <li key={i}>
-                    {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, h:mm a')}–{format(parseISO(c.conflictingEvent.end), 'h:mm a')})
+                    {c.resourceName} is already booked for "{c.conflictingEvent.title}" ({format(parseISO(c.conflictingEvent.start), 'MMM d, HH:mm')}–{format(parseISO(c.conflictingEvent.end), 'HH:mm')})
                   </li>
                 ))}
               </ul>
             )}
-            {vehicleConflicts.length > 0 && staffConflicts.length === 0 && (
+            {venueClashes.length > 0 && (
+              <ul className="text-sm text-amber-800 space-y-1 mb-3 ml-6 list-disc">
+                {venueClashes.map((c, i) => (
+                  <li key={i}>{location} is already booked for "{c.event.title}" ({format(parseISO(c.event.start), 'MMM d, HH:mm')}–{format(parseISO(c.event.end), 'HH:mm')})</li>
+                ))}
+              </ul>
+            )}
+            {(vehicleConflicts.length > 0 || venueClashes.length > 0) && staffConflicts.length === 0 && (
               <label className="flex items-center gap-2 text-sm text-amber-900">
                 <input type="checkbox" checked={overrideConflicts} onChange={(e) => setOverrideConflicts(e.target.checked)} className="accent-amber-600" />
                 Schedule anyway

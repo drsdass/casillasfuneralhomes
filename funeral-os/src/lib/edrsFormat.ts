@@ -1,6 +1,7 @@
+import { MEXICAN_STATES, CANADIAN_PROVINCES, matchPlace } from './places'
 import type { FuneralCase } from '@/types'
 import { withFirstCallDefaults } from './firstCallPlace'
-import { VITAL_FIELDS, resolveName, splitName, computeAge, type VitalContext, type VitalSection } from './vitalFields'
+import { VITAL_FIELDS, resolveName, splitName, computeAge, computeAgeParts, type VitalContext, type VitalSection } from './vitalFields'
 
 /**
  * Turns a case into what California's EDRS actually wants typed or selected.
@@ -35,6 +36,8 @@ export interface EdrsRow {
 
 export interface EdrsContext extends VitalContext {
   location?: { name: string; licenseNumber?: string }
+  /** The embalmer assigned to the case — used when no embalmer is typed on the Vital Sheet. */
+  embalmerName?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +82,7 @@ export const PLACE_OF_DEATH_TYPES: Record<NonNullable<NonNullable<FuneralCase['v
   other: 'OTHER',
 }
 
-const US_STATES: Record<string, string> = {
+export const US_STATES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
   FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana',
   ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri', MT: 'Montana', NE: 'Nebraska',
@@ -87,7 +90,7 @@ const US_STATES: Record<string, string> = {
   OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
   VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
 }
-const US_TERRITORIES: Record<string, string> = { PR: 'Puerto Rico', GU: 'Guam', VI: 'Virgin Islands', AS: 'American Samoa', MP: 'Northern Mariana Islands' }
+export const US_TERRITORIES: Record<string, string> = { PR: 'Puerto Rico', GU: 'Guam', VI: 'Virgin Islands', AS: 'American Samoa', MP: 'Northern Mariana Islands' }
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -188,6 +191,30 @@ export function edrsLicense(raw: string | undefined, prefix: 'FD' | 'EMB'): { va
   return { value: compact, note: note('warn', `Should be ${prefix} followed by a number`) }
 }
 
+/** EDRS's Suffix list. */
+export const EDRS_SUFFIXES = ['JR', 'SR', 'II', 'III', 'IV', 'V'] as const
+
+/** "Jr." / "jr" / "2nd" → "JR" / "II"; '' if it isn't a suffix. */
+export function normalizeSuffix(raw: string | undefined): string {
+  const t = (raw ?? '').trim().replace(/\./g, '').toUpperCase()
+  const map: Record<string, string> = { JR: 'JR', SR: 'SR', II: 'II', '2ND': 'II', III: 'III', '3RD': 'III', IV: 'IV', '4TH': 'IV', V: 'V' }
+  return map[t] ?? ''
+}
+
+/**
+ * Pulls a suffix out of a name. Uses the Suffix box when it is filled in; otherwise looks for one typed on the end of the name
+ * ("CRUZ JR." → CRUZ + JR) so older cases come out right — flagged as a guess so someone confirms it. A lone "V" is never guessed (could be an initial).
+ */
+export function splitSuffix(raw: string | undefined, explicit?: string): { rest: string; suffix: string; inferred: boolean } {
+  const text = (raw ?? '').trim().replace(/\s+/g, ' ')
+  const m = text.match(/(?:^|[\s,])(jr|sr|ii|iii|iv|2nd|3rd|4th)\.?$/i)
+  const stripped = m && m.index !== undefined ? text.slice(0, m.index).trim().replace(/,$/, '') : text
+  const ex = normalizeSuffix(explicit)
+  if (ex) return { rest: m && stripped && normalizeSuffix(m[1]) === ex ? stripped : text, suffix: ex, inferred: false }
+  if (m && stripped) return { rest: stripped, suffix: normalizeSuffix(m[1]), inferred: true }
+  return { rest: text, suffix: '', inferred: false }
+}
+
 /** "123B Main St Apt 4" → { number: '123B', name: 'Main St', unit: '4' }. A best guess — always shown with a "check" note. */
 export function splitStreet(raw: string | undefined): { number: string; name: string; unit: string } {
   let s = (raw ?? '').trim().replace(/\s+/g, ' ')
@@ -208,12 +235,18 @@ export function splitMailing(raw: string | undefined): { street: string; city: s
 }
 
 function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; value: string; notes: EdrsNote[] } {
-  const state = (stateRaw ?? '').trim()
-  const country = (countryRaw ?? '').trim()
+  let state = (stateRaw ?? '').trim()
+  let country = (countryRaw ?? '').trim()
+  // "SAN LUIS POTOSI, Mexico" typed into the one box → state + country
+  const combo = !country && state.match(/^(.+?),\s*(mexico|m[eé]xico|mx|canada|ca-?n)\s*$/i)
+  if (combo) { state = combo[1].trim(); country = /^(mx|m)/i.test(combo[2]) ? 'Mexico' : 'Canada' }
+  const other = !country && state.match(/^other:\s*(.+)$/i)
+  if (other) { country = other[1].trim(); state = '' }
   const us = !country || /^(us|usa|u\.?s\.?a?\.?|united states( of america)?)$/i.test(country)
   if (us) {
     if (!state) return { type: '', value: '', notes: [note('warn', 'Missing — type UNK if it truly is not known')] }
     if (/^(unk|unknown|unk\.)$/i.test(state)) return { type: 'US State', value: 'Unknown', notes: [] }
+    if (/^(us|usa|u\.?s\.?a?\.?|united states( of america)?)$/i.test(state)) return { type: 'US State', value: '', notes: [note('warn', 'Pick the state — for example California')] }
     const abbr = state.toUpperCase().replace(/\./g, '')
     const byAbbr = US_STATES[abbr]
     const byName = Object.values(US_STATES).find((n) => n.toLowerCase() === state.toLowerCase())
@@ -221,11 +254,26 @@ function placeFrom(stateRaw?: string, countryRaw?: string): { type: string; valu
     const terr = US_TERRITORIES[abbr] ?? Object.values(US_TERRITORIES).find((n) => n.toLowerCase() === state.toLowerCase())
     if (terr) return { type: 'US Territory', value: terr, notes: [] }
     if (/^mexico$/i.test(state)) return { type: 'Mexican State', value: 'Unknown', notes: [] }
+    const mx = matchPlace(state, MEXICAN_STATES)
+    if (mx) return { type: 'Mexican State', value: mx.name, notes: [note('info', `"${state}" is a Mexican state — read as "${mx.name}"; confirm`)] }
     return { type: 'US State', value: state, notes: [note('warn', `"${state}" isn't a recognised US state — check the type and spelling`)] }
   }
-  if (/^m[eé]xico$/i.test(country)) return { type: 'Mexican State', value: state || 'Unknown', notes: [] }
-  if (/^canada$/i.test(country)) return { type: 'Canadian Province', value: state || 'Unknown', notes: [] }
+  const listed = (list: readonly string[], type: string) => {
+    if (!state || /^unk/i.test(state)) return { type, value: 'Unknown', notes: [] as EdrsNote[] }
+    const m = matchPlace(state, list)
+    if (!m) return { type, value: state, notes: [note('warn', `"${state}" isn't on EDRS's ${type} list — check the spelling`)] }
+    return { type, value: m.name, notes: m.exact ? [] : [note('info', `Read "${state}" as "${m.name}" — confirm`)] }
+  }
+  if (/^m[eé]xico$/i.test(country)) return listed(MEXICAN_STATES, 'Mexican State')
+  if (/^canada$/i.test(country)) return listed(CANADIAN_PROVINCES, 'Canadian Province')
   return { type: 'Other Country', value: country, notes: [note('info', 'Pick the country with the magnifying-glass browser in EDRS')] }
+}
+
+/** True when a typed state/country is outside the US (so zip codes and counties don't follow US rules). */
+export function isForeignPlace(stateRaw?: string): boolean {
+  if (!(stateRaw ?? '').trim()) return false
+  const t = placeFrom(stateRaw).type
+  return t !== 'US State' && t !== 'US Territory' && t !== ''
 }
 
 // ---------------------------------------------------------------------------
@@ -273,14 +321,22 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         namePart('middleName', '2', 'MIDDLE', 'decedent', 'decedent', c.decedent.middleName, { dash: true })
         break
       case 'lastName':
-        namePart('lastName', '3', 'LAST NAME', undefined, 'decedent', /^unknown$/i.test(c.decedent.lastName) ? '' : c.decedent.lastName, { need: 'error' })
+        namePart('lastName', '3', 'LAST NAME', undefined, 'decedent', /^unknown$/i.test(c.decedent.lastName) ? '' : splitSuffix(c.decedent.lastName, vs.decedentSuffix).rest, { need: 'error' })
         if (/^unknown$/i.test(c.decedent.lastName)) rows[rows.length - 1].notes.push(note('error', 'Placeholder name from First Call — enter the legal last name'))
         break
+      case 'suffix': {
+        const s = splitSuffix(c.decedent.lastName, vs.decedentSuffix)
+        add('suffix', '3', 'SUFFIX', 'decedent', s.suffix, s.inferred ? [note('warn', `Read "${s.suffix}" from the end of the last name ("${c.decedent.lastName}") — confirm, or pick it in the Suffix box on the Vital Sheet`)] : [], { hint: 'beside the last name', hideWhenEmpty: true })
+        break
+      }
       case 'aka': {
-        const a = splitName(vs.alsoKnownAs)
+        // No AKA typed: a two-surname name (PERALTA GARCIA) is usually also known by the first name and first surname.
+        const surnames = splitSuffix(c.decedent.lastName, vs.decedentSuffix).rest.trim().split(/\s+/).filter(Boolean)
+        const guess = !vs.alsoKnownAs?.trim() && surnames.length >= 2 && !/^unknown$/i.test(c.decedent.firstName) ? `${c.decedent.firstName.trim().split(/\s+/)[0]} ${surnames[0]}` : ''
+        const a = splitName(vs.alsoKnownAs || guess)
         for (const [part, label] of [['first', 'AKA FIRST NAME'], ['middle', 'AKA MIDDLE NAME'], ['last', 'AKA LAST NAME']] as const) {
           const r = edrsName(a[part])
-          add(`aka-${part}`, '', label, 'decedent', r.value, [r.note, part === 'first' && vs.alsoKnownAs ? note('info', 'Only one AKA fits on the certificate; more need an amendment later') : undefined], { hideWhenEmpty: true })
+          add(`aka-${part}`, '', label, 'decedent', r.value, [r.note, part === 'first' && vs.alsoKnownAs ? note('info', 'Only one AKA fits on the certificate; more need an amendment later') : undefined, part === 'first' && guess ? note('warn', `Filled in as "${guess}" (first name + first surname). Delete it in EDRS, or type the real AKA in the Vital Sheet, if that is wrong`) : undefined], { hideWhenEmpty: true })
         }
         break
       }
@@ -288,7 +344,11 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         add('dob', '4', 'DATE OF BIRTH', 'decedent', plain, plain ? [] : [note('error', 'Required — use -- for an unknown day or month, UNK if nothing is known')])
         break
       case 'age':
-        add('age', '5', 'AGE', 'decedent', computeAge(c), [note('info', 'EDRS works this out from items 4 and 7 — only type it if the age is under a day or the birth date is partial')])
+      {
+        const ap = computeAgeParts(c)
+        add('age-type', '5', 'AGE UNIT', 'decedent', ap?.unit ?? '', [], { hint: 'years / months / days', hideWhenEmpty: true })
+        add('age', '5', 'AGE', 'decedent', ap?.value ?? computeAge(c), ap ? [] : [note('info', 'Needs the birth date and the date of death to work out the age')])
+      }
         break
       case 'ageHours':
       case 'ageDays':
@@ -309,7 +369,7 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
       case 'ssn': {
         const r = edrsSsn(ssnRaw ?? undefined)
         add('ssn', '10', 'SOCIAL SECURITY NUMBER', 'decedent', r.value,
-          [r.note, ctx.ssn === null ? note('warn', 'None on file — enter UNK if unknown, or NONE if they never had one') : undefined, note('info', 'After entering it, request SSN verification (Certificate menu) at least once')], { sensitive: true })
+          [r.note, ctx.ssn === null ? note('info', 'EDRS requires this, but it can be added later — come back when the family has it (UNK if unknown, NONE if they never had one)') : undefined, note('info', 'After entering it, request SSN verification (Certificate menu) at least once')], { sensitive: true })
         break
       }
       case 'armedForces':
@@ -374,8 +434,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
             : /^(\d+|unk|-)$/i.test(plain.trim()) ? [] : [note('warn', 'Must be a number, UNK, or a dash')])
         break
       case 'residence': {
-        const a = splitStreet(plain)
-        const check = plain ? note('info', `Split from "${plain}" — check`) : undefined
+        // Entered in separate boxes → use them as typed; older cases are split from the single line (and flagged to check).
+        const sep = vs.residenceStreetNumber !== undefined || vs.residenceStreetName !== undefined || vs.residenceUnit !== undefined
+        const a = sep ? { number: (vs.residenceStreetNumber ?? '').trim(), name: (vs.residenceStreetName ?? '').trim(), unit: (vs.residenceUnit ?? '').trim() } : splitStreet(plain)
+        const check = plain && !sep ? note('info', `Split from "${plain}" — check`) : undefined
         add('res-number', '20', "DECEDENT'S RESIDENCE", 'residence', a.number, [check], { hint: 'street number', hideWhenEmpty: true })
         add('res-name', '20', "DECEDENT'S RESIDENCE", 'residence', a.name, a.name ? [] : [note('error', 'Street name is required — enter UNK if unknown')], { hint: 'street name' })
         add('res-unit', '20', "DECEDENT'S RESIDENCE", 'residence', a.unit, [], { hint: 'apt / suite / unit', hideWhenEmpty: true })
@@ -387,10 +449,10 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         break
       }
       case 'residenceCounty':
-        add('res-county', '22', 'COUNTY/PROVINCE', 'residence', plain, plain ? [] : [note('error', 'Required — choose from the county list, UNK if unknown')])
+        add('res-county', '22', 'COUNTY/PROVINCE', 'residence', plain, plain ? [] : isForeignPlace(vs.residenceState) ? [note('info', 'Outside the US — the province or municipality, or UNK')] : [note('error', 'Required — choose from the county list, UNK if unknown')])
         break
       case 'residenceZip':
-        add('res-zip', '23', 'ZIP CODE', 'residence', plain, !plain ? [note('error', 'Required — a dash if there is none')] : /^\d{5}(-\d{4})?$/.test(plain.trim()) ? [] : [note('warn', 'US zip codes are 5 digits, optionally +4')])
+        add('res-zip', '23', 'ZIP CODE', 'residence', plain, !plain ? [note('error', 'Required — a dash if there is none')] : isForeignPlace(vs.residenceState) || /^\d{5}(-\d{4})?$/.test(plain.trim()) ? [] : [note('warn', 'US zip codes are 5 digits, optionally +4')])
         break
       case 'yearsInCounty':
         add('res-years', '24', 'YEARS IN COUNTY', 'residence', plain,
@@ -414,7 +476,8 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         }
         break
       case 'informantName': {
-        const n = splitName(vs.informantName)
+        const infSfx = splitSuffix(vs.informantName, vs.informantSuffix)
+        const n = splitName(infSfx.rest)
         const single = !!vs.informantName && !n.last
         const [first, middle, last] = single ? ['-', '-', n.first] : [n.first, n.middle, n.last]
         const empty = !vs.informantName
@@ -423,6 +486,11 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
           add(`inf-${part}`, '26', label, 'family', r.value || (empty || !dash ? '' : '-'),
             [r.note, !r.value && empty && part !== 'middle' ? note('error', 'Required — the person giving the information') : undefined, single && part !== 'last' ? note('info', 'One name only — EDRS wants it in Last, with dashes before it') : undefined])
         }
+        break
+      }
+      case 'informantSuffix': {
+        const s = splitSuffix(vs.informantName, vs.informantSuffix)
+        add('inf-suffix', '26', 'SUFFIX', 'family', s.suffix, s.inferred ? [note('warn', `Read "${s.suffix}" from the end of the informant's name — confirm`)] : [], { hint: 'informant', hideWhenEmpty: true })
         break
       }
       case 'informantRelationship': {
@@ -459,9 +527,18 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         if (marital.value && SPOUSE_LOCKED.has(marital.value)) {
           add(f.id, number, label, 'family', '-', [note('info', `EDRS fills this with a dash and locks it for "${marital.value}"`)], { hint: part === 'first' ? undefined : 'spouse' })
         } else {
-          namePart(f.id, number, label, part === 'first' ? undefined : 'spouse', 'family', s[part], part === 'middle' ? { dash: true } : marital.value ? { need: 'warn' } : {})
+          namePart(f.id, number, label, part === 'first' ? undefined : 'spouse', 'family', part === 'last' ? splitSuffix(s.last, vs.spouseSuffix).rest : s[part], part === 'middle' ? { dash: true } : marital.value ? { need: 'warn' } : {})
           if (part === 'last' && s.last) rows[rows.length - 1].notes.push(note('info', "Spouse's birth name — the name before marriage"))
         }
+        break
+      }
+      case 'spouseSuffix':
+      case 'fatherSuffix':
+      case 'motherSuffix': {
+        const who = f.id.replace('Suffix', '') as 'spouse' | 'father' | 'mother'
+        if (who === 'spouse' && marital.value && SPOUSE_LOCKED.has(marital.value)) break
+        const s = splitSuffix(resolveName(vs, who).last, vs[`${who}Suffix` as 'spouseSuffix' | 'fatherSuffix' | 'motherSuffix'])
+        add(f.id, f.number || ({ spouse: '30', father: '33', mother: '37' })[who], 'SUFFIX', 'family', s.suffix, s.inferred ? [note('warn', `Read "${s.suffix}" from the end of the ${who}'s last name — confirm`)] : [], { hint: who, hideWhenEmpty: true })
         break
       }
       case 'fatherFirst':
@@ -474,7 +551,7 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         const n = resolveName(vs, who)
         const part = f.id.endsWith('First') ? 'first' : f.id.endsWith('Middle') ? 'middle' : 'last'
         const label = part === 'first' ? (who === 'father' ? 'NAME OF FATHER/PARENT' : 'NAME OF MOTHER/PARENT') : part === 'middle' ? 'MIDDLE' : who === 'mother' ? 'LAST (BIRTH) NAME' : 'LAST'
-        namePart(f.id, f.number, label, part === 'first' ? undefined : who, 'family', n[part], part === 'middle' ? { dash: true } : { need: 'warn', unk: true })
+        namePart(f.id, f.number, label, part === 'first' ? undefined : who, 'family', part === 'last' ? splitSuffix(n.last, vs[`${who}Suffix` as 'fatherSuffix' | 'motherSuffix']).rest : n[part], part === 'middle' ? { dash: true } : { need: 'warn', unk: true })
         if (who === 'mother' && part === 'last' && n.last) rows[rows.length - 1].notes.push(note('info', "Her birth name — the name before any marriage"))
         break
       }
@@ -485,11 +562,36 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         placeRows('mother-birth', '38', "MOTHER/PARENT'S BIRTH STATE/COUNTRY", undefined, 'family', vs.motherBirthState, undefined)
         break
       case 'dispositionDate':
-        add('dispositionDate', '39', 'DATE OF DISPOSITION', 'office', plain, plain ? [] : [note('error', 'Required — a dash only if it is a pending coroner case')])
+        add('dispositionDate', '39', 'DATE OF DISPOSITION', 'office', plain, plain ? [] : [note('info', 'Not known yet? EDRS lets you add this later — Casillas OS will remind you after the service. A dash only for a pending coroner case')])
         break
       case 'finalDisposition':
-        add('finalDisposition', '40', 'PLACE OF FINAL DISPOSITION', 'office', plain, plain ? [] : [note('error', 'Required — a name or a complete address; a dash only for a pending coroner case')])
+        add('finalDisposition', '40', 'PLACE OF FINAL DISPOSITION', 'office', plain, plain ? [] : [note('info', 'Not known yet? EDRS lets you add this later — Casillas OS will remind you after the service')], { hint: 'name' })
         break
+      case 'dispositionAddress': {
+        // EDRS splits the place's street into number / name / unit, like the residence.
+        const a = splitStreet(plain)
+        const check = plain ? note('info', `Split from "${plain}" — check`) : undefined
+        const missing = !plain && !!vs.placeOfFinalDisposition && vs.placeOfFinalDisposition.trim() !== '-'
+        add('disp-number', '40', 'PLACE OF FINAL DISPOSITION', 'office', a.number, [check], { hint: 'street number', hideWhenEmpty: true })
+        add('disp-name', '40', 'PLACE OF FINAL DISPOSITION', 'office', a.name, missing ? [note('warn', 'No street address yet — EDRS has boxes for the street, city and zip of this place')] : [], { hint: 'street name', hideWhenEmpty: !missing })
+        add('disp-unit', '40', 'PLACE OF FINAL DISPOSITION', 'office', a.unit, [], { hint: 'apt / suite / unit', hideWhenEmpty: true })
+        break
+      }
+      case 'dispositionCity': {
+        const r = edrsName(plain)
+        add('disp-city', '40', 'PLACE OF FINAL DISPOSITION', 'office', r.value, [r.note], { hint: 'city', hideWhenEmpty: true })
+        break
+      }
+      case 'dispositionZip': {
+        const digits = (plain ?? '').replace(/\D/g, '')
+        if (isForeignPlace(vs.dispositionState)) {
+          add('disp-zip5', '40', 'PLACE OF FINAL DISPOSITION', 'office', (plain ?? '').trim(), [note('info', 'Outside the US — enter the postal code as written, or leave it blank if EDRS lets you')], { hint: 'postal code', hideWhenEmpty: true })
+          break
+        }
+        add('disp-zip5', '40', 'PLACE OF FINAL DISPOSITION', 'office', digits.slice(0, 5), digits && digits.length < 5 ? [note('warn', 'US zip codes are 5 digits')] : [], { hint: 'zip code', hideWhenEmpty: true })
+        if (digits.length > 5) add('disp-zip4', '40', 'PLACE OF FINAL DISPOSITION', 'office', digits.slice(5, 9), [], { hint: 'zip +4' })
+        break
+      }
       case 'dispositionState':
         // EDRS asks for the state/country of the place of final disposition as an "Address Type" beside item 40.
         placeRows('disp', '40', 'PLACE OF FINAL DISPOSITION — ADDRESS TYPE', 'state / country', 'office', vs.dispositionState, undefined)
@@ -510,7 +612,8 @@ export function buildEdrsRows(caseIn: FuneralCase, ctx: EdrsContext = {}): EdrsR
         const emb = vs.embalmed
         add('embalmed', '42', 'EMBALMED?', 'office', emb === 'yes' ? 'Yes' : emb === 'no' ? 'No' : '', emb ? [emb === 'no' ? note('info', 'EDRS fills in NOT EMBALMED and a dash for item 43') : undefined] : [note('error', 'Required')])
         if (emb === 'yes') {
-          add('embalmer-name', '42', 'EMBALMER', 'office', vs.embalmerName ?? '', vs.embalmerName ? [] : [note('error', 'Required — search the embalmer in EDRS by name or license')], { hint: 'name' })
+          const embName = vs.embalmerName?.trim() || ctx.embalmerName || ''
+          add('embalmer-name', '42', 'EMBALMER', 'office', embName, embName ? (vs.embalmerName?.trim() ? [] : [note('info', 'Taken from the embalmer assigned to this case — after it is typed, press the magnifying glass in EDRS to pick them and fill the license')]) : [note('error', 'Required — search the embalmer in EDRS by name or license')], { hint: 'name' })
           const lic = edrsLicense(vs.embalmerLicense, 'EMB')
           add('embalmer-license', '43', "EMBALMER'S LICENSE NUMBER", 'office', lic.value, lic.value ? [lic.note] : [note('error', 'Required')])
         }

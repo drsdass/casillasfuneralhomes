@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { RecentCases } from '@/components/cases/RecentCases'
 import { useSession } from '@/context/SessionContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
-import { Card, SectionHeading, CaseStatusBadge } from '@/components/ui/Primitives'
+import { Card, SectionHeading, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { Link } from 'react-router-dom'
 import { AlertCircle, CalendarClock, CheckCircle2, Clock, HeartHandshake } from 'lucide-react'
 import { format, isToday, parseISO } from 'date-fns'
@@ -10,6 +11,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
 import TodayHome from '@/pages/TodayHome'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 
 export default function Dashboard() {
   const { easy } = useEasyView()
@@ -19,7 +21,7 @@ export default function Dashboard() {
 function FullDashboard() {
   const { activeLocationId, accessibleLocations, currentUser } = useSession()
   const { t } = useLanguage()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
+  const isAllLocations = !!currentUser // every location of the company is shown to everyone
 
   const { data: cases = [] } = useQuery({
     queryKey: ['cases', isAllLocations ? 'all' : activeLocationId],
@@ -34,7 +36,7 @@ function FullDashboard() {
 
   if (!currentUser) return null
 
-  const activeCases = cases.filter((c) => c.status !== 'completed')
+  const activeCases = cases.filter((c) => !isCaseDone(c) && !isPreNeed(c))
   const openCount = activeCases.length
   const scheduledToday = events.filter((e) => isToday(parseISO(e.start)))
   const needsAttention = cases.filter((c) => c.status === 'first_call' || c.status === 'arrangement_pending')
@@ -59,7 +61,7 @@ function FullDashboard() {
   const locationName = (id: string) => accessibleLocations.find((l) => l.id === id)?.name ?? id
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_240px] gap-6 items-start">
     <div>
       <SectionHeading
         title={`${t('dashboard.welcomeBack')}, ${currentUser.name.split(' ')[0]}`}
@@ -91,6 +93,7 @@ function FullDashboard() {
         </Card>
       </div>
 
+      <RecentCases cases={cases} userId={currentUser.id} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Whiteboard */}
         <Card className="lg:col-span-2 p-4">
@@ -113,10 +116,10 @@ function FullDashboard() {
                   </div>
                   <div className="text-xs text-slate-500">
                     {isAllLocations && `${locationName(c.locationId)} · `}
-                    {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}
+                    {t(`enums.dispositionType.${c.disposition}`)} {c.serviceDate && `· ${format(parseISO(c.serviceDate), 'MMM d, HH:mm')}`}
                   </div>
                 </div>
-                <CaseStatusBadge status={c.status} />
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
               </Link>
             ))}
             {activeCases.length === 0 && (
@@ -136,7 +139,7 @@ function FullDashboard() {
               .sort((a, b) => a.start.localeCompare(b.start))
               .map((e) => (
                 <div key={e.id} className="flex gap-3 text-sm">
-                  <div className="w-16 shrink-0 text-slate-500">{format(parseISO(e.start), 'h:mm a')}</div>
+                  <div className="w-16 shrink-0 text-slate-500">{format(parseISO(e.start), 'HH:mm')}</div>
                   <div>
                     <div className="font-medium text-slate-800">{e.title}</div>
                     <div className="text-xs text-slate-500 capitalize">{t(`enums.eventType.${e.type}`)} {e.location && `· ${e.location}`}</div>
@@ -157,7 +160,7 @@ function FullDashboard() {
             {needsAttention.map((c) => (
               <Link to={`/cases/${c.id}`} key={c.id} className="flex items-center justify-between text-sm px-3 py-2 rounded-md hover:bg-slate-50">
                 <span>{c.decedent.firstName} {c.decedent.lastName} — {c.caseNumber}</span>
-                <CaseStatusBadge status={c.status} />
+                <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
               </Link>
             ))}
           </div>

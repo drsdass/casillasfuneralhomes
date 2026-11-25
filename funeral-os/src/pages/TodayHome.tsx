@@ -7,8 +7,11 @@ import { useSession } from '@/context/SessionContext'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { api } from '@/lib/api'
 import { canViewAllLocations } from '@/lib/permissions'
-import { Card, CaseStatusBadge } from '@/components/ui/Primitives'
+import { Card, CaseStatusBadge, CustodyChip } from '@/components/ui/Primitives'
 import { FirstDayTour } from '@/components/ui/FirstDayTour'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
+import { useWorkflowFor } from '@/lib/useWorkflow'
+import { StatusLight } from '@/components/workflow/WorkflowTrack'
 
 /** The Easy view home: a few big buttons and what needs attention today — nothing else. */
 export default function TodayHome() {
@@ -22,7 +25,8 @@ export default function TodayHome() {
   const tourKey = `casillas_tour_seen_${currentUser?.id ?? ''}`
   const [tour, setTour] = useState(() => { try { return !!currentUser && localStorage.getItem(tourKey) !== '1' } catch { return false } })
   const closeTour = () => { setTour(false); try { localStorage.setItem(tourKey, '1') } catch { /* ignore */ } }
-  const all = currentUser ? canViewAllLocations(currentUser.role) : false
+  const workflowFor = useWorkflowFor()
+  const all = !!currentUser // every location of the company is shown to everyone
 
   const { data: cases = [] } = useQuery({ queryKey: ['cases', all ? 'all' : activeLocationId], queryFn: () => api.getCases(all ? undefined : activeLocationId) })
   const { data: events = [] } = useQuery({ queryKey: ['events', all ? 'all' : activeLocationId], queryFn: () => api.getCalendarEvents(all ? undefined : activeLocationId) })
@@ -50,9 +54,11 @@ export default function TodayHome() {
   if (!currentUser) return null
   const hour = new Date().getHours()
   const greeting = hour < 12 ? tx('Good morning', 'Buenos días') : hour < 18 ? tx('Good afternoon', 'Buenas tardes') : tx('Good evening', 'Buenas noches')
-  const open = cases.filter((c) => c.status !== 'completed')
+  const open = cases.filter((c) => !isCaseDone(c) && !isPreNeed(c))
   const mine = open.filter((c) => c.assignedDirectorId === currentUser.id || c.assignedEmbalmerId === currentUser.id)
   const list = (mine.length ? mine : open).slice(0, 8)
+  const needs = open.map((c) => ({ c, wf: workflowFor(c) })).filter((x) => !x.wf.allDone && !x.c.caseNumber.startsWith('PRACTICE-'))
+    .sort((a, b) => b.wf.urgentCount - a.wf.urgentCount || b.wf.missing.length - a.wf.missing.length).slice(0, 6)
   const today = events.filter((e) => isToday(parseISO(e.start))).sort((a, b) => a.start.localeCompare(b.start))
   const big = 'flex flex-col items-center justify-center gap-2 rounded-xl border-2 px-4 py-6 text-center text-lg font-semibold transition'
 
@@ -76,13 +82,33 @@ export default function TodayHome() {
         </Link>
       </div>
 
+      {needs.length > 0 && (
+        <Card className="p-5 border-2 border-red-200">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-3"><span className="inline-block h-3 w-3 rounded-full bg-red-600 wf-flash wf-blink" /> {tx('Needs attention', 'Necesita atención')}</h2>
+          <div className="space-y-2">
+            {needs.map(({ c, wf }) => {
+              const first = wf.missing.find((m) => m.urgent) ?? wf.missing[0]
+              return (
+                <Link key={c.id} to={`/cases/${c.id}`} className={`flex items-center gap-3 rounded-lg border px-4 py-3 hover:bg-slate-50 ${wf.urgentCount ? 'border-red-300 bg-red-50/50' : 'border-slate-200'}`}>
+                  <StatusLight item={first} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName} <span className="text-sm font-normal text-slate-500">· {wf.missing.length} {tx('missing', 'faltan')}</span></div>
+                    <div className="text-sm text-slate-600 truncate">{first.label}</div>
+                  </div>
+                  <span className="shrink-0 text-[#3b4a35] font-medium">{tx('Open', 'Abrir')} →</span>
+                </Link>)
+            })}
+          </div>
+        </Card>
+      )}
+
       <Card className="p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-3"><CalendarClock size={20} /> {tx("Today's services", 'Servicios de hoy')}</h2>
         {today.length === 0
           ? <p className="text-slate-500 py-2">{tx('Nothing scheduled today.', 'Nada programado hoy.')}</p>
           : <div className="space-y-2">{today.map((e) => (
               <div key={e.id} className="flex gap-4 text-base">
-                <div className="w-24 shrink-0 text-slate-500">{format(parseISO(e.start), 'h:mm a')}</div>
+                <div className="w-24 shrink-0 text-slate-500">{format(parseISO(e.start), 'HH:mm')}</div>
                 <div><span className="font-medium text-slate-900">{e.title}</span>{e.location && <span className="text-slate-500"> · {e.location}</span>}</div>
               </div>))}</div>}
       </Card>
@@ -96,9 +122,9 @@ export default function TodayHome() {
                 <div className="font-medium text-slate-900 truncate">{c.decedent.firstName} {c.decedent.lastName}
                   {c.caseNumber.startsWith('PRACTICE-') && <span className="ml-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">{tx('PRACTICE', 'PRÁCTICA')}</span>}
                 </div>
-                <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, h:mm a')}`}</div>
+                <div className="text-sm text-slate-500">{c.caseNumber}{c.serviceDate && ` · ${format(parseISO(c.serviceDate), 'MMM d, HH:mm')}`}</div>
               </div>
-              <CaseStatusBadge status={c.status} />
+              <span className="inline-flex flex-wrap items-center gap-1.5"><CaseStatusBadge status={c.status} /><CustodyChip stage={c.custodyStage} preNeed={c.type === 'pre_need'} /></span>
             </Link>))}
           {list.length === 0 && <p className="text-slate-500 py-2">{tx('No open cases.', 'No hay casos abiertos.')}</p>}
           {open.length > list.length && <Link to="/cases" className="block text-center text-[#3b4a35] font-medium pt-2 hover:underline">{tx(`See all ${open.length} cases`, `Ver los ${open.length} casos`)}</Link>}

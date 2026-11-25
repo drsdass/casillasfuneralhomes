@@ -1,11 +1,20 @@
+import { BOARD_DISP_OPTIONS } from '@/lib/boardDisp'
+import { DateTime24, Time24 } from '../../components/ui/DateTime24'
+import { CaseEventsPanel } from '../../components/cases/CaseEventsPanel'
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/context/SessionContext'
+import { LocationPicker, useDefaultLocation } from '@/components/ui/LocationPicker'
 import { api } from '@/lib/api'
+import { quickQuotes } from '@/lib/quickQuotes'
+import { quotes as caseQuotes } from '@/lib/quotes'
 import { getErrorMessage } from '@/lib/errors'
 import { Card, SectionHeading } from '@/components/ui/Primitives'
 import { ArrowLeft, Sparkles } from 'lucide-react'
+import { DuplicateWarning, useDuplicates } from '@/components/cases/DuplicateWarning'
+import { findVenueConflicts } from '@/lib/venue'
+import { format, parseISO } from 'date-fns'
 import type { CaseType, DispositionType, CaseStatus, ExtractedCaseData } from '@/types'
 
 const typeOptions: { value: CaseType; label: string }[] = [
@@ -52,6 +61,9 @@ export default function CaseForm() {
   const location = useLocation()
   const { activeLocationId, currentUser } = useSession()
   const queryClient = useQueryClient()
+  const preNeedStart = !isEdit && new URLSearchParams(location.search).get('type') === 'pre_need'
+  // A quote is a pre-need plan started before anyone has passed — the patient's name may not be known yet.
+  const quoteStart = !isEdit && new URLSearchParams(location.search).get('quote') === '1'
   const extracted = (location.state as { extracted?: ExtractedCaseData } | null)?.extracted
 
   const { data: existing } = useQuery({
@@ -65,21 +77,32 @@ export default function CaseForm() {
     enabled: !!existing?.familyId,
   })
 
+  // "Make this a case" from a Quick Quote: start from its location and contact, and carry its prices over as the case's first quote.
+  const fromQuoteId = !isEdit ? new URLSearchParams(location.search).get('fromQuote') : null
+  const { data: fromQuote } = useQuery({ queryKey: ['quick-quote', fromQuoteId], queryFn: () => quickQuotes.get(fromQuoteId!), enabled: !!fromQuoteId })
+
+  const defaultLoc = useDefaultLocation()
+  const [chosenLocationId, setChosenLocationId] = useState(existing?.locationId ?? '')
+  const locId = chosenLocationId || defaultLoc
   const [caseNumber, setCaseNumber] = useState(existing?.caseNumber ?? '')
   const [firstName, setFirstName] = useState(existing?.decedent.firstName ?? extracted?.decedentFirstName ?? '')
   const [middleName, setMiddleName] = useState(existing?.decedent.middleName ?? '')
   const [lastName, setLastName] = useState(existing?.decedent.lastName ?? extracted?.decedentLastName ?? '')
   const [dateOfDeath, setDateOfDeath] = useState(existing?.decedent.dateOfDeath ?? extracted?.dateOfDeath ?? '')
   const [placeOfDeath, setPlaceOfDeath] = useState(existing?.decedent.placeOfDeath ?? extracted?.placeOfDeath ?? '')
-  const [type, setType] = useState<CaseType>(existing?.type ?? extracted?.type ?? 'at_need')
-  const [status, setStatus] = useState<CaseStatus>(existing?.status ?? 'first_call')
+  const [type, setType] = useState<CaseType>(existing?.type ?? (preNeedStart ? 'pre_need' : extracted?.type) ?? 'at_need')
+  const [status, setStatus] = useState<CaseStatus>(existing?.status ?? (preNeedStart ? 'arrangement_pending' : 'first_call'))
   const [disposition, setDisposition] = useState<DispositionType>(existing?.disposition ?? extracted?.disposition ?? 'undetermined')
+  const [boardDisp, setBoardDisp] = useState<string>(existing?.boardDisp ?? '')
   const [familyId, setFamilyId] = useState<string | undefined>(existing?.familyId)
   const [familySearch, setFamilySearch] = useState('')
   const [familySearchResults, setFamilySearchResults] = useState<Awaited<ReturnType<typeof api.searchFamilies>>>([])
   const [selectedFamilyName, setSelectedFamilyName] = useState<string | null>(null)
   const [visitationDate, setVisitationDate] = useState(isoToLocalInput(existing?.visitationDate))
   const [visitationLocation, setVisitationLocation] = useState(existing?.visitationLocation ?? '')
+  const [visitationEndTime, setVisitationEndTime] = useState(isoToLocalInput(existing?.visitationEnd).slice(11, 16))
+  // All-night visitation: the end time is on the day after the start.
+  const [visitationOvernight, setVisitationOvernight] = useState(() => { const s = isoToLocalInput(existing?.visitationDate).slice(0, 10), e = isoToLocalInput(existing?.visitationEnd).slice(0, 10); return !!s && !!e && e > s })
   const [serviceDate, setServiceDate] = useState(isoToLocalInput(existing?.serviceDate))
   const [serviceLocation, setServiceLocation] = useState(existing?.serviceLocation ?? '')
   const [contactName, setContactName] = useState(existing?.contacts[0]?.name ?? extracted?.contactName ?? '')
@@ -100,8 +123,17 @@ export default function CaseForm() {
   }, [familySearch, selectedFamilyName])
 
   useEffect(() => {
+    if (!fromQuote) return
+    setChosenLocationId((v) => v || fromQuote.locationId)
+    setContactName((v) => v || fromQuote.forName)
+    setContactPhone((v) => v || fromQuote.contactPhone || '')
+    setContactEmail((v) => v || fromQuote.contactEmail || '')
+  }, [fromQuote])
+
+  useEffect(() => {
     if (!existing) return
     setCaseNumber(existing.caseNumber)
+    setChosenLocationId(existing.locationId)
     setFirstName(existing.decedent.firstName)
     setMiddleName(existing.decedent.middleName ?? '')
     setLastName(existing.decedent.lastName)
@@ -110,8 +142,11 @@ export default function CaseForm() {
     setType(existing.type)
     setStatus(existing.status)
     setDisposition(existing.disposition)
+    setBoardDisp(existing.boardDisp ?? '')
     setVisitationDate(isoToLocalInput(existing.visitationDate))
     setVisitationLocation(existing.visitationLocation ?? '')
+    setVisitationEndTime(isoToLocalInput(existing.visitationEnd).slice(11, 16))
+    { const s = isoToLocalInput(existing.visitationDate).slice(0, 10), e = isoToLocalInput(existing.visitationEnd).slice(0, 10); setVisitationOvernight(!!s && !!e && e > s) }
     setServiceDate(isoToLocalInput(existing.serviceDate))
     setServiceLocation(existing.serviceLocation ?? '')
     setContactName(existing.contacts[0]?.name ?? '')
@@ -120,9 +155,20 @@ export default function CaseForm() {
     setContactEmail(existing.contacts[0]?.email ?? '')
   }, [existing])
 
+  // The end time is a time on the same day as the visitation start.
+  const nextDay = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10) }
+  // All-night with no end time typed: ends the next morning at 8:00 AM (never the 2-hour default).
+  const effEndTime = visitationEndTime || (visitationOvernight ? '08:00' : '')
+  const visitationEndIso = visitationDate && effEndTime ? localInputToIso(`${visitationOvernight ? nextDay(visitationDate.slice(0, 10)) : visitationDate.slice(0, 10)}T${effEndTime}`) : undefined
+
+  const visChanged = !!existing && (visitationDate !== isoToLocalInput(existing.visitationDate) || visitationLocation !== (existing.visitationLocation ?? '') || effEndTime !== isoToLocalInput(existing.visitationEnd).slice(11, 16))
+  const svcChanged = !!existing && (serviceDate !== isoToLocalInput(existing.serviceDate) || serviceLocation !== (existing.serviceLocation ?? ''))
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const colorPalette = ['#3d4f3a', '#8b5e34', '#6b7f4f', '#a8763e', '#2f4a3f']
+      if (quoteStart && !firstName.trim() && !lastName.trim() && !contactName.trim()) throw new Error('Enter the name of the person asking for the quote (or the patient\'s name).')
+      if (visitationEndIso && visitationDate && new Date(visitationEndIso) <= new Date(localInputToIso(visitationDate)!)) throw new Error('The visitation end time has to be after its start time. For an all-night visitation that ends the next day, tick "All-night visitation".')
+      const colorPalette = ['#3d5a80', '#6b7c8f', '#6b88ad', '#8a97a6', '#2f5d7c']
       const contacts = contactName
         ? [{ id: existing?.contacts[0]?.id ?? `c-${Date.now()}`, name: contactName, relationship: contactRelationship, phone: contactPhone, email: contactEmail, isPrimary: true, isAuthorizingAgent: true }]
         : (existing?.contacts ?? [])
@@ -130,25 +176,25 @@ export default function CaseForm() {
       if (isEdit && caseId) {
         return api.updateCase(caseId, {
           caseNumber: caseNumber.trim() || existing?.caseNumber,
-          type, status, disposition,
+          type, status, disposition, boardDisp, locationId: locId,
           decedent: { ...existing?.decedent, firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
           contacts,
           familyId,
-          visitationDate: localInputToIso(visitationDate),
-          visitationLocation: visitationLocation || undefined,
-          serviceDate: localInputToIso(serviceDate),
-          serviceLocation: serviceLocation || undefined,
+          // Only send the visitation / service boxes if they were changed here; otherwise saving this page must not touch the dates and Calendar events set elsewhere.
+          ...(visChanged ? { visitationDate: localInputToIso(visitationDate), visitationEnd: visitationEndIso, visitationLocation: visitationLocation || undefined } : {}),
+          ...(svcChanged ? { serviceDate: localInputToIso(serviceDate), serviceLocation: serviceLocation || undefined } : {}),
         }, currentUser!)
       }
       return api.createCase({
         orgId: currentUser!.orgId,
-        locationId: activeLocationId,
+        locationId: locId,
         caseNumber: `NEW-${Date.now().toString().slice(-6)}`,
-        type, status, disposition,
-        decedent: { firstName, middleName: middleName || undefined, lastName, dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
+        type, status, disposition, boardDisp: boardDisp || undefined,
+        decedent: { firstName: firstName.trim() || (quoteStart ? 'Quote' : firstName), middleName: middleName || undefined, lastName: lastName.trim() || (quoteStart ? (contactName.trim() || 'Family') : lastName), dateOfDeath: dateOfDeath || undefined, placeOfDeath: placeOfDeath || undefined },
         contacts,
         familyId,
         visitationDate: localInputToIso(visitationDate),
+        visitationEnd: visitationEndIso,
         visitationLocation: visitationLocation || undefined,
         serviceDate: localInputToIso(serviceDate),
         serviceLocation: serviceLocation || undefined,
@@ -158,13 +204,34 @@ export default function CaseForm() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['cases'] })
-      if (result) navigate(`/cases/${result.id}`)
+      if (result && fromQuote && !isEdit && !fromQuote.convertedCaseId) {
+        caseQuotes.create(result.id, { name: fromQuote.name || fromQuote.label, packages: fromQuote.packages, lines: fromQuote.lines, tax: fromQuote.tax, credit: fromQuote.credit, validUntil: fromQuote.validUntil, note: fromQuote.note }, currentUser!)
+          .then(() => quickQuotes.update(fromQuote.id, { convertedCaseId: result.id }))
+          .then(() => { queryClient.invalidateQueries({ queryKey: ['quick-quotes'] }); queryClient.invalidateQueries({ queryKey: ['case-quotes', result.id] }) })
+          .catch(() => {})
+      }
+      if (result) navigate(new URLSearchParams(location.search).get('flow') ? `/cases/${result.id}/guide` : `/cases/${result.id}`)
     },
   })
 
+  const { data: allEvents = [] } = useQuery({ queryKey: ['events', 'venue-check'], queryFn: () => api.getCalendarEvents() })
+  const [venueAck, setVenueAck] = useState(false)
+  const visIso = localInputToIso(visitationDate)
+  const svcIso = localInputToIso(serviceDate)
+  const visEnd = visitationEndIso && visIso && visitationEndIso > visIso ? visitationEndIso : visIso ? new Date(new Date(visIso).getTime() + 2 * 3600e3).toISOString() : undefined
+  const svcEnd = svcIso ? new Date(new Date(svcIso).getTime() + 3600e3).toISOString() : undefined
+  const venueLoc = chosenLocationId || existing?.locationId
+  const venueClashes = [
+    ...findVenueConflicts(allEvents, { start: visIso, end: visEnd, venue: visitationLocation, locationId: venueLoc, caseId }).map((c) => ({ what: 'Visitation', ...c })),
+    ...findVenueConflicts(allEvents, { start: svcIso, end: svcEnd, venue: serviceLocation, locationId: venueLoc, caseId }).map((c) => ({ what: 'Service', ...c })),
+  ]
+  const dupes = useDuplicates({ id: caseId, firstName, lastName, phone: contactPhone })
+  const [dupAck, setDupAck] = useState(false)
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!currentUser) return
+    if (venueClashes.length && !venueAck) return
+    if (!isEdit && dupes.length && !dupAck) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     saveMutation.mutate()
   }
 
@@ -174,7 +241,7 @@ export default function CaseForm() {
         <ArrowLeft size={15} /> {isEdit ? 'Back to case' : 'Back to cases'}
       </Link>
 
-      <SectionHeading title={isEdit ? 'Edit Case' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : 'Enter decedent and case details'} />
+      <SectionHeading title={isEdit ? 'Edit Case' : quoteStart ? 'New Quote' : type === 'pre_need' ? 'New Pre-Need Plan' : 'New Case'} subtitle={isEdit ? existing?.caseNumber : quoteStart ? 'A family wants prices before a first call. Nothing is sent to the Chain of Custody, TV board or Driver screens. When the time comes, tap "Passed away — start First Call" on the quote and everything chosen stays on the file.' : type === 'pre_need' ? 'Planning ahead — the person has not passed away. There is no first call or pickup until they do.' : 'Enter decedent and case details'} />
 
       {extracted && (
         <Card className="max-w-2xl p-4 mb-5 border-[#b3925a]/40 bg-[#b3925a]/5">
@@ -197,11 +264,11 @@ export default function CaseForm() {
 
       <form onSubmit={handleSubmit} className="max-w-2xl">
         <Card className="p-5 mb-5">
-          <h3 className="text-sm font-medium text-slate-800 mb-3">Decedent</h3>
+          <h3 className="text-sm font-medium text-slate-800 mb-3">{quoteStart ? 'Patient (leave blank if the family has not said yet)' : 'Decedent'}</h3>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
               <label className={labelClass}>First Name</label>
-              <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
+              <input required={!quoteStart} value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Middle Name</label>
@@ -209,10 +276,11 @@ export default function CaseForm() {
             </div>
             <div>
               <label className={labelClass}>Last Name</label>
-              <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
+              <input required={!quoteStart} value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          {!isEdit && <DuplicateWarning hits={dupes} ack={dupAck} onAck={setDupAck} />}
+          {type !== 'pre_need' && <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Date of Death</label>
               <input type="date" value={dateOfDeath} onChange={(e) => setDateOfDeath(e.target.value)} className={inputClass} />
@@ -221,11 +289,12 @@ export default function CaseForm() {
               <label className={labelClass}>Place of Death</label>
               <input value={placeOfDeath} onChange={(e) => setPlaceOfDeath(e.target.value)} className={inputClass} />
             </div>
-          </div>
+          </div>}
         </Card>
 
         <Card className="p-5 mb-5">
           <h3 className="text-sm font-medium text-slate-800 mb-3">Case Details</h3>
+          <div className="mb-4"><LocationPicker value={locId} onChange={setChosenLocationId} /></div>
           <div className="mb-4">
             <label className={labelClass}>Case Number</label>
             <input value={caseNumber} onChange={(e) => setCaseNumber(e.target.value)} className={inputClass + ' max-w-xs'} />
@@ -248,6 +317,13 @@ export default function CaseForm() {
               <label className={labelClass}>Disposition</label>
               <select value={disposition} onChange={(e) => setDisposition(e.target.value as DispositionType)} className={inputClass}>
                 {dispositionOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>DISP (shown on the TV Board)</label>
+              <select value={boardDisp} onChange={(e) => setBoardDisp(e.target.value)} className={inputClass}>
+                <option value="">— not set —</option>
+                {BOARD_DISP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
           </div>
@@ -310,11 +386,20 @@ export default function CaseForm() {
 
         <Card className="p-5 mb-5">
           <h3 className="text-sm font-medium text-slate-800 mb-1">Visitation &amp; Service</h3>
-          <p className="text-xs text-slate-400 mb-3">Setting a date here automatically adds (or updates) it on the Calendar — no separate step needed.</p>
+          {isEdit && existing && currentUser && <CaseEventsPanel caseObj={existing} canEdit currentUser={currentUser} />}
+          <p className="text-xs text-slate-400 mb-3">{isEdit ? 'The list above is every visitation and service on the Calendar — add, change or remove them there. The boxes below are only the main visitation and service; leave them alone unless you are changing those.' : 'Setting a date here automatically adds (or updates) it on the Calendar — no separate step needed.'}</p>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className={labelClass}>Visitation Date &amp; Time</label>
-              <input type="datetime-local" value={visitationDate} onChange={(e) => setVisitationDate(e.target.value)} className={inputClass} />
+              <label className={labelClass}>Visitation Date &amp; Start Time (24-hour)</label>
+              <DateTime24 label="Visitation start" value={visitationDate} onChange={setVisitationDate} inputClass={inputClass} />
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs font-medium text-slate-600">Visitation ends (24-hour)</span>
+                <Time24 label="Visitation end" value={visitationEndTime} onChange={setVisitationEndTime} />
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={visitationOvernight} onChange={(e) => { setVisitationOvernight(e.target.checked); if (e.target.checked && !visitationEndTime) setVisitationEndTime('08:00') }} className="h-4 w-4 rounded border-slate-300" />
+                All-night visitation — ends the next day{visitationOvernight && visitationDate && effEndTime ? ` (${new Date(nextDay(visitationDate.slice(0, 10)) + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${effEndTime})` : ''}
+              </label>
             </div>
             <div>
               <label className={labelClass}>Visitation Location</label>
@@ -323,14 +408,25 @@ export default function CaseForm() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Service Date &amp; Time</label>
-              <input type="datetime-local" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} className={inputClass} />
+              <label className={labelClass}>Service Date &amp; Time (24-hour)</label>
+              <DateTime24 label="Service" value={serviceDate} onChange={setServiceDate} inputClass={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Service Location</label>
               <input value={serviceLocation} onChange={(e) => setServiceLocation(e.target.value)} className={inputClass} placeholder="Main Chapel, cemetery, etc." />
             </div>
           </div>
+          {venueClashes.length > 0 && (
+            <div className="mt-4 rounded-md border-2 border-amber-300 bg-amber-50 p-3 text-sm">
+              <div className="font-semibold text-amber-900">That place is already booked at this time</div>
+              <ul className="mt-1 list-disc ml-5 text-amber-950">
+                {venueClashes.map((c, i) => (
+                  <li key={i}>{c.what}: “{c.event.title}” {format(parseISO(c.event.start), 'MMM d, HH:mm')}–{format(parseISO(c.event.end), 'HH:mm')}{c.event.location ? ` at ${c.event.location}` : ''}</li>
+                ))}
+              </ul>
+              <label className="mt-2 flex items-center gap-2 text-amber-950"><input type="checkbox" checked={venueAck} onChange={(e) => setVenueAck(e.target.checked)} /> Book it anyway (a different room, or the family agreed)</label>
+            </div>
+          )}
         </Card>
 
         <Card className="p-5 mb-5">
@@ -375,7 +471,8 @@ export default function CaseForm() {
           </Link>
           <button
             type="submit"
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || !locId || (!isEdit && dupes.length > 0 && !dupAck) || (venueClashes.length > 0 && !venueAck)}
+            title={locId ? undefined : 'Please choose a location first'}
             className="text-sm font-medium bg-[#3b4a35] text-white rounded-md px-4 py-2 hover:bg-[#4d5f45] transition disabled:opacity-60"
           >
             {saveMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Case'}

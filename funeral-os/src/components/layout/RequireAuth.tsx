@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useSession } from '@/context/SessionContext'
-import { isRestrictedToInvoices } from '@/lib/permissions'
+import { canOpenPath } from '@/lib/permissions'
 
 export default function RequireAuth() {
   const { currentUser, loading } = useSession()
@@ -17,9 +17,9 @@ export default function RequireAuth() {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  // staff_member (lowest tier) is confined to the invoices screen — print
-  // and paid/unpaid toggle only. Any other route bounces back there.
-  if (isRestrictedToInvoices(currentUser.role) && location.pathname !== '/invoices') {
+  // staff_member (lowest tier) is confined to Invoices plus the screens the super admin
+  // ticked for that person. Any other route bounces back to Invoices.
+  if (!canOpenPath(currentUser, location.pathname)) {
     return <Navigate to="/invoices" replace />
   }
 

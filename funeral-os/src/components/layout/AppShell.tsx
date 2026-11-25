@@ -3,16 +3,19 @@ import {
   Phone,
   LayoutDashboard, FolderKanban, CalendarDays, Receipt,
   Settings, Building2, ChevronDown, Truck, LogOut, BarChart3, Tv, Mail, Users, MessageCircle,
-  Volume2, VolumeX, X, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell,
+  Music2, Volume2, VolumeX, X, FileText, Users2, MapPin, Menu, Smartphone, Sparkles, LayoutGrid, Bell, BookHeart, CalendarPlus,
 } from 'lucide-react'
 import { useSession } from '@/context/SessionContext'
 import { brandFor } from '@/lib/company'
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { visibleNavKeys } from '@/lib/permissions'
+import { visibleNavKeys, canViewAllLocations } from '@/lib/permissions'
+import { useWorkflowFor } from '@/lib/useWorkflow'
+import { isCaseDone, isPreNeed } from '@/lib/caseDone'
 import { ROLE_LABELS } from '@/types'
 import { playMessageChime, isMessageSoundEnabled, setMessageSoundEnabled } from '@/lib/notificationSound'
+import { HelpButton } from './HelpButton'
 import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useEasyView } from '@/context/EasyViewContext'
@@ -26,13 +29,17 @@ import { BrandLogo } from '@/components/ui/BrandLogo'
 const allNavItems = [
   { key: 'dashboard', to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
   { key: 'cases', to: '/cases', label: 'nav.cases', icon: FolderKanban, end: false },
+  { key: 'quotes', to: '/quotes', label: 'nav.quotes', icon: FileText, end: false },
   { key: 'families', to: '/families', label: 'nav.families', icon: Users2, end: false },
   { key: 'custody', to: '/custody', label: 'nav.custody', icon: Truck, end: false },
   { key: 'driver', to: '/driver', label: 'nav.driver', icon: Smartphone, end: false },
   { key: 'calendar', to: '/calendar', label: 'nav.calendar', icon: CalendarDays, end: false },
   { key: 'staff-schedule', to: '/staff-schedule', label: 'nav.staffSchedule', icon: Users, end: false },
+  { key: 'music', to: '/music', label: 'nav.music', icon: Music2, end: false },
   { key: 'messages', to: '/messages', label: 'nav.messages', icon: MessageCircle, end: false },
   { key: 'inbox', to: '/inbox', label: 'nav.inbox', icon: Mail, end: false },
+  { key: 'obituaries', to: '/obituary-manager', label: 'nav.obituaries', icon: BookHeart, end: false },
+  { key: 'site-events', to: '/site-events', label: 'nav.siteEvents', icon: CalendarPlus, end: false },
   { key: 'financials', to: '/financials', label: 'nav.financials', icon: Receipt, end: false },
   { key: 'reports', to: '/reports', label: 'nav.reports', icon: BarChart3, end: false },
   { key: 'board', to: '/board', label: 'nav.board', icon: Tv, end: false },
@@ -41,11 +48,12 @@ const allNavItems = [
 ]
 
 const NAV_GROUP: Record<string, string> = {
-  cases: 'Cases', families: 'Cases', custody: 'Cases', driver: 'Cases',
-  calendar: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
+  cases: 'Cases', quotes: 'Cases', families: 'Cases', custody: 'Cases', driver: 'Cases',
+  obituaries: 'Cases', 'site-events': 'Cases',
+  calendar: 'Schedule', music: 'Schedule', 'staff-schedule': 'Schedule', messages: 'Schedule', inbox: 'Schedule',
   financials: 'Business', reports: 'Business', board: 'Business', invoices: 'Business', admin: 'Business',
 }
-const EASY_NAV = ['dashboard', 'cases', 'families', 'custody', 'driver', 'calendar', 'messages', 'invoices']
+const EASY_NAV = ['dashboard', 'cases', 'quotes', 'families', 'custody', 'driver', 'calendar', 'music', 'messages', 'invoices']
 
 export default function AppShell() {
   const { easy, toggle: toggleEasy } = useEasyView()
@@ -70,6 +78,13 @@ export default function AppShell() {
     enabled: !!currentUser,
   })
   const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff, enabled: !!currentUser })
+  // Red count on "Cases": how many open cases still have something missing (flashes when any is urgent).
+  const workflowFor = useWorkflowFor()
+  const seesAll = !!currentUser // every location of the company is shown to everyone
+  const { data: navCases = [] } = useQuery({ queryKey: ['cases', seesAll ? 'all' : activeLocationId], queryFn: () => api.getCases(seesAll ? undefined : activeLocationId), enabled: !!currentUser })
+  const needing = navCases.filter((c) => !isCaseDone(c) && !isPreNeed(c) && !c.caseNumber.startsWith('PRACTICE-')).map(workflowFor).filter((w) => !w.allDone)
+  const needCount = needing.length
+  const needUrgent = needing.some((w) => w.urgentCount > 0)
   const unreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
 
   // Ask once for OS-level notification permission — this is what lets a
@@ -135,11 +150,11 @@ export default function AppShell() {
       {/* Phone: dim the page behind the open menu */}
       {menuOpen && <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setMenuOpen(false)} />}
       {/* Sidebar — always visible on a computer; a slide-over drawer on a phone */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`app-side fixed inset-y-0 left-0 z-40 w-64 shrink-0 bg-[#3b4a35] text-slate-100 flex flex-col transition-transform lg:static lg:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
           {!activeOrg || brandFor(activeOrg.name).key === 'casillas' ? (
             <>
-              <BrandLogo on="dark" name={activeOrg?.name} className="h-10 w-auto shrink-0" />
+              <BrandLogo on={/^sanders/i.test(activeOrg?.name ?? '') ? 'white' : 'dark'} name={activeOrg?.name} className="h-10 w-auto shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-lg font-display font-semibold tracking-tight">Casillas OS</div>
                 <div className="text-xs text-slate-300">{activeOrg?.name ?? 'Casillas Funeral Home'}</div>
@@ -147,7 +162,7 @@ export default function AppShell() {
             </>
           ) : (
             <div className="flex-1 min-w-0">
-              <BrandLogo on="dark" name={activeOrg.name} className="h-14 w-auto max-w-full" />
+              <BrandLogo on={/^sanders/i.test(activeOrg?.name ?? '') ? 'white' : 'dark'} name={activeOrg.name} className="h-14 w-auto max-w-full" />
             </div>
           )}
           <button onClick={() => setMenuOpen(false)} className="lg:hidden text-slate-300 hover:text-white" aria-label="Close menu"><X size={20} /></button>
@@ -220,6 +235,11 @@ export default function AppShell() {
             >
               <Icon size={17} />
               <span className="flex-1">{easy && key === 'dashboard' ? (language === 'es' ? 'Hoy' : 'Today') : t(label)}</span>
+              {key === 'cases' && needCount > 0 && (
+                <span title={`${needCount} open case${needCount === 1 ? '' : 's'} with something missing`} className={`text-[10px] font-semibold bg-red-500 text-white rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center ${needUrgent ? 'wf-flash wf-blink' : ''}`}>
+                  {needCount}
+                </span>
+              )}
               {key === 'messages' && unreadCount > 0 && (
                 <span className="text-[10px] font-semibold bg-red-500 text-white rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center">
                   {unreadCount}
@@ -235,7 +255,7 @@ export default function AppShell() {
           <div className="flex items-center gap-3 mb-3">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-              style={{ backgroundColor: currentUser.avatarColor ?? '#b3925a' }}
+              style={{ backgroundColor: currentUser.avatarColor ?? '#5a6f88' }}
             >
               {currentUser.name.split(' ').map((n) => n[0]).join('')}
             </div>
@@ -276,6 +296,7 @@ export default function AppShell() {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <WhoIsOnline />
+            <HelpButton />
             {visibleNavKeys(currentUser).includes('cases') && <VoiceNoteButton />}
             <button
               onClick={toggleEasy}

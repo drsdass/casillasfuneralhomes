@@ -4,8 +4,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#3b4a35",
-  "theme_color": "#3b4a35",
+  "background_color": "#3d5a80",
+  "theme_color": "#3d5a80",
   "icons": [
     {
       "src": "/icon-casillas-192.png",

@@ -1,159 +1,287 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useKeepAwake } from '@/lib/keepAwake'
 import { useSession } from '@/context/SessionContext'
-import { api } from '@/lib/api'
-import { canViewAllLocations } from '@/lib/permissions'
-import { format, parseISO } from 'date-fns'
-import { ArrowLeft, Check, Clock } from 'lucide-react'
-import type { FuneralCase, CalendarEvent, Contract, StaffMember } from '@/types'
+import { CUSTODY_STAGE_LABELS } from '@/types'
+import { loadBoardData, type BoardData, type BoardRowData, type BoardEvent } from '@/lib/tvBoard'
+import { format } from 'date-fns'
+import { boardDay, boardRange, boardClock, casketTypeFromLines } from '@/lib/boardFormat'
+import { boardSplit, boardEventsOf, eventPhase, extraState, FLOWERS_RE, BIRDS_RE, ESCORT_RE, type BoardExtra } from '@/lib/boardDisp'
+import { ArrowLeft, Check, Clock, Printer } from 'lucide-react'
 import { getCompanyName } from '@/lib/company'
 import { BrandLogo } from '@/components/ui/BrandLogo'
+import { shortLocationName } from '@/lib/company'
 
-export default function TvBoard() {
-  const { activeLocationId, currentUser } = useSession()
-  const isAllLocations = currentUser ? canViewAllLocations(currentUser.role) : false
-  const [now, setNow] = useState(new Date())
+/**
+ * Keeps everything on one screen: no scrolling down or sideways, however many cases or notes there are.
+ * It shrinks the whole board just enough to fit (and lets text re-wrap wider as it shrinks), and re-checks
+ * whenever something on the board changes, the TV is resized, or the list loads.
+ */
+export function FitToScreen({ children, safe = 2 }: { children: ReactNode; safe?: number }) {
+  const box = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(t)
+  useLayoutEffect(() => {
+    const b = box.current, el = inner.current
+    if (!b || !el) return
+    let raf = 0
+    const fit = () => {
+      // The room for the board is the box minus its padding (clientWidth/Height include it, which used to push the last column and last row off the screen).
+      const cs = getComputedStyle(b)
+      const W = b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), H = b.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+      if (!W || !H) return
+      let best = 0.2
+      // From full size downwards, find the largest size where the board (re-wrapped to the wider space) fits.
+      // It also grows past normal size (up to 1.8x) when there is room, so a lighter day is easier to read from across the room.
+      for (let sc = 1.8; sc >= 0.2; sc = Math.round((sc - (sc > 1.05 ? 0.05 : 0.025)) * 1000) / 1000) {
+        el.style.width = `${W / sc}px`
+        if (el.scrollHeight * sc <= H && el.scrollWidth * sc <= W + 1) { best = sc; break }
+      }
+      el.style.width = `${W / best}px`
+      setScale((old) => (Math.abs(old - best) > 0.001 ? best : old))
+    }
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit) }
+    fit()
+    const mo = new MutationObserver(schedule) // rows appear, notes load, statuses change
+    mo.observe(el, { childList: true, subtree: true, characterData: true })
+    window.addEventListener('resize', schedule)
+    const tick = setInterval(schedule, 5000) // safety net
+    return () => { mo.disconnect(); window.removeEventListener('resize', schedule); clearInterval(tick); cancelAnimationFrame(raf) }
   }, [])
 
-  // Auto-refresh every 20s so a TV/monitor stays current without anyone touching it.
-  const { data: cases = [] } = useQuery({
-    queryKey: ['cases', isAllLocations ? 'all' : activeLocationId],
-    queryFn: () => api.getCases(isAllLocations ? undefined : activeLocationId),
-    refetchInterval: 20_000,
-  })
-  const { data: events = [] } = useQuery({
-    queryKey: ['events', isAllLocations ? 'all' : activeLocationId],
-    queryFn: () => api.getCalendarEvents(isAllLocations ? undefined : activeLocationId),
-    refetchInterval: 20_000,
-  })
-  const { data: contracts = [] } = useQuery({
-    queryKey: ['contracts'],
-    queryFn: api.getContracts,
-    refetchInterval: 20_000,
-  })
-  const { data: allStaff = [] } = useQuery({ queryKey: ['staff'], queryFn: api.getStaff, refetchInterval: 20_000 })
-
-  if (!currentUser) return null
-
-  const activeCases = cases
-    .filter((c) => c.status !== 'completed')
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-
   return (
-    <div className="min-h-screen bg-[#1f2a1c] text-white flex flex-col">
-      <div className="no-print flex items-center justify-between px-6 py-3 bg-black/20">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white">
-          <ArrowLeft size={15} /> Back
-        </Link>
-        <div className="flex items-center gap-3">
-          <BrandLogo on="dark" className="h-8 w-auto" />
-          <span className="font-display text-lg font-semibold tracking-wide">{getCompanyName()}</span>
-        </div>
-        <div className="text-sm text-slate-300 tabular-nums">
-          {format(now, 'EEEE, MMMM d')} · {format(now, 'h:mm a')}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-auto p-4">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="text-sm uppercase tracking-wide text-[#d9c78f] border-b-2 border-[#4d5f45]">
-              <th className="py-3 px-3">Name</th>
-              <th className="py-3 px-3">Visitation</th>
-              <th className="py-3 px-3">Service</th>
-              <th className="py-3 px-3">Disp.</th>
-              <th className="py-3 px-3">Flowers</th>
-              <th className="py-3 px-3">Birds</th>
-              <th className="py-3 px-3">Escort</th>
-              <th className="py-3 px-3">Casket</th>
-              <th className="py-3 px-3">Special Requests</th>
-            </tr>
-          </thead>
-          <tbody className="text-base">
-            {activeCases.map((c) => (
-              <BoardRow key={c.id} c={c} events={events} contracts={contracts} allStaff={allStaff} />
-            ))}
-          </tbody>
-        </table>
-        {activeCases.length === 0 && (
-          <div className="text-center text-slate-400 py-20">No active cases right now.</div>
-        )}
-      </div>
+    <div ref={box} className="board-fit flex-1 min-h-0 overflow-hidden" style={{ padding: `${safe * 0.5}vh ${safe}vw ${safe}vh` }}>
+      <div ref={inner} className="board-inner" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
     </div>
   )
 }
 
-function OrderCell({ status }: { status: 'confirmed' | 'ordered' | 'pending' | null }) {
-  if (status === 'confirmed') return <Check size={16} className="text-emerald-400" />
-  if (status === 'ordered') return <Clock size={16} className="text-amber-400" />
-  if (status === 'pending') return <span className="text-slate-400 text-xs">pending</span>
-  return <span className="text-slate-500">—</span>
+const LOC_COLORS = ['#34d399', '#fbbf24', '#38bdf8', '#c084fc', '#fb7185']
+export const boardLocColors = (locations: { id: string; name: string }[]) => {
+  const sorted = [...locations].sort((a, b) => a.name.localeCompare(b.name))
+  return new Map(sorted.map((l, i) => [l.id, LOC_COLORS[i % LOC_COLORS.length]]))
 }
 
-function BoardRow({ c, events, contracts, allStaff }: { c: FuneralCase; events: CalendarEvent[]; contracts: Contract[]; allStaff: StaffMember[] }) {
-  const { data: orders = [] } = useQuery({
-    queryKey: ['case-orders', c.id],
-    queryFn: () => api.getOrders(c.id),
-    refetchInterval: 20_000,
-  })
-  const { data: notes = [] } = useQuery({
-    queryKey: ['case-notes', c.id],
-    queryFn: () => api.getCaseNotes(c.id),
-    refetchInterval: 20_000,
-  })
-
-  const visitation = events.find((e) => e.caseId === c.id && e.type === 'visitation')
-  const service = events.find((e) => e.caseId === c.id && e.type === 'service')
-  const contract = contracts.find((ct) => ct.caseId === c.id)
-  const casketLine = contract?.lineItems.find((li) => /casket/i.test(li.name))
-
-  const flowers = orders.find((o) => /flower/i.test(o.item))?.status ?? null
-  const birds = orders.find((o) => /dove|bird/i.test(o.item))?.status ?? null
-  const escort = orders.find((o) => /escort|carriage/i.test(o.item))?.status ?? null
-
-  // Kept separate per event on purpose — the visitation team and service
-  // team are often genuinely different people, and staff glancing at the
-  // board want to know who's on which, not a merged list.
-  const visitationStaff = (visitation?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
-  const serviceStaff = (service?.participantIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name).filter(Boolean) as string[]
-
-  const latestNote = notes.filter((n) => n.isSpecialRequest).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+/** The board itself. Used by the logged-in /board page and by a wall monitor's private /tv/<link> page. */
+export function BoardView({ data, backTo, safe = 2 }: { data: BoardData; backTo?: string; safe?: number }) {
+  useKeepAwake()
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+  const colors = boardLocColors(data.locations)
+  const split = boardSplit(data.rows, now)
+  // Cases with nothing scheduled yet (no visitation, no service) share a compact block instead of a full row each.
+  const hasEvents = (r: BoardRowData) => { const e = boardEventsOf(r); return e.visits.length > 0 || e.services.length > 0 }
+  const scheduled = split.current.filter(hasEvents)
+  const awaiting = split.current.filter((r) => !hasEvents(r))
+  const locName = (id: string) => shortLocationName(data.locations.find((l) => l.id === id)?.name ?? '')
+  const used = data.locations.filter((l) => data.rows.some((r) => r.locationId === l.id))
+  // Prints on white with black text (the dark screen look would use up the toner); landscape, a few pages at most.
+  const printBoard = () => {
+    const st = document.createElement('style')
+    st.textContent = '@page { size: landscape; margin: 0.4in; }'
+    document.head.appendChild(st)
+    const done = () => { st.remove(); window.removeEventListener('afterprint', done) }
+    window.addEventListener('afterprint', done)
+    window.print()
+  }
+  const here = data.screen?.locationId ? shortLocationName(data.locations.find((l) => l.id === data.screen!.locationId)?.name ?? '') : ''
 
   return (
-    <tr className="border-b border-white/10 hover:bg-white/5">
-      <td className="py-3 px-3 font-semibold whitespace-nowrap">
-        <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: c.color }} />
-        {c.decedent.lastName}, {c.decedent.firstName}
-      </td>
-      <td className="py-3 px-3 text-slate-200">
-        {visitation ? (
-          <>
-            <div>{format(parseISO(visitation.start), 'M/d')} {format(parseISO(visitation.start), 'h:mma')}–{format(parseISO(visitation.end), 'h:mma')}</div>
-            {visitationStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{visitationStaff.join(', ')}</div>}
-          </>
-        ) : '—'}
-      </td>
-      <td className="py-3 px-3 text-slate-200">
-        {c.serviceDate || service ? (
-          <>
-            <div>{c.serviceDate ? format(parseISO(c.serviceDate), 'M/d h:mm a') : format(parseISO(service!.start), 'M/d h:mm a')}</div>
-            {serviceStaff.length > 0 && <div className="text-xs text-slate-400 font-normal mt-0.5">{serviceStaff.join(', ')}</div>}
-          </>
-        ) : '—'}
-      </td>
-      <td className="py-3 px-3 text-slate-200 capitalize">{c.disposition.replace('_', ' ')}</td>
-      <td className="py-3 px-3"><OrderCell status={flowers as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3"><OrderCell status={birds as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3"><OrderCell status={escort as 'confirmed' | 'ordered' | 'pending' | null} /></td>
-      <td className="py-3 px-3 text-slate-200">{casketLine?.name.replace(/^Adult Casket\s*—\s*/i, '') ?? '—'}</td>
-      <td className="py-3 px-3 text-slate-300 text-sm max-w-[220px] truncate" title={latestNote?.body}>
-        {latestNote ? latestNote.body : <span className="text-slate-500">—</span>}
-      </td>
-    </tr>
+    <div className="board-print print-target h-screen overflow-hidden bg-[#1f2a1c] text-white flex flex-col">
+      <div className="no-print flex items-center justify-between px-6 py-1.5 bg-black/20 gap-4">
+        {backTo ? (
+          <Link to={backTo} className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white"><ArrowLeft size={15} /> Back</Link>
+        ) : <div className="text-sm text-slate-300 w-24">{here}</div>}
+        <div className="flex items-center gap-3">
+          <BrandLogo on="dark" className="h-6 w-auto" />
+          <span className="font-display text-base font-semibold tracking-wide">{getCompanyName()}</span>
+        </div>
+        <div className="flex items-center gap-5">
+          {backTo && (
+            <button type="button" onClick={printBoard} className="inline-flex items-center gap-1.5 rounded-md border border-white/30 px-3 py-1 text-sm text-slate-100 hover:bg-white/10"><Printer size={15} /> Print</button>
+          )}
+          <div className="flex items-center gap-3 text-sm">
+            {used.map((l) => (
+              <span key={l.id} className="inline-flex items-center gap-1.5 text-slate-200">
+                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: colors.get(l.id) }} />{shortLocationName(l.name)}
+              </span>
+            ))}
+          </div>
+          <div className="text-sm text-slate-300 tabular-nums">{format(now, 'EEEE, MMMM d')} · {format(now, 'h:mm a')}</div>
+        </div>
+      </div>
+
+      <FitToScreen safe={safe}>
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="text-sm uppercase tracking-wide text-[#d9c78f] border-b-2 border-[#4d5f45]">
+              <th className="py-1.5 px-3">Name</th>
+              <th className="py-1.5 px-3">Visitation</th>
+              <th className="py-1.5 px-3">Funeral Attendant</th>
+              <th className="py-1.5 px-3">Service</th>
+              <th className="py-1.5 px-3">Funeral Attendant</th>
+              <th className="py-1.5 px-3">Disp.</th>
+              <th className="py-1.5 px-3">Flowers</th>
+              <th className="py-1.5 px-3">Birds</th>
+              <th className="py-1.5 px-3">Escort</th>
+              <th className="py-1.5 px-3">Casket</th>
+              <th className="py-1.5 px-3">Special Requests</th>
+            </tr>
+          </thead>
+          <tbody className="text-xl">
+            {scheduled.map((r) => (
+              <BoardRow key={r.id} r={r} now={now} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
+            ))}
+            {awaiting.length > 0 && (
+              <tr>
+                <td colSpan={11} className="px-3 pt-3 pb-2 border-b border-white/10">
+                  <div className="mb-1.5 text-sm font-bold uppercase tracking-wider text-[#d9c78f]">Awaiting arrangements — nothing scheduled yet <span className="font-semibold text-slate-400">({awaiting.length})</span></div>
+                  <div className="grid grid-cols-3 gap-x-8 gap-y-1.5">
+                    {awaiting.map((r) => <AwaitingChip key={r.id} r={r} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />)}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {split.waiting.length > 0 && (
+              <>
+                <tr>
+                  <td colSpan={11} className="pt-6 pb-2 px-3">
+                    <div className="flex items-center gap-3 rounded-md border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-amber-200">
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                      <span className="text-sm font-bold uppercase tracking-wider">Services complete — items still pending</span>
+                      <span className="ml-auto text-xs font-semibold text-amber-200/80">{split.waiting.length} case{split.waiting.length === 1 ? '' : 's'}</span>
+                    </div>
+                  </td>
+                </tr>
+                {split.waiting.map((r) => (
+                  <BoardRow key={r.id} r={r} now={now} waitingSince={split.doneAt.get(r)} color={colors.get(r.locationId) ?? '#94a3b8'} loc={locName(r.locationId)} />
+                ))}
+              </>
+            )}
+          </tbody>
+        </table>
+        {data.rows.length === 0 && (
+          <div className="text-center text-slate-400 py-20">No active cases right now.</div>
+        )}
+      </FitToScreen>
+    </div>
+  )
+}
+
+/** The logged-in /board page. Refreshes by itself every 20 seconds. */
+export default function TvBoard() {
+  const { currentUser } = useSession()
+  const { data } = useQuery({ queryKey: ['board-data'], queryFn: loadBoardData, refetchInterval: 20_000 })
+  if (!currentUser || !data) return null
+  return <BoardView data={data} backTo="/" />
+}
+
+function ExtraCell({ state }: { state: BoardExtra }) {
+  if (state === 'confirmed') return <span className="inline-flex items-center gap-1 font-semibold text-emerald-400"><Check size={16} /> Confirmed</span>
+  if (state === 'yes') return <span className="inline-flex items-center gap-1 font-semibold text-amber-300"><Clock size={15} /> Yes</span>
+  return <span className="text-slate-500">No</span>
+}
+
+function EventLine({ e, range, now }: { e: BoardEvent; range: boolean; now: Date }) {
+  const sub = [e.label, e.place].filter(Boolean).join(' · ')
+  const phase = eventPhase(e, now)
+  return (
+    <div className="whitespace-nowrap">
+      <div className="flex items-center gap-2">
+        {phase === 'now' && <span className="board-pulse inline-block h-3 w-3 rounded-full bg-emerald-400" aria-hidden />}
+        {phase === 'today' && <span className="inline-block h-3 w-3 rounded-full bg-yellow-300" aria-hidden />}
+        {phase === 'done' && <Check size={14} className="text-slate-500" aria-hidden />}
+        <span className={phase === 'done' ? 'text-slate-400' : ''}>{boardDay(e.start)} · {range ? boardRange(e.start, e.end) : boardClock(e.start)}</span>
+        {phase === 'now' && <span className="rounded bg-emerald-400/20 px-1.5 text-[11px] font-bold tracking-wider text-emerald-300">NOW</span>}
+        {phase === 'today' && <span className="rounded bg-yellow-300/20 px-1.5 text-[11px] font-bold tracking-wider text-yellow-200">TODAY</span>}
+        {sub && <span className="text-base text-slate-400">· {sub}</span>}
+        {sub && e.confirmed && <Check size={18} strokeWidth={3} className="text-emerald-400" aria-label="Confirmed" />}
+      </div>
+    </div>
+  )
+}
+const Staff = ({ e }: { e?: BoardEvent }) => (e && e.staff.length > 0 ? <>{e.staff.join(', ')}</> : <span className="text-slate-500">—</span>)
+
+/** One case. Several visitations / services stack as lines under each other; the name, DISP, flowers ... span all of them. */
+/** What the board says a finished case is waiting on, by where it is in the custody chain. */
+const WAIT_TEXT: Record<string, string> = { crematory: 'At the crematory', ashes_received: 'Ashes received — release / pickup', cemetery_burial: 'Burial / cemetery', funeral_home: 'Cremation / shipping / burial', chapel_service: 'Cremation / shipping / burial', in_transit: 'In transit' }
+
+function BoardRow({ r, color, loc, now, waitingSince }: { r: BoardRowData; color: string; loc: string; now: Date; waitingSince?: string }) {
+  // The calendar events when there are any; otherwise the visitation / service saved on the case itself.
+  const { visits, services } = boardEventsOf(r)
+  const wait = waitingSince ? (WAIT_TEXT[r.custodyStage ?? ''] ?? CUSTODY_STAGE_LABELS[r.custodyStage as keyof typeof CUSTODY_STAGE_LABELS] ?? 'Open') : ''
+  const tint = waitingSince ? 'bg-amber-300/[0.09]' : ''
+  const dim = waitingSince ? 'opacity-90' : ''
+  const n = Math.max(1, visits.length, services.length)
+  const specialNotes = r.specials
+  return (
+    <>
+      {Array.from({ length: n }, (_, i) => {
+        const v = visits[i], sv = services[i]
+        const last = i === n - 1
+        return (
+          <tr key={i} className={`${last ? 'border-b border-white/10' : ''} ${tint} ${dim} hover:bg-white/5 [&>td]:!py-1`}>
+            {i === 0 && (
+              <td rowSpan={n} className="py-3 px-3 pl-5 font-semibold whitespace-nowrap align-top border-b border-white/10" style={{ boxShadow: `inset 6px 0 0 ${color}` }}>
+                <span className="inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle" style={{ backgroundColor: r.color }} />
+                <span className="text-2xl font-bold align-middle leading-tight">{r.lastName}, {r.firstName}</span>
+                <span className="ml-3 align-middle inline-block text-sm font-semibold rounded px-1.5 py-0.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+                {waitingSince && (
+                  <div className="mt-1 text-xs font-semibold text-amber-300">
+                    <span className="rounded bg-amber-300/20 px-1.5 py-0.5">Waiting: {wait}</span>
+                    <span className="ml-2 font-normal text-amber-200/70">service done {boardDay(waitingSince)}</span>
+                  </div>
+                )}
+              </td>
+            )}
+            <td className="py-3 px-3 text-slate-200 align-top">{v ? <EventLine e={v} range now={now} /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 text-base align-top">{v || i === 0 ? <Staff e={v} /> : null}</td>
+            <td className="py-3 px-3 text-slate-200 align-top">{sv ? <EventLine e={sv} range={false} now={now} /> : i === 0 ? '—' : ''}</td>
+            <td className="py-3 px-3 text-slate-200 text-base align-top">{sv || i === 0 ? <Staff e={sv} /> : null}</td>
+            {i === 0 && (<>
+              <td rowSpan={n} className="py-3 px-3 text-slate-100 font-semibold whitespace-nowrap align-top border-b border-white/10">{r.boardDisp || <span className="text-slate-500 font-normal">—</span>}</td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 align-top border-b border-white/10"><ExtraCell state={extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)} /></td>
+              <td rowSpan={n} className="py-3 px-3 text-slate-200 align-top border-b border-white/10">{(r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? '—'}</td>
+              <td rowSpan={n} className="py-3 px-3 text-slate-300 text-base min-w-[220px] break-words [overflow-wrap:anywhere] align-top border-b border-white/10">
+                {specialNotes.length > 0
+                  ? <ul className="space-y-1">{specialNotes.map((x, k) => <li key={k} className="leading-snug">{specialNotes.length > 1 ? '• ' : ''}{x}</li>)}</ul>
+                  : <span className="text-slate-500">—</span>}
+              </td>
+            </>)}
+          </tr>
+        )
+      })}
+    </>
+  )
+}
+
+/** One case with nothing scheduled yet: name, where, DISP, casket, any flowers/birds/escort, and its special requests — in a few short lines. */
+function AwaitingChip({ r, color, loc }: { r: BoardRowData; color: string; loc: string }) {
+  const casket = (r.casketLines ? casketTypeFromLines(r.casketLines) : casketTypeFromLines(r.casket ? [r.casket] : [])) ?? ''
+  const extras: [string, BoardExtra][] = [
+    ['Flowers', extraState(r.boardFlowers, r.flowers, r.casketLines, FLOWERS_RE)],
+    ['Birds', extraState(r.boardBirds, r.birds, r.casketLines, BIRDS_RE)],
+    ['Escort', extraState(r.boardEscort, r.escort, r.casketLines, ESCORT_RE)],
+  ]
+  return (
+    <div className="pl-3 leading-tight" style={{ boxShadow: `inset 4px 0 0 ${color}` }}>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-xl font-bold whitespace-nowrap">{r.lastName}, {r.firstName}</span>
+        <span className="text-xs font-semibold rounded px-1.5" style={{ color, border: `1px solid ${color}` }}>{loc}</span>
+        {r.boardDisp && <span className="text-base font-semibold text-slate-100">{r.boardDisp}</span>}
+        {casket && <span className="text-base text-slate-300">{casket}</span>}
+        {extras.filter(([, s]) => s !== 'no').map(([label, s]) => (
+          <span key={label} className={`text-sm font-semibold ${s === 'confirmed' ? 'text-emerald-400' : 'text-amber-300'}`}>{label}{s === 'confirmed' ? ' ✓' : ''}</span>
+        ))}
+      </div>
+      {r.specials.length > 0 && <div className="text-base text-slate-300 break-words [overflow-wrap:anywhere]">{r.specials.join(' · ')}</div>}
+    </div>
   )
 }
